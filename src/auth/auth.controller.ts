@@ -84,4 +84,89 @@ export class AuthController {
     if (!name) throw new NotFoundException('Referral code not found');
     return { referrer: name };
   }
+
+  // PUT /auth/deduct-credits/:userId
+  @Put('deduct-credits/:userId')
+  @UseGuards(ApiKeyGuard)
+  async deductCredits(@Param('userId') userId: string) {
+    if (!userId) throw new BadRequestException('User ID is required');
+    try {
+      const remainingCredits = await this.authService.deductUserCredits(userId);
+      return { credits: remainingCredits };
+    } catch (error) {
+      throw new NotFoundException(error.message);
+    }
+  }
+
+  // GET /auth/leaderboard
+  @Get('leaderboard')
+  async getLeaderboard() {
+    try {
+      const users = await this.authService.getAllUsersAndXP();
+      return { users };
+    } catch (error) {
+      throw new BadRequestException('Failed to fetch leaderboard');
+    }
+  }
+
+  // PUT /auth/xp/:userId
+  @Put('xp/:userId')
+  @UseGuards(ApiKeyGuard)
+  async updateXP(
+    @Param('userId') userId: string,
+    @Body() body: { xp: number }
+  ) {
+    if (!userId) throw new BadRequestException('User ID is required');
+    if (body.xp === undefined) throw new BadRequestException('XP amount is required');
+    
+    try {
+      const result = await this.authService.updateUserXP(userId, body.xp);
+      return result;
+    } catch (error) {
+      throw new NotFoundException(error.message);
+    }
+  }
+
+  // PUT /auth/streak/:userId
+  @Put('streak/:userId')
+  @UseGuards(ApiKeyGuard)
+  async updateStreak(
+    @Param('userId') userId: string,
+    @Body() body: { increment?: number }
+  ) {
+    if (!userId) throw new BadRequestException('User ID is required');
+    
+    try {
+      const newStreak = await this.authService.updateUserStreak(
+        userId, 
+        body.increment ?? 1
+      );
+      return { streak: newStreak };
+    } catch (error) {
+      throw new NotFoundException(error.message);
+    }
+  }
+
+  // PUT /auth/level/:userId
+  @Put('level/:userId')
+  @UseGuards(ApiKeyGuard)
+  async setLevel(
+    @Param('userId') userId: string,
+    @Body() body: { level: 'novice' | 'beginner' | 'intermediate' | 'advanced' | 'expert' }
+  ) {
+    if (!userId) throw new BadRequestException('User ID is required');
+    if (!body.level) throw new BadRequestException('Level is required');
+    
+    const validLevels = ['novice', 'beginner', 'intermediate', 'advanced', 'expert'];
+    if (!validLevels.includes(body.level)) {
+      throw new BadRequestException(`Level must be one of: ${validLevels.join(', ')}`);
+    }
+    
+    try {
+      const newLevel = await this.authService.setUserLevel(userId, body.level);
+      return { level: newLevel };
+    } catch (error) {
+      throw new NotFoundException(error.message);
+    }
+  }
 }

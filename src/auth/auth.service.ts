@@ -213,4 +213,46 @@ export class AuthService {
       throw error;
     }
   }
+
+  async updateUserStreak(userId: string, incrementBy: number = 1): Promise<number> {
+    try {
+      const users = await db.select().from(user).where(eq(user.id, userId));
+      if (users.length === 0) {
+        throw new Error(`User with id ${userId} not found`);
+      }
+
+      const currentUser = users[0];
+      const currentStreak = currentUser.streak || 0;
+      const newStreak = currentStreak + incrementBy;
+
+      await db
+        .update(user)
+        .set({ streak: newStreak })
+        .where(eq(user.id, userId));
+
+      return newStreak;
+    } catch (error) {
+      console.error("Failed to update user streak", error);
+      throw error;
+    }
+  }
+
+  async setUserLevel(userId: string, level: 'novice' | 'beginner' | 'intermediate' | 'advanced' | 'expert'): Promise<string> {
+    try {
+      const users = await db.select().from(user).where(eq(user.id, userId));
+      if (users.length === 0) {
+        throw new Error(`User with id ${userId} not found`);
+      }
+
+      await db
+        .update(user)
+        .set({ level })
+        .where(eq(user.id, userId));
+
+      return level;
+    } catch (error) {
+      console.error("Failed to set user level", error);
+      throw error;
+    }
+  }
 }

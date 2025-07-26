@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import db from '../../drizzle';
-import { chat, message, type Message } from '../../lib/db/schema';
+import { chat, message, type Message, type Chat } from '../../lib/db/schema';
 import { eq, asc } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
