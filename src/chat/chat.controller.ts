@@ -5,6 +5,7 @@ import {
     Delete,
     Body,
     Param,
+    NotFoundException,
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { Message } from '../../lib/db/schema';
@@ -26,7 +27,11 @@ export class ChatController {
 
     @Get(':chatId')
     async getChatById(@Param('chatId') chatId: string) {
-        return await this.chatService.getChatById(chatId);
+        const chat = await this.chatService.getChatById(chatId);
+        if (!chat) {
+            throw new NotFoundException(`Chat with id ${chatId} not found`);
+        }
+        return chat;
     }
 
     @Delete(':chatId')

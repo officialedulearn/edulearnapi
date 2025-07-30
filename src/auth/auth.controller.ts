@@ -85,18 +85,18 @@ export class AuthController {
     return { referrer: name };
   }
 
-  // PUT /auth/deduct-credits/:userId
-  @Put('deduct-credits/:userId')
-  @UseGuards(ApiKeyGuard)
-  async deductCredits(@Param('userId') userId: string) {
-    if (!userId) throw new BadRequestException('User ID is required');
-    try {
-      const remainingCredits = await this.authService.deductUserCredits(userId);
-      return { credits: remainingCredits };
-    } catch (error) {
-      throw new NotFoundException(error.message);
-    }
-  }
+  // // PUT /auth/deduct-credits/:userId
+  // @Put('deduct-credits/:userId')
+  // @UseGuards(ApiKeyGuard)
+  // async deductCredits(@Param('userId') userId: string) {
+  //   if (!userId) throw new BadRequestException('User ID is required');
+  //   try {
+  //     const remainingCredits = await this.authService.deductUserCredits(userId);
+  //     return { credits: remainingCredits };
+  //   } catch (error) {
+  //     throw new NotFoundException(error.message);
+  //   }
+  // }
 
   // GET /auth/leaderboard
   @Get('leaderboard')
@@ -114,13 +114,13 @@ export class AuthController {
   @UseGuards(ApiKeyGuard)
   async updateXP(
     @Param('userId') userId: string,
-    @Body() body: { xp: number }
+    @Body() body: { xp: number, type: "chat" | "quiz" | "streak" }
   ) {
     if (!userId) throw new BadRequestException('User ID is required');
     if (body.xp === undefined) throw new BadRequestException('XP amount is required');
     
     try {
-      const result = await this.authService.updateUserXP(userId, body.xp);
+      const result = await this.authService.updateUserXP(userId, body.xp, body.type);
       return result;
     } catch (error) {
       throw new NotFoundException(error.message);

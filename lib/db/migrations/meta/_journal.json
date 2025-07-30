@@ -71,6 +71,20 @@
       "when": 1753280845399,
       "tag": "0009_nappy_hardball",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1753800591374,
+      "tag": "0010_fuzzy_bruce_banner",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1753801906496,
+      "tag": "0011_equal_famine",
+      "breakpoints": true
     }
   ]
 }

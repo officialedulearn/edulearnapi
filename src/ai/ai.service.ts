@@ -7,6 +7,7 @@ import { AuthService } from 'src/auth/auth.service';
 import { ChatService } from 'src/chat/chat.service';
 import { generateUUID } from 'lib/utils';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
+import { ActivityService } from 'src/activity/activity.service';
 
 @Injectable()
 export class AiService {
@@ -28,7 +29,6 @@ Teaching Style:
 - Encourage active learning and problem-solving
 - Use metaphors (e.g., PDA = derived mailbox 📬)
 - Ask thoughtful, guiding questions 💭
-- Reward effort with \`scoreUser\` (1–5 points) and explain why
 - Gently redirect off-topic questions toward Solana or Web3 topics
 - Make learning practical, fun, and hands-on 🚀
 `;
@@ -69,8 +69,9 @@ Do not include any explanation or additional text outside the JSON array.`;
     private configService: ConfigService,
     private chatService: ChatService,
     private authService: AuthService,
+    private activityService: ActivityService
   ) {
-    const aiApiKey = this.configService.get<string>('GEMINI_API_KEY');
+    const aiApiKey = process.env.GEMINI_API_KEY;
     if (!aiApiKey) {
       throw new Error('AI API Key is not configured');
     }
@@ -116,16 +117,18 @@ Do not include any explanation or additional text outside the JSON array.`;
     messages: Array<Message>;
     chatId: string;
     userId: string;
-  }): Promise<string> {
+  }): Promise<Message> {
     const recentUserMessage = getMostRecentUserMessage(messages);
     if (!recentUserMessage) {
       throw new NotFoundException('No user message found');
     }
 
     let chat;
-    try {
+    if (chatId) {
       chat = await this.chatService.getChatById(chatId);
-    } catch (e) {
+    }
+    
+    if (!chat) {
       const title = await this.generateTitleFromMessage(recentUserMessage);
       chat = await this.chatService.createChat({ title, userId });
       chatId = chat.id;
@@ -189,8 +192,9 @@ Do not include any explanation or additional text outside the JSON array.`;
     if (functionPart) {
       score = Number(functionPart.functionCall?.args?.score || 0);
       if (!isNaN(score) && score > 0) {
-        await this.authService.updateUserXP(userId, score);
+        await this.authService.updateUserXP(userId, score, 'chat');
         scoreAcknowledgement = `✅ Great job! I've awarded you ${score} point${score !== 1 ? 's' : ''} for your answer 🎉\n\n`;
+
       }
     }
 
@@ -205,7 +209,8 @@ Do not include any explanation or additional text outside the JSON array.`;
 
     await this.chatService.saveMessages({ messages: [assistantMessage] });
 
-    return fullResponse;
+    console.log(assistantMessage);
+    return assistantMessage;
   }
 
   async generateQuiz({

@@ -9,9 +9,11 @@ import {
 import { signUpDetails } from 'types/auth';
 import { generateReferralCode } from 'lib/constants';
 import { UUID } from 'crypto';
+import { ActivityService } from 'src/activity/activity.service';
 
 @Injectable()
 export class AuthService {
+  constructor(private activityService: ActivityService) {}
   async createUser(data: signUpDetails): Promise<User | Error> {
     try {
       console.log("Creating user in database with data:", data);
@@ -179,15 +181,24 @@ export class AuthService {
     }
   }
 
-  async updateUserXP(userId: string, xp: number) {
+  async updateUserXP(userId: string, xp: number, type: 'quiz' | 'chat' | 'streak'): Promise<{ level: string, xp: number }> {
     try {
       const users = await db.select().from(user).where(eq(user.id, userId));
       if (users.length === 0) {
         throw new Error(`User with id ${userId} not found`);
       }
 
+
       const currentUser = users[0];
       const newXP = (currentUser.xp || 0) + xp;
+
+      await this.activityService.createActivity({
+        userId: currentUser.id,
+        type: type,
+        xpEarned: newXP,
+      });
+
+
       let newLevel = "novice";
 
       if (newXP >= 5000) {

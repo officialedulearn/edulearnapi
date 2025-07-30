@@ -3,9 +3,10 @@ import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
 import { ChatModule } from 'src/chat/chat.module';
 import { AuthModule } from 'src/auth/auth.module';
+import { ActivityModule } from 'src/activity/activity.module';
 
 @Module({
-  imports: [ChatModule, AuthModule],
+  imports: [ChatModule, AuthModule, ActivityModule],
   controllers: [AiController],
   providers: [AiService]
 })

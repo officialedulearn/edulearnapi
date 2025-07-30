@@ -30,12 +30,9 @@ export class ChatService {
       .orderBy(asc(chat.createdAt));
   }
 
-  async getChatById(chatId: string) {
+  async getChatById(chatId: string): Promise<Chat | null> {
     const result = await db.select().from(chat).where(eq(chat.id, chatId));
-    if (!result.length) {
-      throw new NotFoundException('Chat not found');
-    }
-    return result[0];
+    return result.length ? result[0] : null;
   }
 
   async deleteChat(chatId: string) {

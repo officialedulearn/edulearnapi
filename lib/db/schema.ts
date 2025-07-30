@@ -29,6 +29,7 @@ export const user = pgTable('user', {
     .notNull()
     .default('novice'),
 username: text('username').notNull().unique(),
+quizCompleted: integer('quizCompleted').notNull().default(0),
 });
 
 export type User = InferSelectModel<typeof user>;
@@ -40,6 +41,36 @@ export const claim = pgTable('claim', {
 });
 
 export type Claim = InferSelectModel<typeof claim>;
+
+export const reward = pgTable('reward', {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  type: varchar('type', { enum: ['certificate', 'points'] }).notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  imageUrl: text('imageUrl'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+});
+
+export type Reward = InferSelectModel<typeof reward>;
+
+export const userReward = pgTable('user_reward', {
+  userId: uuid('userId')
+    .notNull()
+    .references(() => user.id),
+  rewardId: uuid('rewardId')
+    .notNull()
+    .references(() => reward.id),
+  earnedAt: timestamp('earnedAt').notNull().defaultNow(),
+  // Add a composite primary key to ensure a user can only earn a specific reward once
+  // If you want users to earn the same reward multiple times, you'd need to add another unique identifier
+  // in this table and remove this composite primary key
+}, (table) => {
+  return {
+    pk: primaryKey({ columns: [table.userId, table.rewardId] }),
+  };
+});
+
+export type UserReward = InferSelectModel<typeof userReward>;
 
 export const chat = pgTable('chat', {
   id: uuid('id').primaryKey().unique().notNull().defaultRandom(),
@@ -67,3 +98,14 @@ export const message = pgTable('message', {
 });
  
 export type Message = InferSelectModel<typeof message>;
+
+export const xpActivity = pgTable('activity', {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  userId: uuid('userId')
+    .notNull()
+    .references(() => user.id),
+  type: varchar('type', { enum: ['quiz', 'chat', 'streak'] })
+    .notNull(),
+    xpEarned: integer('xpEarned').notNull(),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+});
