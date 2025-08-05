@@ -9,6 +9,7 @@ export class ActivityController {
   async createActivity(@Body() createActivityDto: { 
     userId: string; 
     type: 'quiz' | 'chat' | 'streak';
+    title: string;
     xpEarned: number;
   }) {
     if (!createActivityDto.userId || !createActivityDto.type || createActivityDto.xpEarned === undefined) {

@@ -5,7 +5,6 @@ import { reward, userReward, user, type Reward, type UserReward } from '../../li
 
 @Injectable()
 export class RewardsService {
-  // Reward Management
   async createReward(data: { 
     type:'certificate' | 'points'
     title: string; 

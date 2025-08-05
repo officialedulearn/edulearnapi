@@ -14,7 +14,6 @@ import { Message } from '../../lib/db/schema';
 export class ChatController {
     constructor(private readonly chatService: ChatService) {}
 
-    
     @Post()
     async createChat(@Body() createChatDto: { title: string; userId: string }) {
         return await this.chatService.createChat(createChatDto);

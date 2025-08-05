@@ -114,13 +114,13 @@ export class AuthController {
   @UseGuards(ApiKeyGuard)
   async updateXP(
     @Param('userId') userId: string,
-    @Body() body: { xp: number, type: "chat" | "quiz" | "streak" }
+    @Body() body: { xp: number, title: string, type: "chat" | "quiz" | "streak" }
   ) {
     if (!userId) throw new BadRequestException('User ID is required');
     if (body.xp === undefined) throw new BadRequestException('XP amount is required');
     
     try {
-      const result = await this.authService.updateUserXP(userId, body.xp, body.type);
+      const result = await this.authService.updateUserXP(userId, body.title, body.xp, body.type);
       return result;
     } catch (error) {
       throw new NotFoundException(error.message);

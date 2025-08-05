@@ -7,6 +7,9 @@ import { ChatModule } from './chat/chat.module';
 import { RewardsModule } from './rewards/rewards.module';
 import { ActivityModule } from './activity/activity.module';
 import { ConfigModule } from '@nestjs/config';
+import { WalletService } from './wallet/wallet.service';
+import { WalletController } from './wallet/wallet.controller';
+import { WalletModule } from './wallet/wallet.module';
 
 @Module({
   imports: [
@@ -16,11 +19,12 @@ import { ConfigModule } from '@nestjs/config';
     RewardsModule,
     ActivityModule,
     ConfigModule.forRoot({
-      isGlobal: true, // Makes ConfigModule available globally
-      envFilePath: '.env', // Specifies the path to your .env file
+      isGlobal: true,
+      envFilePath: '.env',
     }),
+    WalletModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, WalletService],
 })
 export class AppModule {}

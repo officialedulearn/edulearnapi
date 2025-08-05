@@ -1,14 +1,13 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
-import db from '../../drizzle';
-import { chat, message, type Message, type Chat } from '../../lib/db/schema';
-import { eq, asc } from 'drizzle-orm';
+import { Injectable } from '@nestjs/common';
+import { asc, eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
+import db from '../../drizzle';
+import { chat, message, type Chat, type Message } from '../../lib/db/schema';
 
 @Injectable()
 export class ChatService {
-  async createChat({ title, userId }: { title: string; userId: string }) {
-    const newChatId = uuidv4();
-
+  async createChat({ title, userId, chatId }: { title: string; userId: string; chatId?: string }): Promise<Chat> {
+    const newChatId = chatId || uuidv4();
     const result = await db
       .insert(chat)
       .values({
@@ -26,8 +25,21 @@ export class ChatService {
     return await db
       .select()
       .from(chat)
-      .where(eq(chat.userId, userId))
+      .where(and(
+        eq(chat.userId, userId),
+        eq(chat.tested, false)
+      ))
       .orderBy(asc(chat.createdAt));
+  }
+
+  async markChatAsTested(chatId: string): Promise<Chat | null> {
+    const result = await db
+      .update(chat)
+      .set({ tested: true })
+      .where(eq(chat.id, chatId))
+      .returning();
+    
+    return result.length ? result[0] : null;
   }
 
   async getChatById(chatId: string): Promise<Chat | null> {
