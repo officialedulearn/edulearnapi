@@ -15,50 +15,67 @@ export class AiService {
   private readonly systemInstruction = `
 You are EduLearn, an AI tutor designed for Web3-native learners, helping them master concepts across Solana, Ethereum, Layer 2s, and the broader Web3 ecosystem.
 
-🎯 Your mission is to guide learners toward understanding, not just hand over answers. Help them think like Web3 builders by using analogies, strategic hints, guiding questions, and fun metaphors.
+Mission:
+- Guide learners toward understanding, not just hand over answers.
+- Help them think like Web3 builders using analogies, strategic hints, guiding questions, and fun metaphors.
 
-🌐 Coverage Areas:
+Coverage Areas:
+- General Web3: What is Web3? Core principles: decentralization, self-sovereignty, open protocols.
+- Wallets & key management: EOA vs Smart Wallets, Mnemonics, Private keys.
+- Transaction flows, gas vs rent, signatures, state vs logic separation.
+- On-chain vs off-chain design thinking.
+- Token standards: ERC-20, ERC-721, SPL, CW20, etc.
+- DApp architecture and frontend-backend smart contract integration.
 
-🔹 General Web3
-- What is Web3? Core principles: decentralization, self-sovereignty, open protocols
-- Wallets & key management: EOA vs Smart Wallets, Mnemonics, Private keys 🔐
-- Transaction flows, gas vs rent, signatures, state vs logic separation
-- On-chain vs off-chain design thinking 🧠
-- Token standards: ERC-20, ERC-721, SPL, CW20 (Cosmos), etc.
-- DApp architecture and frontend-backend smart contract integration
+Solana (Specialty Track):
+- Solana architecture: runtime, accounts model, rent, compute units.
+- Rust + Anchor smart contract development.
+- PDAs (Program Derived Addresses) = "smart mailboxes".
+- CPIs, cross-program invocations, composability.
+- Solana CLI, keypairs, Phantom, Backpack.
+- SPL Tokens, Token2022, Associated Token Accounts.
+- Metaplex: NFTs, Candy Machine, DAS.
+- solana/web3.js and building React-based dApps.
 
-🔸 Solana-Focused (Specialty Track 🥇)
-- Solana architecture: runtime, accounts model, rent, compute units
-- Rust + Anchor smart contract development 🦀
-- PDAs (Program Derived Addresses) = "smart mailboxes" 📬
-- CPIs, cross-program invocations, composability
-- Solana CLI, keypairs, Phantom, Backpack wallets
-- SPL Tokens, Token2022, Associated Token Accounts
-- Metaplex: NFTs, Candy Machine, Digital Asset Standard (DAS)
-- Web3.js, solana/web3.js, and building React-based dApps
+Ethereum + EVM:
+- Solidity, Truffle, Hardhat, Foundry.
+- Gas optimization, storage layouts, reentrancy and security.
+- Layer 2s: Arbitrum, Optimism, zkSync, Starknet.
+- ERC standards and contract inheritance.
+- Wallets: MetaMask, Rainbow, Frame.
 
-🔸 Ethereum + EVM
-- Solidity smart contracts, Truffle, Hardhat, Foundry 🧪
-- Gas optimization, storage layouts, reentrancy and security
-- Layer 2 scaling: Arbitrum, Optimism, zkSync, Starknet
-- ERC standards and contract inheritance patterns
-- Wallets: MetaMask, Rainbow, Frame
+Other Ecosystems:
+- Cosmos SDK, Tendermint, IBC.
+- Polkadot/Substrate.
+- Near, Aptos, Sui (Move).
+- Bitcoin Layer 2s: Stacks, Ordinals, Lightning.
+- Account Abstraction, AA Wallets, Passkeys.
 
-🔸 Other Ecosystems
-- Cosmos SDK, Tendermint, IBC 🌌
-- Polkadot/Substrate parachains 🕸️
-- Near, Aptos, Sui (Move-based chains)
-- Bitcoin Layer 2s (Stacks, Ordinals, Lightning)
-- Account Abstraction, AA Wallets, Passkeys
+Teaching Style & Behavior:
+- Encourage active learning: ask "what do you think would happen if…" or "why do you think it's structured that way?"
+- Use metaphors to demystify complex ideas (smart contracts = vending machines, PDAs = derived mailboxes).
+- Ask guiding questions to lead learners to answers.
+- Use a friendly, engaging tone — include emojis where appropriate.
+- Redirect off-topic questions gently, tying them back to Web3 when possible.
+- Suggest hands-on mini challenges, terminal commands, or code snippets to reinforce learning.
+- Emphasize the why, not just the how. Help users become independent builders.
+- When teaching, always aim to transform knowledge into practical skills: "In Web3, it's not just about what you know—it's about what you can build, debug, and ship."
 
-🧠 Teaching Style:
-- Encourage active learning: ask “what do you think would happen if…” or “why do you think it’s structured that way?”
-- Use metaphors to demystify complex ideas (e.g., smart contracts = vending machines 🤖, PDAs = derived mailboxes 📬)
-- Ask guiding questions to lead learners to answers 💭
-- Use friendly, engaging tone — include emojis 🎉😄
-- Redirect off-topic questions gently, tying them back to Web3 when possible
-- Suggest hands-on mini challenges, terminal commands, or code snippets to reinforce learning 🚀
-- Emphasize the why, not just the how. Help users become independent builders 🛠️
+Mini-challenges & Learning UX:
+- For each concept, offer a short hands-on challenge (5–60 minutes) that results in a tangible artifact (contract, script, small dApp).
+- Provide debugging drills: intentionally broken snippets + hints to guide learners through fixes.
+- Offer "what if" scenarios to stimulate architecture thinking and tradeoff analysis.
+- Encourage learners to produce small portfolio items as proof-of-learning.
+
+Tone:
+- Warm, enthusiastic, and honest.
+- Builder-first, practical, and encouraging.
+- Use concise explanations and concrete examples; avoid academic verbosity.
+
+Safety & Boundaries:
+- Do not provide or assist in creating malware, exploits, or instructions that directly enable theft/hacking.
+- For high-stakes legal/financial decisions, recommend consulting a professional and provide educational context only.
+
 `;
 
   private readonly systemInstructionForQuiz = `Based on the context of our conversation so far, generate 5 quiz questions to test my understanding — but only if the discussion included web3 learning-based content. If the conversation was casual or unrelated to learning, return an empty array.
@@ -117,26 +134,42 @@ Do not include any explanation or additional text outside the JSON array.`;
         role: 'user',
         text: message.content,
       };
-      const result = await this.genAI.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: [formattedMessage],
-        config: {
-          maxOutputTokens: 500,
-          temperature: 0.1,
-          systemInstruction: `
-            Generate a short title based on the first user message.
-            Ensure it is not more than 80 characters.
-            The title should be a summary of the user's message.
-            Do not use quotes or colons.
-          `,
-        },
-      });
+      
+      // Add timeout to prevent hanging requests
+      const result = await Promise.race([
+        this.genAI.models.generateContent({
+          model: 'gemini-2.0-flash',
+          contents: [formattedMessage],
+          config: {
+            maxOutputTokens: 500,
+            temperature: 0.1,
+            systemInstruction: `
+              Generate a short title based on the first user message.
+              Ensure it is not more than 80 characters.
+              The title should be a summary of the user's message.
+              Do not use quotes or colons.
+            `,
+          },
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout')), 10000)
+        )
+      ]);
 
-      const titleResponse = result.text?.trim();
+      const titleResponse = (result as { text?: string }).text?.trim();
       return titleResponse || 'Untitled Chat';
     } catch (error) {
       console.error('Error generating title:', error);
-      return 'Untitled Chat';
+      
+      // Fallback title generation logic that doesn't require API
+      try {
+        const words = String(message.content).split(' ');
+        const shortTitle = words.slice(0, 5).join(' ');
+        return shortTitle.length > 30 ? `${shortTitle.substring(0, 30)}...` : shortTitle || 'Untitled Chat';
+      } catch (fallbackError) {
+        console.error('Error in fallback title generation:', fallbackError);
+        return 'Untitled Chat';
+      }
     }
   }
 
@@ -182,66 +215,91 @@ Do not include any explanation or additional text outside the JSON array.`;
       ],
     });
 
-    const formattedMessages = messages.map((msg: any) => ({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [
-        {
-          text:
-            typeof msg.content === 'string' ? msg.content : msg.content.text,
-        },
-      ],
-    }));
+    try {
+      const formattedMessages = messages.map((msg: any) => ({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [
+          {
+            text:
+              typeof msg.content === 'string' ? msg.content : msg.content.text,
+          },
+        ],
+      }));
 
-    const result = await this.genAI.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: formattedMessages,
-      config: {
-        tools: [{ functionDeclarations: [this.scoreUser] }],
-        maxOutputTokens: 3000,
-        temperature: 1,
-        systemInstruction: this.systemInstruction,
-      },
-    });
+      // Add timeout to prevent hanging requests
+      const result = await Promise.race([
+        this.genAI.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: formattedMessages,
+          config: {
+            tools: [{ functionDeclarations: [this.scoreUser] }],
+            maxOutputTokens: 3000,
+            temperature: 1,
+            systemInstruction: this.systemInstruction,
+          },
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout')), 15000)
+        )
+      ]);
 
-    await this.authService.deductUserCredits(userId);
+      await this.authService.deductUserCredits(userId);
 
-    const candidate = result.candidates?.[0];
-    const parts = candidate?.content?.parts || [];
+      const candidate = (result as { candidates?: Array<{ content?: { parts: Array<{ text?: string; functionCall?: { name: string; args: any } }> } }> }).candidates?.[0];
+      const parts = candidate?.content?.parts || [];
 
-    const responseText = parts
-      .filter((part: any) => typeof part.text === 'string')
-      .map((part: any) => part.text)
-      .join('')
-      .trim();
+      const responseText = parts
+        .filter((part: any) => typeof part.text === 'string')
+        .map((part: any) => part.text)
+        .join('')
+        .trim();
 
-    const functionPart = parts.find(
-      (part: any) => part.functionCall?.name === 'scoreUser',
-    );
-    let score = 0;
-    let scoreAcknowledgement = '';
+      const functionPart = parts.find(
+        (part: any) => part.functionCall?.name === 'scoreUser',
+      );
+      let score = 0;
+      let scoreAcknowledgement = '';
 
-    if (functionPart) {
-      score = Number(functionPart.functionCall?.args?.score || 0);
-      if (!isNaN(score) && score > 0) {
-        await this.authService.updateUserXP(userId, chat.title, score, 'chat');
-        scoreAcknowledgement = `✅ Great job! I've awarded you ${score} point${score !== 1 ? 's' : ''} for your answer 🎉\n\n`;
-
+      if (functionPart) {
+        score = Number(functionPart.functionCall?.args?.score || 0);
+        if (!isNaN(score) && score > 0) {
+          await this.authService.updateUserXP(userId, chat.title, score, 'chat');
+          scoreAcknowledgement = `✅ Great job! I've awarded you ${score} point${score !== 1 ? 's' : ''} for your answer 🎉\n\n`;
+        }
       }
+
+      const fullResponse = `${scoreAcknowledgement}${responseText}`.trim();
+      const assistantMessage = {
+        id: generateUUID(),
+        role: 'assistant',
+        content: { text: fullResponse },
+        createdAt: new Date(),
+        chatId,
+      };
+
+      await this.chatService.saveMessages({ messages: [assistantMessage] });
+
+      return assistantMessage;
+    } catch (error) {
+      console.error('Error generating response:', error);
+      
+      // Fallback response when API is unreachable
+      const fallbackResponse = {
+        id: generateUUID(),
+        role: 'assistant',
+        content: { 
+          text: "I'm sorry, but I'm having trouble connecting to my knowledge base at the moment. " +
+                "This could be due to network connectivity issues. Please check your internet connection " +
+                "and try again in a few moments." 
+        },
+        createdAt: new Date(),
+        chatId,
+      };
+      
+      await this.chatService.saveMessages({ messages: [fallbackResponse] });
+      
+      return fallbackResponse;
     }
-
-    const fullResponse = `${scoreAcknowledgement}${responseText}`.trim();
-    const assistantMessage = {
-      id: generateUUID(),
-      role: 'assistant',
-      content: { text: fullResponse },
-      createdAt: new Date(),
-      chatId,
-    };
-
-    await this.chatService.saveMessages({ messages: [assistantMessage] });
-
-    console.log(assistantMessage);
-    return assistantMessage;
   }
 
   async generateQuiz({

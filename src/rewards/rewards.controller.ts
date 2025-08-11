@@ -5,6 +5,22 @@ import { ApiKeyGuard } from '../auth/guards/api-key.guard';
 @Controller('rewards')
 export class RewardsController {
   constructor(private readonly rewardsService: RewardsService) {}
+  
+  @Post('claim')
+  async claimReward(
+    @Body() data: { userId: string; rewardId: string }
+  ) {
+    if (!data.userId || !data.rewardId) {
+      throw new BadRequestException('User ID and reward ID are required');
+    }
+    
+    try {
+      return await this.rewardsService.claimReward(data.userId, data.rewardId);
+    } catch (error) {
+      throw new BadRequestException('Failed to claim reward: ' + error.message);
+    }
+  }
+
   @Post()
   @UseGuards(ApiKeyGuard)
   async createReward(@Body() data: {

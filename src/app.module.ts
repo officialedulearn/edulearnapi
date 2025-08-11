@@ -7,9 +7,10 @@ import { ChatModule } from './chat/chat.module';
 import { RewardsModule } from './rewards/rewards.module';
 import { ActivityModule } from './activity/activity.module';
 import { ConfigModule } from '@nestjs/config';
-import { WalletService } from './wallet/wallet.service';
 import { WalletController } from './wallet/wallet.controller';
 import { WalletModule } from './wallet/wallet.module';
+import { CronTasksModule } from './cron-tasks/cron-tasks.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -22,9 +23,11 @@ import { WalletModule } from './wallet/wallet.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    ScheduleModule.forRoot(),
     WalletModule,
+    CronTasksModule,
   ],
   controllers: [AppController],
-  providers: [AppService, WalletService],
+  providers: [AppService],
 })
 export class AppModule {}

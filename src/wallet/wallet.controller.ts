@@ -1,10 +1,21 @@
-import { Controller, Get, Param, Response } from '@nestjs/common';
+import { Controller, Get, Param, Post, Response } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { PublicKey } from '@solana/web3.js';
 
 @Controller('wallet')
 export class WalletController {
     constructor(private walletService: WalletService) {}
+
+    @Post("upgrade/:userId")
+    async upgradeToPremium(@Response() res, @Param('userId') userId: string) {
+        try {
+            const result = await this.walletService.payPremium(userId);
+            return res.status(200).json({ message: 'Upgrade successful', result });
+        } catch (error) {
+            console.error('Error upgrading to premium:', error);
+            return res.status(500).json({ error: 'Failed to upgrade to premium' });
+        }
+    }
 
     @Get("balance/:publicKey")
     async getBalance(@Response() res, @Param('publicKey') publicKey: string) {
@@ -14,6 +25,17 @@ export class WalletController {
         } catch (error) {
             console.error('Error fetching balance:', error);
             return res.status(500).json({ error: 'Failed to fetch balance' });      
+        }
+    }
+
+    @Get("decrypt/:userId") 
+    async decryptPrivateKey(@Response() res, @Param('userId') userId: string) {
+        try {
+            const decryptedKey = await this.walletService.getDecryptedPrivateKey(userId);
+            return res.status(200).json({ decryptedKey });
+        } catch (error) {
+            console.error('Error decrypting private key:', error);
+            return res.status(500).json({ error: 'Failed to decrypt private key' });
         }
     }
 }

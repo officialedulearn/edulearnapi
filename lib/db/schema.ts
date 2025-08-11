@@ -34,7 +34,10 @@ export const user = pgTable('user', {
     .default('novice'),
   username: text('username').notNull().unique(),
   quizCompleted: integer('quizCompleted').notNull().default(0),
-  encryptedPrivateKey: text("encryptedPrivateKey").notNull()
+  encryptedPrivateKey: text('encryptedPrivateKey').notNull(),
+  lastCreditRenewal: timestamp('last_credit_renewal'),
+  isPremium: boolean('isPremium').default(false),
+  premiumUntil: timestamp('premiumUntil'),
 });
 
 export type User = InferSelectModel<typeof user>;
@@ -53,6 +56,7 @@ export const reward = pgTable('reward', {
   title: text('title').notNull(),
   description: text('description').notNull(),
   imageUrl: text('imageUrl'),
+  ipfs: text('ipfs').unique(),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 });
 
@@ -68,6 +72,7 @@ export const userReward = pgTable(
       .notNull()
       .references(() => reward.id),
     earnedAt: timestamp('earnedAt').notNull().defaultNow(),
+    signature: text('signature').unique(),
     // Add a composite primary key to ensure a user can only earn a specific reward once
     // If you want users to earn the same reward multiple times, you'd need to add another unique identifier
     // in this table and remove this composite primary key
@@ -120,3 +125,12 @@ export const xpActivity = pgTable('activity', {
 });
 
 export type XpActivity = InferSelectModel<typeof xpActivity>;
+
+export const premiumTransactions = pgTable('premium_transactions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => user.id),
+  signature: varchar('signature', { length: 256 }).notNull().unique(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export type PremiumTransaction = InferSelectModel<typeof premiumTransactions>;

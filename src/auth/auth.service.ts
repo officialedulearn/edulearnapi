@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { eq, desc } from 'drizzle-orm';
 import db from '../../drizzle';
 import { user, claim, type User } from '../../lib/db/schema';
@@ -13,6 +13,7 @@ import { RewardsService } from 'src/rewards/rewards.service';
 export class AuthService {
   constructor(
     private activityService: ActivityService,
+    @Inject(forwardRef(() => WalletService))
     private walletService: WalletService,
     private rewardService: RewardsService,
   ) {}
@@ -103,7 +104,15 @@ export class AuthService {
       throw error;
     }
   }
-
+  async getUserByAddress(address: string): Promise<User | null> {
+    try {
+      const result = await db.select().from(user).where(eq(user.address, address));
+      return result[0] ?? null;
+    } catch (error) {
+      console.error('Failed to get user by address');
+      throw error;
+    }
+  }
   async editUser({
     name,
     email,
@@ -305,6 +314,69 @@ export class AuthService {
       return level;
     } catch (error) {
       console.error('Failed to set user level', error);
+      throw error;
+    }
+  }
+
+  async renewUserCredits(userId: string): Promise<number> {
+    try {
+      const users = await db.select().from(user).where(eq(user.id, userId));
+      if (users.length === 0) {
+        throw new Error(`User with id ${userId} not found`);
+      }
+
+      const currentUser = users[0];
+      const currentCredits = Number(currentUser.credits || 0);
+      const lastCreditRenewal = currentUser.lastCreditRenewal || new Date(0);
+      const now = new Date();
+      
+      const hoursSinceLastRenewal = Math.floor((now.getTime() - lastCreditRenewal.getTime()) / (1000 * 60 * 60));
+      
+      if (hoursSinceLastRenewal >= 24) {
+        const newCredits = currentUser.isPremium ? currentCredits + 20 : 10
+        
+        await db
+          .update(user)
+          .set({ 
+            credits: newCredits.toString(),
+            lastCreditRenewal: now 
+          })
+          .where(eq(user.id, userId));
+        
+        return newCredits;
+      }
+      return currentCredits;
+    } catch (error) {
+      console.error('Failed to renew user credits', error);
+      throw error;
+    }
+  }
+
+  async updateUserPremiumStatus(
+    userId: string,
+    isPremium: boolean,
+  ): Promise<boolean> {
+    try {
+      const users = await db.select().from(user).where(eq(user.id, userId));
+      if (users.length === 0) {
+        throw new Error(`User with id ${userId} not found`);
+      }
+
+      const now = new Date();
+      const premiumUntil = new Date(now);
+      premiumUntil.setMonth(now.getMonth() + 1);
+
+      await db
+        .update(user)
+        .set({ 
+          isPremium,
+          premiumUntil: isPremium ? premiumUntil : null 
+        })
+        .where(eq(user.id, userId));
+
+      return isPremium;
+    } catch (error) {
+      console.error('Failed to update user premium status', error);
       throw error;
     }
   }

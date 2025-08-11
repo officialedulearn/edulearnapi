@@ -106,6 +106,41 @@
       "when": 1754325699218,
       "tag": "0014_stale_ego",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1754455591694,
+      "tag": "0015_zippy_ricochet",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1754474060589,
+      "tag": "0016_quiet_black_tarantula",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1754493241226,
+      "tag": "0017_stiff_dragon_lord",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1754537036304,
+      "tag": "0018_flawless_logan",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1754838693742,
+      "tag": "0019_same_enchantress",
+      "breakpoints": true
     }
   ]
 }
