@@ -33,6 +33,7 @@
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.1.5",
     "@nestjs/schedule": "^6.0.0",
+    "@project-serum/anchor": "^0.26.0",
     "@sixaphone/nestjs-drizzle": "^1.0.1",
     "@solana/spl-token": "^0.4.13",
     "@solana/web3.js": "^1.98.4",
@@ -48,6 +49,7 @@
     "helmet": "^8.1.0",
     "pg": "^8.16.3",
     "postgres": "^3.4.7",
+    "promise-retry": "^2.0.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "uuid": "^11.1.0"

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Response } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Response } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { PublicKey } from '@solana/web3.js';
 
@@ -28,14 +28,29 @@ export class WalletController {
         }
     }
 
-    @Get("decrypt/:userId") 
-    async decryptPrivateKey(@Response() res, @Param('userId') userId: string) {
+    @Post("swap")
+    async swapSolToEDLN(@Response() res, @Body() data: {userId: string, amount: number}) {
         try {
-            const decryptedKey = await this.walletService.getDecryptedPrivateKey(userId);
-            return res.status(200).json({ decryptedKey });
-        } catch (error) {
-            console.error('Error decrypting private key:', error);
-            return res.status(500).json({ error: 'Failed to decrypt private key' });
+            const response = await this.walletService.swapSolToEdln(data.userId, data.amount)
+            return res.status(200).json({response})
+        } catch(error) {
+            console.error("Error swapping sol to edln", error)
+            return res.status(500).json({error: "Failed to swap SOL to EDLN"})
+        }
+    }
+    
+    @Post("burn")
+    async burnEDLN(@Response() res, @Body() data: {userId: string, amount: number}) {
+        try {
+            const signature = await this.walletService.burnEDLN(data.userId, data.amount);
+            return res.status(200).json({
+                message: 'EDLN tokens burned successfully',
+                signature,
+                transactionLink: `https://solscan.io/tx/${signature}`
+            });
+        } catch(error) {
+            console.error("Error burning EDLN tokens", error);
+            return res.status(500).json({error: "Failed to burn EDLN tokens"});
         }
     }
 }

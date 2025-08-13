@@ -380,4 +380,26 @@ export class AuthService {
       throw error;
     }
   }
+  async incrementCredits(userId: string, amount: number): Promise<number> {
+    try {
+      const users = await db.select().from(user).where(eq(user.id, userId));
+      if (users.length === 0) {
+        throw new Error(`User with id ${userId} not found`);
+      }
+
+      const currentUser = users[0];
+      const currentCredits = Number(currentUser.credits || 0);
+      const newCredits = currentCredits + amount;
+
+      await db
+        .update(user)
+        .set({ credits: newCredits.toString() })
+        .where(eq(user.id, userId));
+
+      return newCredits;
+    } catch (error) {
+      console.error('Failed to increment user credits', error);
+      throw error;
+    }
+  }
 }

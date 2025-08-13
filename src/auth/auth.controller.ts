@@ -169,4 +169,21 @@ export class AuthController {
       throw new NotFoundException(error.message);
     }
   }
+  // PUT /auth/credits/:userId
+  @Put('credits/:userId')
+  @UseGuards(ApiKeyGuard)
+  async updateCredits(
+    @Param('userId') userId: string,
+    @Body() body: { credits: number }
+  ) {
+    if (!userId) throw new BadRequestException('User ID is required');
+    if (body.credits === undefined) throw new BadRequestException('Credits amount is required');
+    
+    try {
+      const updatedCredits = await this.authService.incrementCredits(userId, body.credits);
+      return { credits: updatedCredits };
+    } catch (error) {
+      throw new NotFoundException(error.message);
+    }
+  }
 }

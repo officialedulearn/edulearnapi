@@ -128,6 +128,20 @@ Do not include any explanation or additional text outside the JSON array.`;
     });
   }
 
+  async checkUserCredits(userId: string): Promise<number> {
+    try {
+      const user = await this.authService.getUserById(userId);
+      if (!user) {
+        throw new NotFoundException(`User with id ${userId} not found`);
+      }
+      
+      return Number(user.credits || 0);
+    } catch (error) {
+      console.error('Failed to check user credits', error);
+      throw error;
+    }
+  }
+
   async generateTitleFromMessage(message: Message): Promise<string> {
     try {
       const formattedMessage = {
@@ -216,6 +230,24 @@ Do not include any explanation or additional text outside the JSON array.`;
     });
 
     try {
+      // Check if user has enough credits before proceeding
+      const userCredits = await this.checkUserCredits(userId);
+      if (userCredits < 0.5) {
+        // User doesn't have enough credits
+        const outOfCreditsMessage = {
+          id: generateUUID(),
+          role: 'assistant',
+          content: { 
+            text: "You've run out of credits! To continue using EduLearn AI, please purchase $EDLN tokens to get more credits or upgrade your plan in the app settings. Premium users get more daily credits and additional benefits." 
+          },
+          createdAt: new Date(),
+          chatId,
+        };
+        
+        await this.chatService.saveMessages({ messages: [outOfCreditsMessage] });
+        return outOfCreditsMessage;
+      }
+
       const formattedMessages = messages.map((msg: any) => ({
         role: msg.role === 'assistant' ? 'model' : 'user',
         parts: [

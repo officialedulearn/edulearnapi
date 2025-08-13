@@ -9,19 +9,17 @@ import {
   type UserReward,
 } from '../../lib/db/schema';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
-import { create, mplCore } from '@metaplex-foundation/mpl-core'
+import { create, mplCore } from '@metaplex-foundation/mpl-core';
 import * as bs58 from 'bs58';
 
-import { clusterApiUrl, Connection, Keypair } from '@solana/web3.js';
+import { clusterApiUrl, Connection, Keypair, PublicKey } from '@solana/web3.js';
 import {
   createSignerFromKeypair,
   generateSigner,
   keypairIdentity,
-  
+  publicKey,
 } from '@metaplex-foundation/umi';
-import { mplToolbox } from '@metaplex-foundation/mpl-toolbox';
 import { decrypt } from 'lib/crypto.util';
-import { sign } from 'crypto';
 
 @Injectable()
 export class RewardsService {
@@ -161,8 +159,7 @@ export class RewardsService {
         throw new Error(`Reward with id ${rewardId} not found`);
       }
 
-      const umi = createUmi(clusterApiUrl('mainnet-beta'))
-        .use(mplCore())
+      const umi = createUmi(clusterApiUrl('mainnet-beta')).use(mplCore());
       const encodedPrivateKey = bs58.default.decode(
         decrypt(userExists[0].encryptedPrivateKey),
       );
@@ -178,11 +175,19 @@ export class RewardsService {
         asset: mint,
         name: rewardExists[0].title,
         uri: `${rewardExists[0].ipfs}`,
-        owner: signer.publicKey,
+        owner: publicKey(userExists[0].address as string)
       }).sendAndConfirm(umi);
 
       console.log('NFT Mint Signature:', bs58.default.encode(result.signature));
-      return result
+      await db.update(userReward)
+        .set({
+          signature: bs58.default.encode(result.signature),
+        })
+        .where(
+          and(eq(userReward.userId, userId), eq(userReward.rewardId, rewardId)),
+        );
+
+      return  bs58.default.encode(result.signature);
     } catch (error) {
       console.error(`Failed to claim reward for user`, error);
       throw error;
@@ -221,6 +226,7 @@ export class RewardsService {
           createdAt: reward.createdAt,
           earnedAt: userReward.earnedAt,
           ipfs: reward.ipfs,
+          signature: userReward.signature
         })
         .from(userReward)
         .innerJoin(reward, eq(userReward.rewardId, reward.id))
