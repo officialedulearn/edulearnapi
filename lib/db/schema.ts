@@ -38,6 +38,8 @@ export const user = pgTable('user', {
   lastCreditRenewal: timestamp('last_credit_renewal'),
   isPremium: boolean('isPremium').default(false),
   premiumUntil: timestamp('premiumUntil'),
+  verified: boolean('verified').default(false),
+  imageUploadLimit: integer('imageUploadLimit').default(3),
 });
 
 export type User = InferSelectModel<typeof user>;

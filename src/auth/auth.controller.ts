@@ -49,14 +49,14 @@ export class AuthController {
   
   @UseGuards(ApiKeyGuard)
   @Put('edit')
-  async editUser(@Body() body: { name: string; email: string }) {
-    const { name, email } = body;
+  async editUser(@Body() body: { name: string; email: string, username: string }) {
+    const { name, email, username } = body;
 
     if (!name || !email) {
       throw new BadRequestException('Name and email are required');
     }
 
-    const updatedUser = await this.authService.editUser({ name, email });
+    const updatedUser = await this.authService.editUser({ name, email, username });
 
     if (!updatedUser) {
       throw new BadRequestException('User not found or update failed');

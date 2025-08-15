@@ -1,0 +1,1 @@
+ALTER TABLE "user" ADD COLUMN "imageUploadLimit" integer DEFAULT 3;

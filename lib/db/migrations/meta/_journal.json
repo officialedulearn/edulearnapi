@@ -141,6 +141,20 @@
       "when": 1754838693742,
       "tag": "0019_same_enchantress",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1755162540152,
+      "tag": "0020_purple_squadron_supreme",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1755269647137,
+      "tag": "0021_lucky_skaar",
+      "breakpoints": true
     }
   ]
 }

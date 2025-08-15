@@ -116,14 +116,16 @@ export class AuthService {
   async editUser({
     name,
     email,
+    username
   }: {
     name: string;
     email: string;
+    username: string;
   }): Promise<User | null> {
     try {
       const result = await db
         .update(user)
-        .set({ name })
+        .set({ name, username })
         .where(eq(user.email, email))
         .returning();
 
@@ -334,6 +336,7 @@ export class AuthService {
       
       if (hoursSinceLastRenewal >= 24) {
         const newCredits = currentUser.isPremium ? currentCredits + 20 : 10
+        const newUploadLimit = currentUser.isPremium ? 5 : 2;
         
         await db
           .update(user)
@@ -342,6 +345,10 @@ export class AuthService {
             lastCreditRenewal: now 
           })
           .where(eq(user.id, userId));
+
+        await db.update(user)
+        .set({imageUploadLimit: newUploadLimit})
+        .where(eq(user.id, userId));
         
         return newCredits;
       }
@@ -399,6 +406,21 @@ export class AuthService {
       return newCredits;
     } catch (error) {
       console.error('Failed to increment user credits', error);
+      throw error;
+    }
+  }
+
+  async verifyUser(email: string): Promise<User | null> { 
+    try {
+      const result = await db
+        .update(user)
+        .set({ verified: true })
+        .where(eq(user.email, email))
+        .returning();
+
+      return result[0] ?? null;
+    } catch (error) {
+      console.error('Failed to verify user', error);
       throw error;
     }
   }

@@ -288,12 +288,17 @@ export class WalletService {
         userPublicKey,
       );
 
+      // EDLN token has 9 decimals, so we multiply by 10^9
+      const tokenDecimals = 9;
+      const adjustedAmount = amount * Math.pow(10, tokenDecimals);
+      console.log(`Adjusted burn amount: ${amount} EDLN = ${adjustedAmount} base units`);
+
       const burnInstruction = createBurnCheckedInstruction(
         tokenAccount,
         this.EDLN,
         userPublicKey,
-        amount,
-        9,
+        adjustedAmount,
+        tokenDecimals,
       );
       
       const transaction = new Transaction().add(burnInstruction);
@@ -301,7 +306,6 @@ export class WalletService {
       transaction.feePayer = userPublicKey;
       transaction.sign(userKeyPair);
       
-      // Use our improved transaction sender
       const blockhashWithExpiryBlockHeight = await this.connection.getLatestBlockhash();
       const txResponse = await transactionSenderAndConfirmationWaiter({
         connection: this.connection,

@@ -11,6 +11,7 @@ import { WalletController } from './wallet/wallet.controller';
 import { WalletModule } from './wallet/wallet.module';
 import { CronTasksModule } from './cron-tasks/cron-tasks.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { TwitterModule } from './twitter/twitter.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     ScheduleModule.forRoot(),
     WalletModule,
     CronTasksModule,
+    TwitterModule,
   ],
   controllers: [AppController],
   providers: [AppService],
