@@ -24,7 +24,7 @@ import { decrypt } from 'lib/crypto.util';
 @Injectable()
 export class RewardsService {
   private readonly connection = new Connection(
-    'https://api.mainnet-beta.solana.com',
+    'https://mainnet.helius-rpc.com/?api-key=36181439-ce38-4a9f-8adc-d413c0a4e218',
   );
 
   async createReward(data: {
@@ -159,7 +159,7 @@ export class RewardsService {
         throw new Error(`Reward with id ${rewardId} not found`);
       }
 
-      const umi = createUmi(clusterApiUrl('mainnet-beta')).use(mplCore());
+      const umi = createUmi(this.connection).use(mplCore());
       const encodedPrivateKey = bs58.default.decode(
         decrypt(userExists[0].encryptedPrivateKey),
       );

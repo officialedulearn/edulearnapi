@@ -1,6 +1,5 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Message } from 'lib/db/schema';
 import { getMostRecentUserMessage } from 'lib/utils';
 import { AuthService } from 'src/auth/auth.service';
@@ -8,6 +7,7 @@ import { ChatService } from 'src/chat/chat.service';
 import { generateUUID } from 'lib/utils';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { ActivityService } from 'src/activity/activity.service';
+import { RewardsService } from 'src/rewards/rewards.service';
 
 @Injectable()
 export class AiService {
@@ -36,6 +36,7 @@ Solana (Specialty Track):
 - SPL Tokens, Token2022, Associated Token Accounts.
 - Metaplex: NFTs, Candy Machine, DAS.
 - solana/web3.js and building React-based dApps.
+- Internet capital markets on solana
 
 Ethereum + EVM:
 - Solidity, Truffle, Hardhat, Foundry.
@@ -95,6 +96,10 @@ Format the output strictly as a JSON array with this structure:
 
 Do not include any explanation or additional text outside the JSON array.`;
 
+  private readonly rewards = {
+    web3Basics: "4c5d895a-3479-481a-9db6-4327f6ae53cd",
+  }
+
   private readonly scoreUser = {
     name: 'scoreUser',
     description:
@@ -113,11 +118,27 @@ Do not include any explanation or additional text outside the JSON array.`;
 
   private readonly rewardUser = {
     name: "giveACertificate",
-    description: "from your interaction with the user, if you think they have learned something valuable, give them one of these certificates that matches what they learned: 'web3 basics': "
+    description: "ONLY give a certificate when the user has CLEARLY demonstrated deep understanding of a topic through multiple interactions. The user must have asked thoughtful questions AND correctly answered your questions AND engaged meaningfully with the topic over multiple exchanges. Available certificates: 'web3 Basics'. NEVER give certificates for basic questions or simple interactions - the standard must be high.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        certificate: {
+          type: Type.STRING,
+          description: "The certificate type to give the user. Must be one of: 'web3Basics'",
+          enum: ["web3Basics"]
+        },
+        confidenceLevel: {
+          type: Type.NUMBER,
+          description: "Your confidence (1-10) that the user truly understands this topic deeply. ONLY award certificates when confidence is 8 or higher.",
+        }
+      },
+      required: ['certificate', 'confidenceLevel'],  
+    }
   }
   constructor(
     private chatService: ChatService,
     private authService: AuthService,
+    private rewardsService: RewardsService,
   ) {
     const aiApiKey = process.env.GEMINI_API_KEY;
     if (!aiApiKey) {
@@ -149,7 +170,6 @@ Do not include any explanation or additional text outside the JSON array.`;
         text: message.content,
       };
       
-      // Add timeout to prevent hanging requests
       const result = await Promise.race([
         this.genAI.models.generateContent({
           model: 'gemini-2.0-flash',
@@ -175,7 +195,6 @@ Do not include any explanation or additional text outside the JSON array.`;
     } catch (error) {
       console.error('Error generating title:', error);
       
-      // Fallback title generation logic that doesn't require API
       try {
         const words = String(message.content).split(' ');
         const shortTitle = words.slice(0, 5).join(' ');
@@ -217,6 +236,7 @@ Do not include any explanation or additional text outside the JSON array.`;
         'You do not have permission to access this chat',
       );
     }
+    const user = await this.authService.getUserById(userId);
 
     await this.chatService.saveMessages({
       messages: [
@@ -230,10 +250,8 @@ Do not include any explanation or additional text outside the JSON array.`;
     });
 
     try {
-      // Check if user has enough credits before proceeding
       const userCredits = await this.checkUserCredits(userId);
       if (userCredits < 0.5) {
-        // User doesn't have enough credits
         const outOfCreditsMessage = {
           id: generateUUID(),
           role: 'assistant',
@@ -258,13 +276,12 @@ Do not include any explanation or additional text outside the JSON array.`;
         ],
       }));
 
-      // Add timeout to prevent hanging requests
       const result = await Promise.race([
         this.genAI.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: user?.isPremium ? 'gemini-2.5-flash' : 'gemini-1.5-flash',
           contents: formattedMessages,
           config: {
-            tools: [{ functionDeclarations: [this.scoreUser] }],
+            tools: [{ functionDeclarations: [this.scoreUser, this.rewardUser] }],
             maxOutputTokens: 3000,
             temperature: 1,
             systemInstruction: this.systemInstruction,
@@ -289,8 +306,14 @@ Do not include any explanation or additional text outside the JSON array.`;
       const functionPart = parts.find(
         (part: any) => part.functionCall?.name === 'scoreUser',
       );
+      
+      const certificatePart = parts.find(
+        (part: any) => part.functionCall?.name === 'giveACertificate',
+      );
+      
       let score = 0;
       let scoreAcknowledgement = '';
+      let certificateAcknowledgement = '';
 
       if (functionPart) {
         score = Number(functionPart.functionCall?.args?.score || 0);
@@ -299,8 +322,33 @@ Do not include any explanation or additional text outside the JSON array.`;
           scoreAcknowledgement = `✅ Great job! I've awarded you ${score} point${score !== 1 ? 's' : ''} for your answer 🎉\n\n`;
         }
       }
+      
+      if (certificatePart) {
+        const certificateType = certificatePart.functionCall?.args?.certificate;
+        const confidenceLevel = Number(certificatePart.functionCall?.args?.confidenceLevel || 0);
+        console.log(`Certificate type requested: ${certificateType} with confidence level: ${confidenceLevel}`);
+        
+        if (certificateType && this.rewards[certificateType] && confidenceLevel >= 8) {
+          try {
+            const rewardId = this.rewards[certificateType];
+            await this.rewardsService.awardRewardToUser(userId, rewardId);
+            
+            certificateAcknowledgement = `🏆 Congratulations! You've earned a ${certificateType} certificate! You can view and claim it in your rewards section 🎓\n\n`;
+            console.log(`Awarded certificate ${certificateType} (${rewardId}) to user ${userId} with confidence level ${confidenceLevel}`);
+          } catch (error) {
+            if (error.message && error.message.includes('already has this reward')) {
+              certificateAcknowledgement = `You've already earned the ${certificateType} certificate! You can view it in your rewards section 🎓\n\n`;
+              console.log(`User ${userId} already has the ${certificateType} certificate`);
+            } else {
+              console.error(`Failed to award ${certificateType} certificate to user ${userId}:`, error);
+            }
+          }
+        } else {
+          console.log(`Certificate request denied - confidence level ${confidenceLevel} is below threshold (8)`);
+        }
+      }
 
-      const fullResponse = `${scoreAcknowledgement}${responseText}`.trim();
+      const fullResponse = `${scoreAcknowledgement}${certificateAcknowledgement}${responseText}`.trim();
       const assistantMessage = {
         id: generateUUID(),
         role: 'assistant',
@@ -314,8 +362,7 @@ Do not include any explanation or additional text outside the JSON array.`;
       return assistantMessage;
     } catch (error) {
       console.error('Error generating response:', error);
-      
-      // Fallback response when API is unreachable
+    
       const fallbackResponse = {
         id: generateUUID(),
         role: 'assistant',

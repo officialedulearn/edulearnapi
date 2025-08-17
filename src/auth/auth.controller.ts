@@ -186,4 +186,15 @@ export class AuthController {
       throw new NotFoundException(error.message);
     }
   }
+
+  @Get('search')
+  async searchUsers(@Query('username') username: string, @Query('limit') limit?: number) {
+    if (!username) {
+      throw new BadRequestException('Username query parameter is required');
+    }
+    
+    const limitValue = limit ? parseInt(limit.toString(), 10) : 10;
+    
+    return this.authService.searchUsersByUsername(username, limitValue);
+  }
 }

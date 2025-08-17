@@ -15,12 +15,13 @@ import { Wallet } from '@project-serum/anchor';
 import {
   createBurnCheckedInstruction,
   createMint,
+  createTransferCheckedInstruction,
   getAssociatedTokenAddress,
   getOrCreateAssociatedTokenAccount,
 } from '@solana/spl-token';
 import db from '../../drizzle';
 import { AuthService } from 'src/auth/auth.service';
-import { premiumTransactions, user } from 'lib/db/schema';
+import { earning, premiumTransactions, user } from 'lib/db/schema';
 import { eq } from 'drizzle-orm';
 import axios from 'axios';
 import { transactionSenderAndConfirmationWaiter } from '../../lib/transaction/transactionSender';
@@ -36,6 +37,9 @@ export class WalletService {
   );
   private readonly connection = new Connection(
     'https://api.mainnet-beta.solana.com',
+  );
+  private readonly heliusConnection = new Connection(
+    "https://mainnet.helius-rpc.com/?api-key=36181439-ce38-4a9f-8adc-d413c0a4e218"
   );
   private readonly lamportsToSend = 0.0007;
 
@@ -142,15 +146,15 @@ export class WalletService {
     const transaction = new Transaction().add(transferInstruction);
 
     transaction.recentBlockhash = (
-      await this.connection.getLatestBlockhash()
+      await this.heliusConnection.getLatestBlockhash()
     ).blockhash;
     transaction.feePayer = sender.publicKey;
 
     transaction.sign(sender);
-    const signature = await this.connection.sendRawTransaction(
+    const signature = await this.heliusConnection.sendRawTransaction(
       transaction.serialize(),
     );
-    await this.connection.confirmTransaction(signature);
+    await this.heliusConnection.confirmTransaction(signature);
 
     await db.insert(premiumTransactions).values({
       userId: user.id,
@@ -171,12 +175,10 @@ export class WalletService {
     const keypair = Keypair.fromSecretKey(secretKey);
     const wallet = new Wallet(keypair);
 
-    // Create an axios instance with more reasonable timeouts for Jupiter API
     const axiosInstance = axios.create({
-      timeout: 30000, // 30 seconds
+      timeout: 30000,
     });
     
-    // Try multiple Jupiter API endpoints if one fails
     const jupiterApiEndpoints = [
       'https://quote-api.jup.ag/v6',
       'https://jupiter-quote-api.saihubd.xyz/v6',
@@ -187,7 +189,6 @@ export class WalletService {
       console.log('Swapping SOL to EDLN for user:', userId);
       console.log('Amount:', amount * LAMPORTS_PER_SOL, 'lamports');
       
-      // Get quote with retry logic
       let quoteResponse;
       let currentEndpointIndex = 0;
       
@@ -244,12 +245,12 @@ export class WalletService {
 
       transaction.sign([keypair]);
 
-      const blockhashWithExpiryBlockHeight = await this.connection.getLatestBlockhash();
+      const blockhashWithExpiryBlockHeight = await this.heliusConnection.getLatestBlockhash();
 
       
       console.log('Sending transaction with improved transaction sender...');
       const txResponse = await transactionSenderAndConfirmationWaiter({
-        connection: this.connection,
+        connection: this.heliusConnection,
         serializedTransaction: Buffer.from(transaction.serialize()),
         blockhashWithExpiryBlockHeight,
       });
@@ -287,8 +288,6 @@ export class WalletService {
         this.EDLN,
         userPublicKey,
       );
-
-      // EDLN token has 9 decimals, so we multiply by 10^9
       const tokenDecimals = 9;
       const adjustedAmount = amount * Math.pow(10, tokenDecimals);
       console.log(`Adjusted burn amount: ${amount} EDLN = ${adjustedAmount} base units`);
@@ -323,6 +322,251 @@ export class WalletService {
     } catch (error) {
       console.error('Error during EDLN token burn:', error.message);
       throw new Error(`Burn failed: ${error.message}`);
+    }
+  }
+
+  async addEarnings(userId: string, data: { sol?: number; edln?: number }) {
+    try {
+      console.log(`Adding earnings for user ${userId}: ${JSON.stringify(data)}`);
+      const user = await this.authService.getUserById(userId);
+      if (!user) {
+        throw new Error('User not found');
+      }
+      const solValue = data.sol ? Number(data.sol).toFixed(2) : '0.00';
+      const edlnValue = data.edln ? Number(data.edln).toFixed(2) : '0.00';
+
+      const [result] = await db.insert(earning).values({
+        userId: userId,
+        sol: solValue,
+        edln: edlnValue,
+        createdAt: new Date()
+      }).returning();
+
+      console.log(`Earnings added successfully for user ${userId}`, result);
+      return result;
+    } catch (error) {
+      console.error('Error adding earnings:', error.message);
+      throw new Error(`Failed to add earnings: ${error.message}`);
+    }
+  }
+
+  async getUserEarnings(userId: string) {
+    try {
+      console.log(`Getting earnings for user ${userId}`);
+      const user = await this.authService.getUserById(userId);
+      if (!user) {
+        throw new Error('User not found');
+      }
+      
+      const userEarnings = await db.select().from(earning).where(eq(earning.userId, userId));
+      
+      let totalSol = 0;
+      let totalEdln = 0;
+      
+      userEarnings.forEach(earn => {
+        totalSol += Number(earn.sol);
+        totalEdln += Number(earn.edln);
+      });
+      
+      return {
+        sol: totalSol,
+        edln: totalEdln,
+        hasEarnings: totalSol > 0 || totalEdln > 0
+      };
+    } catch (error) {
+      console.error('Error getting user earnings:', error.message);
+      throw new Error(`Failed to get user earnings: ${error.message}`);
+    }
+  }
+
+  async claimEarnings(userId: string, type: 'sol' | 'edln' | 'all') {
+    try {
+      console.log(`Claiming earnings for user ${userId}, type: ${type}`);
+      const user = await this.authService.getUserById(userId);
+      if (!user) {
+        throw new Error('User not found');
+      }
+      const earnings = await db.select().from(earning).where(eq(earning.userId, userId));
+      
+      if (!earnings.length) {
+        console.log(`No earnings found for user ${userId}`);
+        return { success: false, message: 'No earnings to claim' };
+      }
+
+      let totalSol = 0;
+      let totalEdln = 0;
+      
+      earnings.forEach(earn => {
+        totalSol += Number(earn.sol);
+        totalEdln += Number(earn.edln);
+      });
+      
+      console.log(`Found earnings - SOL: ${totalSol}, EDLN: ${totalEdln}`);
+
+      if ((type === 'sol' && totalSol <= 0) || (type === 'edln' && totalEdln <= 0) || 
+          (type === 'all' && totalSol <= 0 && totalEdln <= 0)) {
+        return { success: false, message: 'No earnings to claim for the selected type' };
+      }
+
+      const userPublicKey = new PublicKey(user.address as unknown as string);
+      
+      const transactions: any = [];
+
+      if ((type === 'sol' || type === 'all') && totalSol > 0) {
+        const solTransaction = await this.transferSOL(
+          userPublicKey, 
+          totalSol
+        );
+        transactions.push({ type: 'sol', amount: totalSol, tx: solTransaction });
+      }
+
+      if ((type === 'edln' || type === 'all') && totalEdln > 0) {
+        const edlnTransaction = await this.transferEDLN(
+          userPublicKey, 
+          totalEdln
+        );
+        transactions.push({ type: 'edln', amount: totalEdln, tx: edlnTransaction });
+      }
+      
+      if (type === 'all' && transactions.length > 0) {
+        await db.delete(earning).where(eq(earning.userId, userId));
+      } else if (type === 'sol' && totalSol > 0) {
+        await db.delete(earning).where(eq(earning.userId, userId));
+        if (totalEdln > 0) {
+          await this.addEarnings(userId, { edln: totalEdln });
+        }
+      } else if (type === 'edln' && totalEdln > 0) {
+        await db.delete(earning).where(eq(earning.userId, userId));
+        if (totalSol > 0) {
+          await this.addEarnings(userId, { sol: totalSol });
+        }
+      }
+
+      console.log(`Successfully claimed earnings for user ${userId}`, transactions);
+      
+      return {
+        success: true,
+        message: 'Earnings claimed successfully',
+        transactions
+      };
+    } catch (error) {
+      console.error('Error claiming earnings:', error.message);
+      throw new Error(`Failed to claim earnings: ${error.message}`);
+    }
+  }
+
+  private async transferSOL(toPubkey: PublicKey, amount: number) {
+    try {
+      const adminSecretKey = process.env.ADMIN_WALLET_SECRET_KEY;
+      if (!adminSecretKey) {
+        throw new Error('Admin wallet secret key not configured');
+      }
+      
+      const adminKeypair = Keypair.fromSecretKey(
+        bs58.default.decode(adminSecretKey)
+      );
+
+      const lamports = amount * LAMPORTS_PER_SOL;
+      console.log(`Transferring ${lamports} lamports (${amount} SOL) from admin to ${toPubkey.toBase58()}`);
+
+      const transferInstruction = SystemProgram.transfer({
+        fromPubkey: adminKeypair.publicKey,
+        toPubkey: toPubkey,
+        lamports: lamports,
+      });
+
+      const transaction = new Transaction().add(transferInstruction);
+      transaction.recentBlockhash = (await this.heliusConnection.getLatestBlockhash()).blockhash;
+      transaction.feePayer = adminKeypair.publicKey;
+      transaction.sign(adminKeypair);
+
+      const txid = await sendAndConfirmTransaction(this.heliusConnection, transaction, [adminKeypair]);
+      console.log('SOL transfer successful with signature:', txid);
+      
+      return txid;
+    } catch (error) {
+      console.error('Error transferring SOL:', error.message);
+      throw new Error(`SOL transfer failed: ${error.message}`);
+    }
+  }
+
+  private async transferEDLN( toPubkey: PublicKey, amount: number) {
+    try {
+      const adminSecretKey = process.env.ADMIN_WALLET_SECRET_KEY;
+      if (!adminSecretKey) {
+        throw new Error('Admin wallet secret key not configured');
+      }
+      
+      const adminKeypair = Keypair.fromSecretKey(
+        bs58.default.decode(adminSecretKey)
+      );
+
+      const sourceTokenAccount = await getAssociatedTokenAddress(
+        this.EDLN,
+        adminKeypair.publicKey
+      );
+      
+      const destinationTokenAccount = await getOrCreateAssociatedTokenAccount(
+        this.heliusConnection,
+        adminKeypair, // fee payer
+        this.EDLN,
+        toPubkey
+      );
+      
+      const tokenDecimals = 9;
+      const adjustedAmount = amount * Math.pow(10, tokenDecimals);
+      
+      console.log(
+        `Transferring ${adjustedAmount} EDLN tokens (${amount} EDLN) from admin to ${toPubkey.toBase58()}`
+      );
+
+      const transferInstruction = createTransferCheckedInstruction(
+        sourceTokenAccount,
+        this.EDLN,
+        destinationTokenAccount.address,
+        adminKeypair.publicKey,
+        adjustedAmount,
+        tokenDecimals
+      );
+
+      const transaction = new Transaction().add(transferInstruction);
+      transaction.recentBlockhash = (await this.heliusConnection.getLatestBlockhash()).blockhash;
+      transaction.feePayer = adminKeypair.publicKey;
+      transaction.sign(adminKeypair);
+
+      const txid = await sendAndConfirmTransaction(this.heliusConnection, transaction, [adminKeypair]);
+      console.log('EDLN transfer successful with signature:', txid);
+      
+      return txid;
+    } catch (error) {
+      console.error('Error transferring EDLN:', error.message);
+      throw new Error(`EDLN transfer failed: ${error.message}`);
+    }
+  }
+
+  async decryptPrivateKey(userId: string) {
+    try {
+      const user = await this.authService.getUserById(userId);
+      if (!user) {
+        throw new Error('User not found');
+      }
+      
+      if (!user.encryptedPrivateKey) {
+        throw new Error('User does not have a private key');
+      }
+      
+      const decryptedPrivateKey = decrypt(user.encryptedPrivateKey);
+      const secretKey = bs58.default.decode(decryptedPrivateKey);
+      const keypair = Keypair.fromSecretKey(secretKey);
+      
+      return {
+        keypair,
+        publicKey: keypair.publicKey,
+        privateKey: decryptedPrivateKey
+      };
+    } catch (error) {
+      console.error('Error decrypting private key:', error.message);
+      throw new Error(`Failed to decrypt private key: ${error.message}`);
     }
   }
 }

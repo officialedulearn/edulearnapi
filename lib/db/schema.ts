@@ -136,3 +136,19 @@ export const premiumTransactions = pgTable('premium_transactions', {
 });
 
 export type PremiumTransaction = InferSelectModel<typeof premiumTransactions>;
+
+export const earning = pgTable('earning', {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  userId: uuid('userId')
+    .notNull()
+    .references(() => user.id),
+  sol: numeric('sol', { precision: 10, scale: 2 })
+    .notNull()
+    .default('0.00'),
+  edln: numeric('edln', { precision: 10, scale: 2 })
+    .notNull()
+    .default('0.00'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+});
+
+export type Earning = InferSelectModel<typeof earning>;

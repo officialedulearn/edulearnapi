@@ -1,5 +1,5 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, ilike } from 'drizzle-orm';
 import db from '../../drizzle';
 import { user, claim, type User } from '../../lib/db/schema';
 import { signUpDetails } from 'types/auth';
@@ -335,7 +335,7 @@ export class AuthService {
       const hoursSinceLastRenewal = Math.floor((now.getTime() - lastCreditRenewal.getTime()) / (1000 * 60 * 60));
       
       if (hoursSinceLastRenewal >= 24) {
-        const newCredits = currentUser.isPremium ? currentCredits + 20 : 10
+        const newCredits = currentUser.isPremium ? currentCredits + 10 : currentCredits + 5
         const newUploadLimit = currentUser.isPremium ? 5 : 2;
         
         await db
@@ -421,6 +421,31 @@ export class AuthService {
       return result[0] ?? null;
     } catch (error) {
       console.error('Failed to verify user', error);
+      throw error;
+    }
+  }
+
+  async searchUsersByUsername(usernameQuery: string, limit: number = 10): Promise<Partial<User>[]> {
+    try {
+      const results = await db
+        .select({
+          id: user.id,
+          username: user.username,
+          name: user.name,
+          email: user.email,
+          verified: user.verified,
+          level: user.level,
+          xp: user.xp,
+          address: user.address,
+        })
+        .from(user)
+        .where(ilike(user.username, `%${usernameQuery}%`))
+        .limit(limit)
+        .orderBy(desc(user.xp));
+
+      return results;
+    } catch (error) {
+      console.error('Failed to search users by username', error);
       throw error;
     }
   }

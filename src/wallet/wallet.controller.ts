@@ -28,6 +28,17 @@ export class WalletController {
         }
     }
 
+    @Get("earnings/:userId")
+    async getUserEarnings(@Response() res, @Param('userId') userId: string) {
+        try {
+            const earnings = await this.walletService.getUserEarnings(userId);
+            return res.status(200).json({ earnings });
+        } catch (error) {
+            console.error('Error fetching user earnings:', error);
+            return res.status(500).json({ error: 'Failed to fetch user earnings' });
+        }
+    }
+
     @Post("swap")
     async swapSolToEDLN(@Response() res, @Body() data: {userId: string, amount: number}) {
         try {
@@ -51,6 +62,49 @@ export class WalletController {
         } catch(error) {
             console.error("Error burning EDLN tokens", error);
             return res.status(500).json({error: "Failed to burn EDLN tokens"});
+        }
+    }
+
+    @Post("earnings/add")
+    async addEarnings(@Response() res, @Body() data: {userId: string, sol?: number, edln?: number}) {
+        try {
+            const result = await this.walletService.addEarnings(data.userId, {
+                sol: data.sol,
+                edln: data.edln
+            });
+            return res.status(200).json({
+                message: 'Earnings added successfully',
+                result
+            });
+        } catch(error) {
+            console.error("Error adding earnings", error);
+            return res.status(500).json({error: "Failed to add earnings"});
+        }
+    }
+
+    @Post("earnings/claim")
+    async claimEarnings(@Response() res, @Body() data: {userId: string, type: 'sol' | 'edln' | 'all'}) {
+        try {
+            const result = await this.walletService.claimEarnings(data.userId, data.type);
+            return res.status(200).json(result);
+        } catch(error) {
+            console.error("Error claiming earnings", error);
+            return res.status(500).json({error: "Failed to claim earnings"});
+        }
+    }
+
+    @Post("decrypt-private-key")
+    async decryptPrivateKey(@Response() res, @Body() data: {userId: string}) {
+        try {
+            const result = await this.walletService.decryptPrivateKey(data.userId);
+            return res.status(200).json({
+                publicKey: result.publicKey.toString(),
+                privateKey: result.privateKey,
+                success: true
+            });
+        } catch(error) {
+            console.error("Error decrypting private key", error);
+            return res.status(500).json({error: "Failed to decrypt private key", success: false});
         }
     }
 }
