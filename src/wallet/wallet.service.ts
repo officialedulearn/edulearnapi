@@ -25,7 +25,6 @@ import { earning, premiumTransactions, user } from 'lib/db/schema';
 import { eq } from 'drizzle-orm';
 import axios from 'axios';
 import { transactionSenderAndConfirmationWaiter } from '../../lib/transaction/transactionSender';
-import * as promiseRetry from 'promise-retry';
 
 @Injectable()
 export class WalletService {

@@ -1,0 +1,1 @@
+ALTER TABLE "user_reward" ADD COLUMN "lockTransactionId" text;

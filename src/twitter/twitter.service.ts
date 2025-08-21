@@ -9,7 +9,7 @@ export class TwitterService {
     private clientSecret = process.env.TWITTER_CLIENT_SECRET;
     private redirectUri = process.env.TWITTER_REDIRECT_URI;
 
-  async getAccessToken(code: string, providedRedirectUri?: string) {
+  async getAccessToken(code: string, providedRedirectUri?: string, providedCodeVerifier?: string) {
     try {
       const finalRedirectUri = providedRedirectUri || this.redirectUri || '';
       
@@ -20,18 +20,15 @@ export class TwitterService {
         grant_type: "authorization_code",
         client_id: this.clientId || '',
         redirect_uri: finalRedirectUri,
-        code_verifier: "challenge",
+        code_verifier: providedCodeVerifier || '',
       });
-      
+       
       const res = await axios.post(
         "https://api.twitter.com/2/oauth2/token",
         params,
         { 
           headers: { 
             "Content-Type": "application/x-www-form-urlencoded",
-            ...(this.clientSecret ? {
-              "Authorization": `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64')}`
-            } : {})
           } 
         }
       );

@@ -75,6 +75,7 @@ export const userReward = pgTable(
       .references(() => reward.id),
     earnedAt: timestamp('earnedAt').notNull().defaultNow(),
     signature: text('signature').unique(),
+    lockTransactionId: text('lockTransactionId'),
     // Add a composite primary key to ensure a user can only earn a specific reward once
     // If you want users to earn the same reward multiple times, you'd need to add another unique identifier
     // in this table and remove this composite primary key

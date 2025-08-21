@@ -12,7 +12,7 @@ import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { create, mplCore } from '@metaplex-foundation/mpl-core';
 import * as bs58 from 'bs58';
 
-import { clusterApiUrl, Connection, Keypair, PublicKey } from '@solana/web3.js';
+import { clusterApiUrl, Connection, Keypair, PublicKey, Transaction, sendAndConfirmTransaction } from '@solana/web3.js';
 import {
   createSignerFromKeypair,
   generateSigner,
@@ -20,12 +20,17 @@ import {
   publicKey,
 } from '@metaplex-foundation/umi';
 import { decrypt } from 'lib/crypto.util';
+import { createTransferCheckedInstruction, getAssociatedTokenAddress, getOrCreateAssociatedTokenAccount } from '@solana/spl-token';
 
 @Injectable()
 export class RewardsService {
   private readonly connection = new Connection(
     'https://mainnet.helius-rpc.com/?api-key=36181439-ce38-4a9f-8adc-d413c0a4e218',
   );
+
+  private readonly tokenMint = new PublicKey("CFw2KxMpWuxivoowkF8vRCrnMuDeg5VMHRR7zjE7pBLV")
+  private readonly reciepient = new PublicKey("CPfwdgYWhKL9Lshsdm5TKxB7sC8tHyKuLWzRTZtKCR7p")
+
 
   async createReward(data: {
     type: 'certificate' | 'points';
@@ -158,18 +163,47 @@ export class RewardsService {
       if (!rewardExists.length) {
         throw new Error(`Reward with id ${rewardId} not found`);
       }
-
-      const umi = createUmi(this.connection).use(mplCore());
-      const encodedPrivateKey = bs58.default.decode(
-        decrypt(userExists[0].encryptedPrivateKey),
+    
+      const secretKey = decrypt(userExists[0].encryptedPrivateKey);
+      const sender = Keypair.fromSecretKey(
+        bs58.default.decode(secretKey),
       );
 
-      const umiKeypair =
-        umi.eddsa.createKeypairFromSecretKey(encodedPrivateKey);
+      const umi = createUmi(this.connection).use(mplCore());
+      const umiKeypair = umi.eddsa.createKeypairFromSecretKey(
+        bs58.default.decode(secretKey)
+      );
+      
       const signer = createSignerFromKeypair(umi, umiKeypair);
       umi.use(keypairIdentity(signer));
 
       const mint = generateSigner(umi);
+
+      const senderTokenAccount = await getOrCreateAssociatedTokenAccount(
+        this.connection,
+        sender,
+        this.tokenMint,
+        sender.publicKey
+      );
+
+      const recipientTokenAccount = await getAssociatedTokenAddress(
+        this.tokenMint,
+        this.reciepient
+      );
+
+      const transferInstruction = createTransferCheckedInstruction(
+        senderTokenAccount.address,
+        this.tokenMint,
+        recipientTokenAccount,
+        sender.publicKey,
+        10_000_000_000_000,
+        9
+      );
+
+      const transaction = new Transaction().add(transferInstruction);
+      const txId = await sendAndConfirmTransaction(this.connection, transaction, [sender]);
+
+      console.log('Transfer Transaction ID:', txId);
 
       const result = await create(umi, {
         asset: mint,
@@ -179,15 +213,17 @@ export class RewardsService {
       }).sendAndConfirm(umi);
 
       console.log('NFT Mint Signature:', bs58.default.encode(result.signature));
+      
       await db.update(userReward)
         .set({
           signature: bs58.default.encode(result.signature),
+          lockTransactionId: txId
         })
         .where(
           and(eq(userReward.userId, userId), eq(userReward.rewardId, rewardId)),
         );
 
-      return  bs58.default.encode(result.signature);
+      return bs58.default.encode(result.signature);
     } catch (error) {
       console.error(`Failed to claim reward for user`, error);
       throw error;

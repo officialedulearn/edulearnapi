@@ -6,7 +6,7 @@ export class TwitterController {
   constructor(private readonly twitterService: TwitterService) {}
 
   @Post("callback")
-  async callback(@Body("data") data: {code: string, userEmail: string, redirectUri?: string}) {
+  async callback(@Body("data") data: {code: string, userEmail: string, redirectUri?: string, providedCodeVerifier?: string}) {
     try {
       if (!data.code || !data.userEmail) {
         throw new HttpException('Missing required parameters', HttpStatus.BAD_REQUEST);
@@ -25,3 +25,4 @@ export class TwitterController {
   }
 }
 
+ 
