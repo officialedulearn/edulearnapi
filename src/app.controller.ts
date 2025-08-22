@@ -3,7 +3,6 @@ import { AppService } from './app.service';
 import { ApiKeyGuard } from './auth/guards/api-key.guard';
 
 @Controller()
-@UseGuards(ApiKeyGuard)
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
