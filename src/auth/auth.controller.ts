@@ -13,12 +13,13 @@ import {
 import { AuthService } from './auth.service';
 import { signUpDetails } from 'types/auth';
 import { ApiKeyGuard } from './guards/api-key.guard';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Controller('auth')
-@UseGuards(ApiKeyGuard)
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // Public endpoints that don't need authentication
   @Post('signup')
   async signUp(@Body() data: signUpDetails) {
     const result = await this.authService.createUser(data);
@@ -28,8 +29,10 @@ export class AuthController {
     return result;
   }
 
+  // These endpoints should support both auth methods during transition
   // GET /auth/email/:email
   @Get('email/:email')
+  @UseGuards(JwtAuthGuard)
   async getUserByEmail(@Param('email') email: string) {
     const user = await this.authService.getUserByEmail(email);
     if (!user) {
@@ -40,6 +43,7 @@ export class AuthController {
 
   // GET /auth/id/:id
   @Get('id/:id')
+  @UseGuards(JwtAuthGuard)
   async getUserById(@Param('id') id: string) {
     const user = await this.authService.getUserById(id);
     if (!user) {
@@ -49,6 +53,7 @@ export class AuthController {
   }
   
   @Put('edit')
+  @UseGuards(JwtAuthGuard)
   async editUser(@Body() body: { name: string; email: string, username: string }) {
     const { name, email, username } = body;
 
@@ -64,8 +69,10 @@ export class AuthController {
 
     return updatedUser;
   }
+
   // PUT /auth/address?email=someone@email.com&address=solanaWallet
   @Put('address')
+  @UseGuards(JwtAuthGuard)
   async updateUserAddress(
     @Query('email') email: string,
     @Query('address') address: string,
@@ -78,6 +85,7 @@ export class AuthController {
 
   // POST /auth/referral?code=abc123
   @Post('referral')
+  @UseGuards(JwtAuthGuard)
   async incrementReferral(@Query('code') code: string) {
     if (!code) throw new BadRequestException('Referral code is required');
     const name = await this.authService.incrementReferralCount(code);
@@ -85,21 +93,9 @@ export class AuthController {
     return { referrer: name };
   }
 
-  // // PUT /auth/deduct-credits/:userId
-  // @Put('deduct-credits/:userId')
-  // @UseGuards(ApiKeyGuard)
-  // async deductCredits(@Param('userId') userId: string) {
-  //   if (!userId) throw new BadRequestException('User ID is required');
-  //   try {
-  //     const remainingCredits = await this.authService.deductUserCredits(userId);
-  //     return { credits: remainingCredits };
-  //   } catch (error) {
-  //     throw new NotFoundException(error.message);
-  //   }
-  // }
-
   // GET /auth/leaderboard
   @Get('leaderboard')
+  // Public leaderboard endpoint
   async getLeaderboard() {
     try {
       const users = await this.authService.getAllUsersAndXP();
@@ -111,6 +107,7 @@ export class AuthController {
 
   // PUT /auth/xp/:userId
   @Put('xp/:userId')
+  @UseGuards(JwtAuthGuard)
   async updateXP(
     @Param('userId') userId: string,
     @Body() body: { xp: number, title: string, type: "chat" | "quiz" | "streak" }
@@ -128,6 +125,7 @@ export class AuthController {
 
   // PUT /auth/streak/:userId
   @Put('streak/:userId')
+  @UseGuards(JwtAuthGuard)
   async updateStreak(
     @Param('userId') userId: string,
     @Body() body: { increment?: number }
@@ -147,6 +145,7 @@ export class AuthController {
 
   // PUT /auth/level/:userId
   @Put('level/:userId')
+  @UseGuards(JwtAuthGuard)
   async setLevel(
     @Param('userId') userId: string,
     @Body() body: { level: 'novice' | 'beginner' | 'intermediate' | 'advanced' | 'expert' }
@@ -166,8 +165,10 @@ export class AuthController {
       throw new NotFoundException(error.message);
     }
   }
+  
   // PUT /auth/credits/:userId
   @Put('credits/:userId')
+  @UseGuards(JwtAuthGuard)
   async updateCredits(
     @Param('userId') userId: string,
     @Body() body: { credits: number }
@@ -184,6 +185,7 @@ export class AuthController {
   }
 
   @Get('search')
+  @UseGuards(JwtAuthGuard)
   async searchUsers(@Query('username') username: string, @Query('limit') limit?: number) {
     if (!username) {
       throw new BadRequestException('Username query parameter is required');

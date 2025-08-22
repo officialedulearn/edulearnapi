@@ -1,10 +1,10 @@
 import { Body, Controller, Get, Param, Post, Response, UseGuards } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { PublicKey } from '@solana/web3.js';
-import { ApiKeyGuard } from '../auth/guards/api-key.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('wallet')
-@UseGuards(ApiKeyGuard)
+@UseGuards(JwtAuthGuard)
 export class WalletController {
     constructor(private walletService: WalletService) {}
 

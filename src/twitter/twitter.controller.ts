@@ -1,9 +1,9 @@
 import { Body, Controller, Post, HttpException, HttpStatus, UseGuards } from '@nestjs/common';
 import { TwitterService } from './twitter.service';
-import { ApiKeyGuard } from '../auth/guards/api-key.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('twitter')
-@UseGuards(ApiKeyGuard)
+@UseGuards(JwtAuthGuard)
 export class TwitterController {
   constructor(private readonly twitterService: TwitterService) {}
 

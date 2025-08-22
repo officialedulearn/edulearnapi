@@ -1,7 +1,7 @@
 import { Controller, Post, UseGuards } from '@nestjs/common';
 import { CronTasksService } from './cron-tasks.service';
-import { ApiKeyGuard } from '../auth/guards/api-key.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('cron-tasks')
-@UseGuards(ApiKeyGuard)
+@UseGuards(JwtAuthGuard)
 export class CronTasksController {}

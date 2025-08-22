@@ -4,11 +4,13 @@ import { AuthService } from './auth.service';
 import { ActivityModule } from 'src/activity/activity.module';
 import { WalletModule } from 'src/wallet/wallet.module';
 import { RewardsModule } from 'src/rewards/rewards.module';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { ApiKeyGuard } from './guards/api-key.guard';
 
 @Module({
   imports: [ActivityModule, forwardRef(() => WalletModule), RewardsModule],
   controllers: [AuthController],
-  providers: [AuthService],
-  exports: [AuthService],
+  providers: [AuthService, JwtAuthGuard, ApiKeyGuard],
+  exports: [AuthService, JwtAuthGuard, ApiKeyGuard],
 })
 export class AuthModule {}

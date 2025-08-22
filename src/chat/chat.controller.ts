@@ -10,10 +10,10 @@ import {
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { Message } from '../../lib/db/schema';
-import { ApiKeyGuard } from '../auth/guards/api-key.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('chat')
-@UseGuards(ApiKeyGuard)
+@UseGuards(JwtAuthGuard)
 export class ChatController {
     constructor(private readonly chatService: ChatService) {}
 

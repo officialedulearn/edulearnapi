@@ -1,9 +1,9 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, BadRequestException, NotFoundException } from '@nestjs/common';
 import { RewardsService } from './rewards.service';
-import { ApiKeyGuard } from '../auth/guards/api-key.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('rewards')
-@UseGuards(ApiKeyGuard)
+@UseGuards(JwtAuthGuard)
 export class RewardsController {
   constructor(private readonly rewardsService: RewardsService) {}
   
