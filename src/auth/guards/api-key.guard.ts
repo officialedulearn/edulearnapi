@@ -15,17 +15,13 @@ export class ApiKeyGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
     const apiKey = request.headers['x-api-key'];
 
-    // Check if API key is provided
     if (!apiKey) {
       throw new UnauthorizedException('API key is missing');
     }
     
-    // Check if environment variable is defined
     if (!this.validKey) {
       throw new UnauthorizedException('API authentication is misconfigured');
     }
-
-    // Check if API key is valid
     if (apiKey !== this.validKey) {
       throw new UnauthorizedException('Invalid API key');
     }

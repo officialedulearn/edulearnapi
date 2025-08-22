@@ -1,7 +1,9 @@
-import { Body, Controller, Post, HttpException, HttpStatus } from '@nestjs/common';
+import { Body, Controller, Post, HttpException, HttpStatus, UseGuards } from '@nestjs/common';
 import { TwitterService } from './twitter.service';
+import { ApiKeyGuard } from '../auth/guards/api-key.guard';
 
 @Controller('twitter')
+@UseGuards(ApiKeyGuard)
 export class TwitterController {
   constructor(private readonly twitterService: TwitterService) {}
 
@@ -25,4 +27,3 @@ export class TwitterController {
   }
 }
 
- 

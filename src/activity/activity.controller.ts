@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Body, Param, Query, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, BadRequestException, NotFoundException, UseGuards } from '@nestjs/common';
 import { ActivityService } from './activity.service';
+import { ApiKeyGuard } from '../auth/guards/api-key.guard';
 
 @Controller('activity')
+@UseGuards(ApiKeyGuard)
 export class ActivityController {
   constructor(private readonly activityService: ActivityService) {}
 

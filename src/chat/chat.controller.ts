@@ -6,11 +6,14 @@ import {
     Body,
     Param,
     NotFoundException,
+    UseGuards,
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { Message } from '../../lib/db/schema';
+import { ApiKeyGuard } from '../auth/guards/api-key.guard';
 
 @Controller('chat')
+@UseGuards(ApiKeyGuard)
 export class ChatController {
     constructor(private readonly chatService: ChatService) {}
 

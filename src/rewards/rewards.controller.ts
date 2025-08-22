@@ -3,6 +3,7 @@ import { RewardsService } from './rewards.service';
 import { ApiKeyGuard } from '../auth/guards/api-key.guard';
 
 @Controller('rewards')
+@UseGuards(ApiKeyGuard)
 export class RewardsController {
   constructor(private readonly rewardsService: RewardsService) {}
   
@@ -22,7 +23,6 @@ export class RewardsController {
   }
 
   @Post()
-  @UseGuards(ApiKeyGuard)
   async createReward(@Body() data: {
     type: 'certificate' | 'points'
     title: string;
@@ -66,7 +66,6 @@ export class RewardsController {
   }
 
   @Put(':id')
-  @UseGuards(ApiKeyGuard)
   async updateReward(
     @Param('id') id: string,
     @Body() data: {
@@ -91,7 +90,6 @@ export class RewardsController {
   }
 
   @Delete(':id')
-  @UseGuards(ApiKeyGuard)
   async deleteReward(@Param('id') id: string) {
     try {
       const deleted = await this.rewardsService.deleteReward(id);
@@ -108,7 +106,6 @@ export class RewardsController {
   }
 
   @Post('award')
-  @UseGuards(ApiKeyGuard)
   async awardRewardToUser(
     @Body() data: { userId: string; rewardId: string }
   ) {
@@ -137,7 +134,6 @@ export class RewardsController {
   }
 
   @Delete('user')
-  @UseGuards(ApiKeyGuard)
   async removeRewardFromUser(
     @Query('userId') userId: string,
     @Query('rewardId') rewardId: string
@@ -175,7 +171,6 @@ export class RewardsController {
   }
 
   @Get('recipients/:rewardId')
-  @UseGuards(ApiKeyGuard)
   async getUsersWithReward(@Param('rewardId') rewardId: string) {
     if (!rewardId) {
       throw new BadRequestException('Reward ID is required');

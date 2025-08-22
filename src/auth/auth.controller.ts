@@ -8,13 +8,14 @@ import {
   Query,
   BadRequestException,
   NotFoundException,
+  UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { signUpDetails } from 'types/auth';
-import { UseGuards } from '@nestjs/common';
 import { ApiKeyGuard } from './guards/api-key.guard';
 
 @Controller('auth')
+@UseGuards(ApiKeyGuard)
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
@@ -47,7 +48,6 @@ export class AuthController {
     return user;
   }
   
-  @UseGuards(ApiKeyGuard)
   @Put('edit')
   async editUser(@Body() body: { name: string; email: string, username: string }) {
     const { name, email, username } = body;
@@ -111,7 +111,6 @@ export class AuthController {
 
   // PUT /auth/xp/:userId
   @Put('xp/:userId')
-  @UseGuards(ApiKeyGuard)
   async updateXP(
     @Param('userId') userId: string,
     @Body() body: { xp: number, title: string, type: "chat" | "quiz" | "streak" }
@@ -129,7 +128,6 @@ export class AuthController {
 
   // PUT /auth/streak/:userId
   @Put('streak/:userId')
-  @UseGuards(ApiKeyGuard)
   async updateStreak(
     @Param('userId') userId: string,
     @Body() body: { increment?: number }
@@ -149,7 +147,6 @@ export class AuthController {
 
   // PUT /auth/level/:userId
   @Put('level/:userId')
-  @UseGuards(ApiKeyGuard)
   async setLevel(
     @Param('userId') userId: string,
     @Body() body: { level: 'novice' | 'beginner' | 'intermediate' | 'advanced' | 'expert' }
@@ -171,7 +168,6 @@ export class AuthController {
   }
   // PUT /auth/credits/:userId
   @Put('credits/:userId')
-  @UseGuards(ApiKeyGuard)
   async updateCredits(
     @Param('userId') userId: string,
     @Body() body: { credits: number }
