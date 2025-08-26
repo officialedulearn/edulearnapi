@@ -128,14 +128,15 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async updateStreak(
     @Param('userId') userId: string,
-    @Body() body: { increment?: number }
+    @Body() body: { streak: number }
   ) {
     if (!userId) throw new BadRequestException('User ID is required');
+    if (body.streak === undefined) throw new BadRequestException('Streak value is required');
     
     try {
       const newStreak = await this.authService.updateUserStreak(
         userId, 
-        body.increment ?? 1
+        body.streak
       );
       return { streak: newStreak };
     } catch (error) {

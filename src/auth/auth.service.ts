@@ -277,17 +277,13 @@ export class AuthService {
 
   async updateUserStreak(
     userId: string,
-    incrementBy: number = 1,
+    newStreak: number,
   ): Promise<number> {
     try {
       const users = await db.select().from(user).where(eq(user.id, userId));
       if (users.length === 0) {
         throw new Error(`User with id ${userId} not found`);
       }
-
-      const currentUser = users[0];
-      const currentStreak = currentUser.streak || 0;
-      const newStreak = currentStreak + incrementBy;
 
       await db
         .update(user)
