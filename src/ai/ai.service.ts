@@ -434,7 +434,6 @@ Do not include any explanation or additional text outside the JSON array.`;
         throw new Error('Failed to generate valid quiz questions');
       }
 
-      // Parse and validate the JSON
       const quizQuestions = this.parseAndValidateQuiz(jsonStr);
       
       if (!quizQuestions || quizQuestions.length === 0) {
@@ -446,7 +445,6 @@ Do not include any explanation or additional text outside the JSON array.`;
     } catch (error) {
       console.error('Error generating quiz:', error);
       
-      // Mark as tested and deduct credits even on error to prevent retry abuse
       await this.chatService.markChatAsTested(chatId);
       await this.authService.deductUserCredits(userId);
       
@@ -480,15 +478,8 @@ Do not include any explanation or additional text outside the JSON array.`;
     
     jsonStr = jsonStr
       .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') 
-      .replace(/\n/g, '\\n') 
-      .replace(/\r/g, '\\r') 
-      .replace(/\t/g, '\\t') 
-      .replace(/\\/g, '\\\\')
-      .replace(/\\\\n/g, '\\n')
-      .replace(/\\\\r/g, '\\r') 
-      .replace(/\\\\t/g, '\\t') 
-      .replace(/([^\\])"/g, '$1\\"') 
-      .replace(/^"/g, '\\"'); 
+      .replace(/\r\n/g, '\n') 
+      .replace(/\r/g, '\n'); 
     
     return jsonStr;
   }
@@ -545,8 +536,7 @@ Do not include any explanation or additional text outside the JSON array.`;
       if (quoteCount % 2 !== 0) {
         const lastQuoteIndex = fixed.lastIndexOf('"');
         const afterLastQuote = fixed.substring(lastQuoteIndex + 1);
-        
-        // If there's content after the last quote that looks like it should be closed
+      
         if (afterLastQuote.includes('}') || afterLastQuote.includes(']')) {
           const insertIndex = fixed.lastIndexOf('}');
           if (insertIndex > lastQuoteIndex) {
