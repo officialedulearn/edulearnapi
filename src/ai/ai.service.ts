@@ -410,33 +410,178 @@ Do not include any explanation or additional text outside the JSON array.`;
       ],
     }));
 
-    const result = await this.genAI.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: `Our conversation: ${JSON.stringify(formattedMessages)}`,
-      config: {
-        temperature: 0.2,
-        maxOutputTokens: 500,
-        systemInstruction: this.systemInstructionForQuiz,
-      },
-    });
-
-    await this.chatService.markChatAsTested(chatId)
-    await this.authService.deductUserCredits(userId);
-
-    const response = result.text ?? '';
-    let jsonStr = response;
-    if (response.includes('```json')) {
-      jsonStr = response.split('```json')[1].split('```')[0].trim();
-    } else if (response.includes('```')) {
-      jsonStr = response.split('```')[1].split('```')[0].trim();
-    }
-
     try {
-      const quizQuestions = JSON.parse(jsonStr);
+      const result = await this.genAI.models.generateContent({
+        model: 'gemini-1.5-flash',
+        contents: `Our conversation: ${JSON.stringify(formattedMessages)}`,
+        config: {
+          temperature: 0.1, // Lower temperature for more consistent JSON output
+          maxOutputTokens: 1000, // Increased tokens for better JSON completion
+          systemInstruction: this.systemInstructionForQuiz,
+        },
+      });
+
+      await this.chatService.markChatAsTested(chatId);
+      await this.authService.deductUserCredits(userId);
+
+      const response = result.text ?? '';
+      
+      // Clean and extract JSON from the response
+      let jsonStr = this.extractAndCleanJSON(response);
+      
+      if (!jsonStr) {
+        console.error('No valid JSON found in response:', response);
+        throw new Error('Failed to generate valid quiz questions');
+      }
+
+      // Parse and validate the JSON
+      const quizQuestions = this.parseAndValidateQuiz(jsonStr);
+      
+      if (!quizQuestions || quizQuestions.length === 0) {
+        console.warn('Empty or invalid quiz questions generated');
+        throw new Error('Failed to generate valid quiz questions');
+      }
+
       return quizQuestions;
-    } catch (jsonError) {
-      console.error('Error parsing JSON from model response:', jsonError);
+    } catch (error) {
+      console.error('Error generating quiz:', error);
+      
+      // Mark as tested and deduct credits even on error to prevent retry abuse
+      await this.chatService.markChatAsTested(chatId);
+      await this.authService.deductUserCredits(userId);
+      
       throw new Error('Failed to generate valid quiz questions');
     }
+  }
+
+  private extractAndCleanJSON(response: string): string | null {
+    let jsonStr = response.trim();
+    
+    if (jsonStr.includes('```json')) {
+      const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        jsonStr = jsonMatch[1].trim();
+      }
+    } else if (jsonStr.includes('```')) {
+      const codeMatch = jsonStr.match(/```\s*([\s\S]*?)\s*```/);
+      if (codeMatch) {
+        jsonStr = codeMatch[1].trim();
+      }
+    }
+    
+    const arrayStart = jsonStr.indexOf('[');
+    const arrayEnd = jsonStr.lastIndexOf(']');
+    
+    if (arrayStart === -1 || arrayEnd === -1 || arrayStart >= arrayEnd) {
+      return null;
+    }
+    
+    jsonStr = jsonStr.substring(arrayStart, arrayEnd + 1);
+    
+    jsonStr = jsonStr
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') 
+      .replace(/\n/g, '\\n') 
+      .replace(/\r/g, '\\r') 
+      .replace(/\t/g, '\\t') 
+      .replace(/\\/g, '\\\\')
+      .replace(/\\\\n/g, '\\n')
+      .replace(/\\\\r/g, '\\r') 
+      .replace(/\\\\t/g, '\\t') 
+      .replace(/([^\\])"/g, '$1\\"') 
+      .replace(/^"/g, '\\"'); 
+    
+    return jsonStr;
+  }
+
+  private parseAndValidateQuiz(jsonStr: string): any[] | null {
+    try {
+      const parsed = JSON.parse(jsonStr);
+      
+      if (!Array.isArray(parsed)) {
+        console.error('Parsed JSON is not an array');
+        return null;
+      }
+      
+      const validQuestions = parsed.filter(question => 
+        question &&
+        typeof question.question === 'string' &&
+        Array.isArray(question.options) &&
+        question.options.length === 4 &&
+        typeof question.correctAnswer === 'string' &&
+        typeof question.explanation === 'string' &&
+        question.options.includes(question.correctAnswer)
+      );
+      
+      if (validQuestions.length === 0) {
+        console.error('No valid questions found in parsed JSON');
+        return null;
+      }
+      
+      return validQuestions;
+    } catch (jsonError) {
+      console.error('JSON parsing failed:', jsonError);
+      console.error('Attempted to parse:', jsonStr);
+      
+      try {
+        const fixedJson = this.attemptJSONFix(jsonStr);
+        if (fixedJson) {
+          const parsed = JSON.parse(fixedJson);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch (secondError) {
+        console.error('Second parsing attempt failed:', secondError);
+      }
+      
+      return null;
+    }
+  }
+
+  private attemptJSONFix(jsonStr: string): string | null {
+    try {
+      let fixed = jsonStr;
+      const quoteCount = (fixed.match(/"/g) || []).length;
+      if (quoteCount % 2 !== 0) {
+        const lastQuoteIndex = fixed.lastIndexOf('"');
+        const afterLastQuote = fixed.substring(lastQuoteIndex + 1);
+        
+        // If there's content after the last quote that looks like it should be closed
+        if (afterLastQuote.includes('}') || afterLastQuote.includes(']')) {
+          const insertIndex = fixed.lastIndexOf('}');
+          if (insertIndex > lastQuoteIndex) {
+            fixed = fixed.substring(0, insertIndex) + '"' + fixed.substring(insertIndex);
+          }
+        }
+      }
+      
+      let openBraces = 0;
+      let openBrackets = 0;
+      
+      for (let i = 0; i < fixed.length; i++) {
+        if (fixed[i] === '{') openBraces++;
+        else if (fixed[i] === '}') openBraces--;
+        else if (fixed[i] === '[') openBrackets++;
+        else if (fixed[i] === ']') openBrackets--;
+      }
+      
+      while (openBraces > 0) {
+        fixed += '}';
+        openBraces--;
+      }
+      while (openBrackets > 0) {
+        fixed += ']';
+        openBrackets--;
+      }
+      
+      return fixed;
+    } catch (error) {
+      console.error('Error attempting JSON fix:', error);
+      return null;
+    }
+  }
+
+  private getFallbackQuiz(): any[] {
+    return [];
   }
 }
