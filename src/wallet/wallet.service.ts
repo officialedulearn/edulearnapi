@@ -31,6 +31,9 @@ export class WalletService {
   private readonly EDLN: PublicKey = new PublicKey(
     'CFw2KxMpWuxivoowkF8vRCrnMuDeg5VMHRR7zjE7pBLV',
   );
+  private readonly USDC: PublicKey = new PublicKey(
+    'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+  );
   private readonly solStore: PublicKey = new PublicKey(
     'BTxbf6nkRX2wUiNpBVhA5SytPvST7KvEQoBDWVfpcvtv',
   );
@@ -40,6 +43,8 @@ export class WalletService {
   private readonly heliusConnection = new Connection(
     "https://mainnet.helius-rpc.com/?api-key=36181439-ce38-4a9f-8adc-d413c0a4e218"
   );
+
+  private readonly proPaymentWallet: PublicKey = new PublicKey("CT9ispmUxpBrbXT4kiLuJNMKoYWEZXtos2cKcSds4jY5")
   private readonly lamportsToSend = 0.0007;
 
   constructor(
@@ -120,36 +125,88 @@ export class WalletService {
     }
   }
 
-  async payPremium(userId: string) {
+  async payPremium(userId: string, amount: number) {
     const user = await this.authService.getUserById(userId);
     if (!user) {
       throw new Error('User not found');
     }
 
-    const userBalance = await this.getBalance(
-      new PublicKey(user.address as unknown as PublicKey),
-    );
-    if (userBalance.sol < this.lamportsToSend) {
-      throw new Error('Insufficient balance to upgrade to premium');
+    if (amount !== 8 && amount !== 80) {
+      throw new Error('Invalid premium amount. Must be 8 (monthly) or 80 (annual)');
     }
 
+    const userPublicKey = new PublicKey(user.address as unknown as string);
     const secretKey = bs58.default.decode(decrypt(user.encryptedPrivateKey));
-    const sender = Keypair.fromSecretKey(secretKey);
-    const receiver = this.solStore;
+    const userKeypair = Keypair.fromSecretKey(secretKey);
+    let userUsdcTokenAccount;
+    try {
+      userUsdcTokenAccount = await getAssociatedTokenAddress(
+        this.USDC,
+        userPublicKey
+      );
+      
+      const accountInfo = await this.heliusConnection.getAccountInfo(userUsdcTokenAccount);
+      if (!accountInfo) {
+        throw new Error('User does not have a USDC token account. Please ensure you have USDC in your wallet.');
+      }
 
-    const transferInstruction = SystemProgram.transfer({
-      fromPubkey: sender.publicKey,
-      toPubkey: receiver,
-      lamports: this.lamportsToSend * LAMPORTS_PER_SOL,
-    });
+      const tokenAccountInfo = await this.heliusConnection.getParsedTokenAccountsByOwner(userPublicKey, {
+        mint: this.USDC,
+      });
+
+      if (tokenAccountInfo.value.length === 0) {
+        throw new Error('No USDC token account found');
+      }
+
+      const usdcBalance = tokenAccountInfo.value[0].account.data.parsed.info.tokenAmount.uiAmount;
+      if (usdcBalance < amount) {
+        throw new Error(`Insufficient USDC balance. Required: ${amount} USDC, Available: ${usdcBalance} USDC`);
+      }
+    } catch (error) {
+      console.error('Error checking USDC balance:', error.message);
+      throw new Error(`Failed to verify USDC balance: ${error.message}`);
+    }
+
+
+    const adminSecretKey = process.env.ADMIN_WALLET_SECRET_KEY;
+    if (!adminSecretKey) {
+      throw new Error('Admin wallet secret key not configured');
+    }
+    
+    const adminKeypair = Keypair.fromSecretKey(bs58.default.decode(adminSecretKey));
+
+
+    const adminUsdcTokenAccount = await getAssociatedTokenAddress(
+      this.USDC,
+      this.proPaymentWallet
+    );
+
+    await getOrCreateAssociatedTokenAccount(
+      this.heliusConnection,
+      userKeypair,
+      this.USDC,
+      adminKeypair.publicKey
+    );
+
+    const usdcDecimals = 6;
+    const adjustedAmount = amount * Math.pow(10, usdcDecimals);
+
+    console.log(`Processing premium payment: ${amount} USDC from user ${userId}`);
+
+    const transferInstruction = createTransferCheckedInstruction(
+      userUsdcTokenAccount,
+      this.USDC,
+      adminUsdcTokenAccount,
+      userPublicKey,
+      adjustedAmount,
+      usdcDecimals
+    );
+
     const transaction = new Transaction().add(transferInstruction);
+    transaction.recentBlockhash = (await this.heliusConnection.getLatestBlockhash()).blockhash;
+    transaction.feePayer = userPublicKey;
+    transaction.sign(userKeypair);
 
-    transaction.recentBlockhash = (
-      await this.heliusConnection.getLatestBlockhash()
-    ).blockhash;
-    transaction.feePayer = sender.publicKey;
-
-    transaction.sign(sender);
     const signature = await this.heliusConnection.sendRawTransaction(
       transaction.serialize(),
     );
@@ -158,10 +215,18 @@ export class WalletService {
     await db.insert(premiumTransactions).values({
       userId: user.id,
       signature: signature,
+      amount: amount,
     });
 
     await this.authService.updateUserPremiumStatus(userId, true);
-    console.log('Transaction sent with signature:', signature);
+    console.log('Premium payment transaction sent with signature:', signature);
+    
+    return {
+      signature,
+      amount,
+      currency: 'USDC',
+      type: amount === 8 ? 'monthly' : 'annual'
+    };
   }
 
   async swapSolToEdln(userId: string, amount: number) {
@@ -412,11 +477,11 @@ export class WalletService {
       const transactions: any = [];
 
       if ((type === 'sol' || type === 'all') && totalSol > 0) {
-        const solTransaction = await this.transferSOL(
+        const usdcTransaction = await this.transferUSDC(
           userPublicKey, 
           totalSol
         );
-        transactions.push({ type: 'sol', amount: totalSol, tx: solTransaction });
+        transactions.push({ type: 'usdc', amount: totalSol, tx: usdcTransaction });
       }
 
       if ((type === 'edln' || type === 'all') && totalEdln > 0) {
@@ -540,6 +605,60 @@ export class WalletService {
     } catch (error) {
       console.error('Error transferring EDLN:', error.message);
       throw new Error(`EDLN transfer failed: ${error.message}`);
+    }
+  }
+
+  private async transferUSDC(toPubkey: PublicKey, amount: number) {
+    try {
+      const adminSecretKey = process.env.ADMIN_WALLET_SECRET_KEY;
+      if (!adminSecretKey) {
+        throw new Error('Admin wallet secret key not configured');
+      }
+      
+      const adminKeypair = Keypair.fromSecretKey(
+        bs58.default.decode(adminSecretKey)
+      );
+
+      const sourceTokenAccount = await getAssociatedTokenAddress(
+        this.USDC,
+        adminKeypair.publicKey
+      );
+      
+      const destinationTokenAccount = await getOrCreateAssociatedTokenAccount(
+        this.heliusConnection,
+        adminKeypair, // fee payer
+        this.USDC,
+        toPubkey
+      );
+      
+      const usdcDecimals = 6; // USDC has 6 decimals
+      const adjustedAmount = amount * Math.pow(10, usdcDecimals);
+      
+      console.log(
+        `Transferring ${adjustedAmount} USDC tokens (${amount} USDC) from admin to ${toPubkey.toBase58()}`
+      );
+
+      const transferInstruction = createTransferCheckedInstruction(
+        sourceTokenAccount,
+        this.USDC,
+        destinationTokenAccount.address,
+        adminKeypair.publicKey,
+        adjustedAmount,
+        usdcDecimals
+      );
+
+      const transaction = new Transaction().add(transferInstruction);
+      transaction.recentBlockhash = (await this.heliusConnection.getLatestBlockhash()).blockhash;
+      transaction.feePayer = adminKeypair.publicKey;
+      transaction.sign(adminKeypair);
+
+      const txid = await sendAndConfirmTransaction(this.heliusConnection, transaction, [adminKeypair]);
+      console.log('USDC transfer successful with signature:', txid);
+      
+      return txid;
+    } catch (error) {
+      console.error('Error transferring USDC:', error.message);
+      throw new Error(`USDC transfer failed: ${error.message}`);
     }
   }
 

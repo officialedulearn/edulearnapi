@@ -9,13 +9,18 @@ export class WalletController {
     constructor(private walletService: WalletService) {}
 
     @Post("upgrade/:userId")
-    async upgradeToPremium(@Response() res, @Param('userId') userId: string) {
+    async upgradeToPremium(@Response() res, @Param('userId') userId: string, @Body() data: { amount: number }) {
         try {
-            const result = await this.walletService.payPremium(userId);
-            return res.status(200).json({ message: 'Upgrade successful', result });
+            const result = await this.walletService.payPremium(userId, data.amount);
+            return res.status(200).json({ 
+                message: 'Premium upgrade successful', 
+                result,
+                subscriptionType: result.type,
+                currency: result.currency
+            });
         } catch (error) {
             console.error('Error upgrading to premium:', error);
-            return res.status(500).json({ error: 'Failed to upgrade to premium' });
+            return res.status(500).json({ error: error.message || 'Failed to upgrade to premium' });
         }
     }
 

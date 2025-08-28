@@ -1,0 +1,1 @@
+ALTER TABLE "premium_transactions" ADD COLUMN "amount" integer NOT NULL;

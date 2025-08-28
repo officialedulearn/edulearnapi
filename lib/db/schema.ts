@@ -133,6 +133,7 @@ export const premiumTransactions = pgTable('premium_transactions', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => user.id),
   signature: varchar('signature', { length: 256 }).notNull().unique(),
+  amount: integer('amount').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
