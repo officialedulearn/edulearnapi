@@ -1,0 +1,1 @@
+ALTER TABLE "user" ADD COLUMN "quizLimits" integer DEFAULT 5;

@@ -66,7 +66,12 @@ export class TwitterService {
       }
 
       if(res.data.data.username !== user?.username) {
-        await this.authService.editUser({name: res.data.data.name, email: userCaller, username: res.data.data.username});
+        await this.authService.editUser({
+          name: res.data.data.name, 
+          email: userCaller, 
+          username: res.data.data.username,
+          learning: user.learning || ''
+        });
         await this.authService.verifyUser(userCaller);
       }
       

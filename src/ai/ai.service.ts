@@ -390,65 +390,191 @@ Do not include any explanation or additional text outside the JSON array.`;
     chatId: string;
     userId: string;
   }): Promise<any> {
-    const chat = await this.chatService.getChatById(chatId);
-    if (!chat) {
-      throw new NotFoundException('Chat not found');
-    }
-    if (chat.userId !== userId) {
-      throw new ForbiddenException('Unauthorized');
-    }
-    if (chat.tested) {
-      throw new ForbiddenException('This chat has already been tested.');
-    }
-
-    const messages = await this.chatService.getMessagesInChat(chatId);
-
-    const formattedMessages = messages.map((msg) => ({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [
-        { text: typeof msg.content === 'string' ? msg.content : msg.content },
-      ],
-    }));
+    // Track what operations we've performed for potential rollback
+    let chatMarkedAsTested = false;
+    let creditsDeducted = false;
+    let quizLimitDeducted = false;
 
     try {
-      const result = await this.genAI.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: `Our conversation: ${JSON.stringify(formattedMessages)}`,
-        config: {
-          temperature: 0.1, // Lower temperature for more consistent JSON output
-          maxOutputTokens: 1000, // Increased tokens for better JSON completion
-          systemInstruction: this.systemInstructionForQuiz,
-        },
-      });
+      // Validate inputs
+      if (!chatId || !userId) {
+        throw new Error('Chat ID and User ID are required');
+      }
 
-      await this.chatService.markChatAsTested(chatId);
-      await this.authService.deductUserCredits(userId);
+      // Check if chat exists and user has permission
+      const chat = await this.chatService.getChatById(chatId);
+      if (!chat) {
+        throw new NotFoundException('Chat not found');
+      }
+      if (chat.userId !== userId) {
+        throw new ForbiddenException('You do not have permission to access this chat');
+      }
+      if (chat.tested) {
+        throw new ForbiddenException('This chat has already been tested. Each chat can only be used for one quiz.');
+      }
 
+      // Check user credits before proceeding
+      const userCredits = await this.checkUserCredits(userId);
+      if (userCredits < 0.5) {
+        throw new ForbiddenException('Insufficient credits. You need at least 0.5 credits to generate a quiz.');
+      }
+
+      // Check quiz limits
+      const user = await this.authService.getUserById(userId);
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+      
+      const quizLimits = user.quizLimits || 0;
+      if (quizLimits <= 0) {
+        throw new ForbiddenException('No quiz attempts left for today. Quiz limits reset daily.');
+      }
+
+      // Get chat messages
+      const messages = await this.chatService.getMessagesInChat(chatId);
+      if (!messages || messages.length === 0) {
+        throw new Error('No messages found in this chat. A conversation is needed to generate a quiz.');
+      }
+
+      // Check if there's enough content for a meaningful quiz
+      const userMessages = messages.filter(msg => msg.role === 'user');
+      if (userMessages.length < 2) {
+        throw new Error('Not enough conversation content. Have at least 2 exchanges with the AI to generate a meaningful quiz.');
+      }
+
+      const formattedMessages = messages.map((msg) => ({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [
+          { text: typeof msg.content === 'string' ? msg.content : msg.content },
+        ],
+      }));
+
+      // Generate quiz with timeout and retry logic
+      let result;
+      let attempts = 0;
+      const maxAttempts = 2;
+
+      while (attempts < maxAttempts) {
+        try {
+          result = await Promise.race([
+            this.genAI.models.generateContent({
+              model: user?.isPremium ? 'gemini-2.0-flash' : 'gemini-1.5-flash',
+              contents: `Our conversation: ${JSON.stringify(formattedMessages)}`,
+              config: {
+                temperature: 0.1, 
+                maxOutputTokens: 1500, 
+                systemInstruction: this.systemInstructionForQuiz,
+              },
+            }),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Request timeout - AI service took too long to respond')), 20000)
+            )
+          ]);
+          break; // Success, exit retry loop
+        } catch (attemptError) {
+          attempts++;
+          console.error(`Quiz generation attempt ${attempts} failed:`, attemptError);
+          
+          if (attempts >= maxAttempts) {
+            throw new Error(`Failed to generate quiz after ${maxAttempts} attempts. ${attemptError.message || 'AI service unavailable'}`);
+          }
+          
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      if (!result) {
+        throw new Error('Failed to get response from AI service');
+      }
+
+      // Process the AI response
       const response = result.text ?? '';
       
+      if (!response || response.trim().length === 0) {
+        throw new Error('AI service returned empty response. Please try again.');
+      }
+
       // Clean and extract JSON from the response
       let jsonStr = this.extractAndCleanJSON(response);
       
       if (!jsonStr) {
-        console.error('No valid JSON found in response:', response);
-        throw new Error('Failed to generate valid quiz questions');
+        console.error('No valid JSON found in AI response:', response);
+        throw new Error('AI service returned invalid format. This might be due to conversation content not being suitable for quiz generation.');
       }
 
       const quizQuestions = this.parseAndValidateQuiz(jsonStr);
       
       if (!quizQuestions || quizQuestions.length === 0) {
-        console.warn('Empty or invalid quiz questions generated');
-        throw new Error('Failed to generate valid quiz questions');
+        console.warn('No valid quiz questions generated from conversation');
+        throw new Error('Unable to generate quiz questions from this conversation. The discussion may not contain enough educational content.');
       }
 
-      return quizQuestions;
+      // Validate quiz quality
+      if (quizQuestions.length < 3) {
+        throw new Error('Generated quiz has too few questions. A minimum of 3 questions is required.');
+      }
+
+      // All validations passed, now perform the operations
+      try {
+        // Mark chat as tested
+        await this.chatService.markChatAsTested(chatId);
+        chatMarkedAsTested = true;
+
+        // Deduct user credits
+        await this.authService.deductUserCredits(userId);
+        creditsDeducted = true;
+
+        // Deduct quiz limit
+        await this.authService.deductQuizLimit(userId);
+        quizLimitDeducted = true;
+
+        console.log(`Successfully generated quiz for user ${userId}, chat ${chatId}: ${quizQuestions.length} questions`);
+        return quizQuestions;
+
+      } catch (operationError) {
+        console.error('Error performing post-generation operations:', operationError);
+        // Operations failed, but we have valid questions - let's try to rollback what we can
+        throw new Error('Quiz generated successfully but failed to update user account. Please contact support.');
+      }
+
     } catch (error) {
-      console.error('Error generating quiz:', error);
-      
-      await this.chatService.markChatAsTested(chatId);
-      await this.authService.deductUserCredits(userId);
-      
-      throw new Error('Failed to generate valid quiz questions');
+      console.error('Error in generateQuiz:', error);
+
+      // Attempt rollback of any completed operations
+      if (chatMarkedAsTested || creditsDeducted || quizLimitDeducted) {
+        try {
+          // Note: In a real scenario, you'd want proper transaction management
+          // For now, we'll just log the need for manual intervention
+          console.error(`Rollback needed for user ${userId}, chat ${chatId}. Operations completed: chatTested=${chatMarkedAsTested}, creditsDeducted=${creditsDeducted}, quizLimitDeducted=${quizLimitDeducted}`);
+        } catch (rollbackError) {
+          console.error('Failed to rollback operations:', rollbackError);
+        }
+      }
+
+      // Re-throw with more specific error messages
+      if (error instanceof NotFoundException || error instanceof ForbiddenException) {
+        throw error;
+      }
+
+      // Handle specific error types with user-friendly messages
+      if (error.message) {
+        if (error.message.includes('timeout')) {
+          throw new Error('Request timed out. The AI service is currently slow. Please try again in a few moments.');
+        }
+        if (error.message.includes('credits')) {
+          throw new ForbiddenException(error.message);
+        }
+        if (error.message.includes('quiz attempts') || error.message.includes('Quiz limits')) {
+          throw new ForbiddenException(error.message);
+        }
+        if (error.message.includes('conversation content') || error.message.includes('educational content')) {
+          throw new Error(error.message);
+        }
+      }
+
+      // Generic fallback error
+      throw new Error('Unable to generate quiz at this time. Please ensure you have an educational conversation and try again later.');
     }
   }
 

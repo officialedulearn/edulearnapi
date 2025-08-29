@@ -54,14 +54,14 @@ export class AuthController {
   
   @Put('edit')
   @UseGuards(JwtAuthGuard)
-  async editUser(@Body() body: { name: string; email: string, username: string }) {
-    const { name, email, username } = body;
+  async editUser(@Body() body: { name: string; email: string, username: string, learning: string; }) {
+    const { name, email, username, learning } = body;
 
     if (!name || !email) {
       throw new BadRequestException('Name and email are required');
     }
 
-    const updatedUser = await this.authService.editUser({ name, email, username });
+    const updatedUser = await this.authService.editUser({ name, email, username, learning });
 
     if (!updatedUser) {
       throw new BadRequestException('User not found or update failed');

@@ -26,6 +26,7 @@ export const user = pgTable('user', {
   streak: integer('streak').notNull().default(1),
   referralCode: text('referralCode'),
   referralCount: integer('referralCount').default(0),
+  learning: text("learning"),
   referredBy: text('referredBy'),
   level: varchar('level', {
     enum: ['novice', 'beginner', 'intermediate', 'advanced', 'expert'],
@@ -40,6 +41,7 @@ export const user = pgTable('user', {
   premiumUntil: timestamp('premiumUntil'),
   verified: boolean('verified').default(false),
   imageUploadLimit: integer('imageUploadLimit').default(3),
+  quizLimits: integer('quizLimits').default(5), 
 });
 
 export type User = InferSelectModel<typeof user>;

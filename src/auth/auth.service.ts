@@ -116,16 +116,18 @@ export class AuthService {
   async editUser({
     name,
     email,
-    username
+    username,
+    learning
   }: {
     name: string;
     email: string;
     username: string;
+    learning: string
   }): Promise<User | null> {
     try {
       const result = await db
         .update(user)
-        .set({ name, username })
+        .set({ name, username, learning })
         .where(eq(user.email, email))
         .returning();
 
@@ -346,6 +348,10 @@ export class AuthService {
         .set({imageUploadLimit: newUploadLimit})
         .where(eq(user.id, userId));
         
+        await db.update(user)
+        .set({quizLimits: 5})
+        .where(eq(user.id, userId));
+
         return newCredits;
       }
       return currentCredits;
@@ -433,6 +439,7 @@ export class AuthService {
           level: user.level,
           xp: user.xp,
           address: user.address,
+          learning: user.learning
         })
         .from(user)
         .where(ilike(user.username, `%${usernameQuery}%`))
@@ -442,6 +449,31 @@ export class AuthService {
       return results;
     } catch (error) {
       console.error('Failed to search users by username', error);
+      throw error;
+    }
+  }
+
+  async deductQuizLimit(userId: string): Promise<number> {
+    try {
+      const users = await db.select().from(user).where(eq(user.id, userId));
+      if (users.length === 0) {
+        throw new Error(`User with id ${userId} not found`);
+      }
+      
+      const currentUser = users[0];
+      const currentQuizLimits = currentUser.quizLimits || 0;
+      if (currentQuizLimits <= 0) {
+        throw new Error('No quiz attempts left for today');
+      }
+      const newQuizLimits = currentQuizLimits - 1;
+      
+      await db
+        .update(user)
+        .set({ quizLimits: newQuizLimits })
+        .where(eq(user.id, userId));
+      return newQuizLimits;
+    } catch (error) {
+      console.error('Failed to deduct quiz limit', error);
       throw error;
     }
   }
