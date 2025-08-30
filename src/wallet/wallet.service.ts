@@ -235,6 +235,21 @@ export class WalletService {
       throw new Error('User not found');
     }
     
+    const userPublicKey = new PublicKey(user.address as unknown as string);
+    
+   
+    let isFirstTimeBuying = false;
+    try {
+      const currentBalance = await this.getBalance(userPublicKey);
+      if (currentBalance.tokenAccount === 0) {
+        isFirstTimeBuying = true;
+        console.log(`First time EDLN purchase detected for user ${userId}`);
+      }
+    } catch (error) {
+      console.log('Could not check current EDLN balance for first-time detection:', error.message);
+      isFirstTimeBuying = false;
+    }
+    
     const secretKey = bs58.default.decode(decrypt(user.encryptedPrivateKey));
     const keypair = Keypair.fromSecretKey(secretKey);
     const wallet = new Wallet(keypair);
@@ -325,6 +340,15 @@ export class WalletService {
 
       const txid = txResponse.transaction.signatures[0];
       console.log('Transaction confirmed with signature:', txid);
+      
+      if (isFirstTimeBuying) {
+        try {
+          await this.authService.incrementCredits(userId, 5);
+          console.log(`Awarded 5 KP to user ${userId} for first-time EDLN purchase`);
+        } catch (kpError) {
+          console.error('Failed to award first-time purchase KP:', kpError.message);
+        }
+      }
       
       return `https://solscan.io/tx/${txid}`;
     } catch (error) {
