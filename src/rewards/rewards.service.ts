@@ -163,12 +163,50 @@ export class RewardsService {
       if (!rewardExists.length) {
         throw new Error(`Reward with id ${rewardId} not found`);
       }
+      const adminSecretKey = process.env.ADMIN_WALLET_SECRET_KEY;
+      if (!adminSecretKey) {
+        throw new Error('Admin wallet secret key not configured');
+      }
+      const adminKeypair = Keypair.fromSecretKey(bs58.default.decode(adminSecretKey));
     
       const secretKey = decrypt(userExists[0].encryptedPrivateKey);
-      const sender = Keypair.fromSecretKey(
+      const userKeypair = Keypair.fromSecretKey(
         bs58.default.decode(secretKey),
       );
+      const userPublicKey = new PublicKey(userExists[0].address as string);
 
+      const userTokenAccount = await getOrCreateAssociatedTokenAccount(
+        this.connection,
+        adminKeypair, 
+        this.tokenMint,
+        userPublicKey
+      );
+
+      const recipientTokenAccount = await getAssociatedTokenAddress(
+        this.tokenMint,
+        this.reciepient
+      );
+
+      const transferInstruction = createTransferCheckedInstruction(
+        userTokenAccount.address,
+        this.tokenMint,
+        recipientTokenAccount,
+        userPublicKey,
+        10_000_000_000_000, 
+        9
+      );
+
+      const transaction = new Transaction().add(transferInstruction);
+      transaction.recentBlockhash = (await this.connection.getLatestBlockhash()).blockhash;
+      transaction.feePayer = adminKeypair.publicKey; 
+      
+      transaction.sign(adminKeypair, userKeypair);
+      
+      const txId = await sendAndConfirmTransaction(this.connection, transaction, [adminKeypair, userKeypair]);
+
+      console.log('Transfer Transaction ID:', txId);
+
+      // Now mint the NFT
       const umi = createUmi(this.connection).use(mplCore());
       const umiKeypair = umi.eddsa.createKeypairFromSecretKey(
         bs58.default.decode(secretKey)
@@ -178,32 +216,6 @@ export class RewardsService {
       umi.use(keypairIdentity(signer));
 
       const mint = generateSigner(umi);
-
-      const senderTokenAccount = await getOrCreateAssociatedTokenAccount(
-        this.connection,
-        sender,
-        this.tokenMint,
-        sender.publicKey
-      );
-
-      const recipientTokenAccount = await getAssociatedTokenAddress(
-        this.tokenMint,
-        this.reciepient
-      );
-
-      const transferInstruction = createTransferCheckedInstruction(
-        senderTokenAccount.address,
-        this.tokenMint,
-        recipientTokenAccount,
-        sender.publicKey,
-        10_000_000_000_000,
-        9
-      );
-
-      const transaction = new Transaction().add(transferInstruction);
-      const txId = await sendAndConfirmTransaction(this.connection, transaction, [sender]);
-
-      console.log('Transfer Transaction ID:', txId);
 
       const result = await create(umi, {
         asset: mint,
