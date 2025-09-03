@@ -333,7 +333,7 @@ export class AuthService {
       const hoursSinceLastRenewal = Math.floor((now.getTime() - lastCreditRenewal.getTime()) / (1000 * 60 * 60));
       
       if (hoursSinceLastRenewal >= 24) {
-        const newCredits = currentUser.isPremium ? currentCredits + 10 : currentCredits + 5
+        const newCredits = currentUser.isPremium ? currentCredits + 10 : 5
         const newUploadLimit = currentUser.isPremium ? 5 : 2;
         
         await db
@@ -348,8 +348,9 @@ export class AuthService {
         .set({imageUploadLimit: newUploadLimit})
         .where(eq(user.id, userId));
         
+        const newQuizLimits = currentUser.isPremium ? 10 : 5;
         await db.update(user)
-        .set({quizLimits: 5})
+        .set({quizLimits: newQuizLimits})
         .where(eq(user.id, userId));
 
         return newCredits;
