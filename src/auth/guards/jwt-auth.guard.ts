@@ -8,12 +8,23 @@ export class JwtAuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
     const token = this.extractTokenFromHeader(request);
     
+    // Check for reviewer bypass first
+    const reviewerApiKey = request.headers['x-reviewer-key'] as string;
+    if (reviewerApiKey && reviewerApiKey === process.env.REVIEWER_API_KEY) {
+      // Set a mock user for reviewer requests
+      request['user'] = { 
+        email: 'playreview@edulearn.com',
+        role: 'reviewer',
+        sub: 'reviewer-user'
+      };
+      return true;
+    }
+    
     if (!token) {
       throw new UnauthorizedException('JWT token is missing');
     }
     
     try {
-     
       const jwtSecret = process.env.SUPABASE_JWT_SECRET;
       if (!jwtSecret) {
         console.warn('WARNING: SUPABASE_JWT_SECRET environment variable is not set.');
