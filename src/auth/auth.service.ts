@@ -88,7 +88,24 @@ export class AuthService {
   async getUserByEmail(email: string): Promise<User | null> {
     try {
       const result = await db.select().from(user).where(eq(user.email, email));
-      return result[0] ?? null;
+
+      const userObject = {
+        id: result[0]?.id,
+        name: result[0]?.name,
+        email: result[0]?.email,
+        username: result[0]?.username,
+        learning: result[0]?.learning,
+        verified: result[0]?.verified,
+        level: result[0]?.level,
+        xp: result[0]?.xp,
+        address: result[0]?.address,
+        credits: result[0]?.credits,
+        isPremium: result[0]?.isPremium,
+        premiumUntil: result[0]?.premiumUntil,
+        streak: result[0]?.streak,
+        referralCode: result[0]?.referralCode,
+      }
+      return userObject as User || null;
     } catch (error) {
       console.error('Failed to get user by email');
       throw error;

@@ -6,8 +6,6 @@ config({
   path: '.env',
 });
 
-
-
 const client = postgres(process.env.POSTGRES_URL!, { prepare: false });
 const db = drizzle(client);
 
