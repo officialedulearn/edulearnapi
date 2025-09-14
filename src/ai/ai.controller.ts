@@ -34,4 +34,9 @@ export class AiController {
   async generateQuiz(@Body() quizDto: { chatId: string; userId: string }) {
     return await this.aiService.generateQuiz(quizDto);
   }
+
+  @Post('suggestions')
+  async generateSuggestions(@Body() suggestionsDto: { userId: string }) {
+    return await this.aiService.generateSuggestions(suggestionsDto);
+  }
 }

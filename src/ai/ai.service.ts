@@ -389,6 +389,104 @@ Safety & Boundaries:
     }
   }
 
+  async generateSuggestions({userId}: {userId: string}) {
+    const user = await this.authService.getUserById(userId);
+
+    if (!user) {
+      throw new NotFoundException(`User with id ${userId} not found`);
+    }
+
+    const getXpLevel = (xp: number) => {
+      if (xp < 100) return 'novice';
+      if (xp < 500) return 'beginner';
+      if (xp < 1500) return 'intermediate';
+      if (xp < 3000) return 'advanced';
+      return 'expert';
+    };
+
+    const xpLevel = getXpLevel(user.xp);
+    const userLevel = user.level || xpLevel;
+    const userLearning = user.learning || 'blockchain fundamentals';
+
+   const systemInstruction = `
+You are EduLearn AI, a Web3 study assistant. 
+Generate exactly 3 personalized study suggestions.
+
+User:
+- Interest: ${userLearning}
+- Level: ${userLevel}
+- XP: ${user.xp}
+- Quizzes: ${user.quizCompleted}
+- Streak: ${user.streak}
+
+Rules:
+- Match ${userLevel} level
+- Build on ${userLearning}
+- Tie to ICM, Solana, DeFi, NFTs, smart contracts, or Web3 tools
+- Each suggestion: 3 words, study-focused, relevant, engaging
+- Focus on understanding, not actions
+
+Output:
+Return ONLY a JSON array of 3 strings.
+`;
+    try {
+      const result = await this.genAI.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: `Generate 3 personalized learning suggestions for a ${userLevel} level user interested in ${userLearning} with ${user.xp} XP points.`,
+        config: {
+          maxOutputTokens: 300,
+          temperature: 0.7,
+          systemInstruction: systemInstruction,
+        }
+      });
+
+      const responseText = result.text?.trim();
+      if (!responseText) {
+        throw new Error('Empty response from AI');
+      }
+
+      const suggestions = JSON.parse(responseText);
+      
+      if (!Array.isArray(suggestions) || suggestions.length !== 3) {
+        throw new Error('Invalid suggestions format');
+      }
+
+      return suggestions;
+    } catch (error) {
+      console.error('Error generating suggestions:', error);
+      
+      const fallbackSuggestions = {
+        novice: [
+          "solana consensus basics",
+          "wallet security fundamentals", 
+          "ICM market concepts"
+        ],
+        beginner: [
+          "anchor framework study",
+          "ICM trading principles",
+          "SPL token mechanics"
+        ],
+        intermediate: [
+          "solana PDA concepts",
+          "ICM protocol analysis",
+          "compute units explained"
+        ],
+        advanced: [
+          "ICM yield strategies",
+          "anchor optimization patterns",
+          "cross-program invocations"
+        ],
+        expert: [
+          "ICM protocol design",
+          "solana performance tuning",
+          "advanced ICM applications"
+        ]
+      };
+
+      return fallbackSuggestions[userLevel] || fallbackSuggestions.novice;
+    }
+  }
+
   async generateQuiz({
     chatId,
     userId,
