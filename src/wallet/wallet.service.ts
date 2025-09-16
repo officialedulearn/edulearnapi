@@ -236,7 +236,9 @@ export class WalletService {
     }
     
     const userPublicKey = new PublicKey(user.address as unknown as string);
-    
+    const adminKeypair = Keypair.fromSecretKey(
+      bs58.default.decode(process.env.ADMIN_WALLET_SECRET_KEY || ''),
+    );
    
     let isFirstTimeBuying = false;
     try {
@@ -322,7 +324,7 @@ export class WalletService {
       const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
       const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
 
-      transaction.sign([keypair]);
+      transaction.sign([adminKeypair]);
 
       const blockhashWithExpiryBlockHeight = await this.heliusConnection.getLatestBlockhash();
 
