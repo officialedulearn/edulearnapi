@@ -131,8 +131,8 @@ export class WalletService {
       throw new Error('User not found');
     }
 
-    if (amount !== 8 && amount !== 80) {
-      throw new Error('Invalid premium amount. Must be 8 (monthly) or 80 (annual)');
+    if (amount !== 5 && amount !== 50) {
+      throw new Error('Invalid premium amount. Must be 5 (monthly) or 50 (annual)');
     }
 
     const userPublicKey = new PublicKey(user.address as unknown as string);
@@ -218,6 +218,24 @@ export class WalletService {
       amount: amount,
     });
 
+    if(user.referredBy !== null) {
+      const cut = .2 * amount
+      console.log(`Processing affiliate earning: ${cut} SOL for referral code ${user.referredBy}`);
+
+      const affiliate = await this.authService.getUserByRefCode(user.referredBy)
+      if (affiliate) {
+        const existingEarnings = await this.getUserEarnings(affiliate.id);
+        console.log(`Affiliate ${affiliate.id} existing earnings: ${existingEarnings.sol} SOL, ${existingEarnings.edln} EDLN`);
+      
+        await this.addEarnings(affiliate.id, {sol: cut, edln: 0});
+        
+        const updatedEarnings = await this.getUserEarnings(affiliate.id);
+        console.log(`Affiliate ${affiliate.id} updated earnings: ${updatedEarnings.sol} SOL, ${updatedEarnings.edln} EDLN`);
+      } else {
+        console.error(`Affiliate not found for referral code: ${user.referredBy}`);
+      }
+    }
+
     await this.authService.updateUserPremiumStatus(userId, true);
     console.log('Premium payment transaction sent with signature:', signature);
     
@@ -225,7 +243,7 @@ export class WalletService {
       signature,
       amount,
       currency: 'USDC',
-      type: amount === 8 ? 'monthly' : 'annual'
+      type: amount === 5 ? 'monthly' : 'annual'
     };
   }
 

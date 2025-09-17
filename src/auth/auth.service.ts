@@ -495,4 +495,19 @@ export class AuthService {
       throw error;
     }
   }
+
+  async getUserByRefCode(referralCode: string): Promise<User> {
+    try {
+      const affiliate = await db.select().from(user).where(eq(user.referralCode, referralCode));
+      
+      if (affiliate.length === 0) {
+        throw new Error(`User with referral code ${referralCode} not found`);
+      }
+      
+      return affiliate[0];
+    } catch (error) {
+      console.error('Failed to get user by referral code', error);
+      throw error;
+    }
+  }
 }
