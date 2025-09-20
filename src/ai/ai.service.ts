@@ -427,7 +427,8 @@ Rules:
 - Focus on understanding, not actions
 
 Output:
-Return ONLY a JSON array of 3 strings.
+Return ONLY a valid JSON array of exactly 3 strings. No markdown, no explanations, no additional text.
+Example format: ["topic one", "topic two", "topic three"]
 `;
     try {
       const result = await this.genAI.models.generateContent({
@@ -444,11 +445,37 @@ Return ONLY a JSON array of 3 strings.
       if (!responseText) {
         throw new Error('Empty response from AI');
       }
+      let jsonStr = this.extractAndCleanJSON(responseText);
+      
+      if (!jsonStr) {
+        console.error('No valid JSON found in AI response:', responseText);
+        throw new Error('AI service returned invalid format for suggestions');
+      }
 
-      const suggestions = JSON.parse(responseText);
+      let suggestions;
+      try {
+        suggestions = JSON.parse(jsonStr);
+      } catch (parseError) {
+        console.error('JSON parsing failed for suggestions:', parseError);
+        console.error('Attempted to parse:', jsonStr);
+
+        try {
+          const fixedJson = this.attemptJSONFix(jsonStr);
+          if (fixedJson) {
+            suggestions = JSON.parse(fixedJson);
+            console.log('Fixed JSON:', fixedJson);
+          } else {
+            throw parseError;
+          }
+        } catch (secondError) {
+          console.error('Second parsing attempt failed:', secondError);
+          throw parseError;
+        }
+      }
       
       if (!Array.isArray(suggestions) || suggestions.length !== 3) {
-        throw new Error('Invalid suggestions format');
+        console.error('Invalid suggestions format:', suggestions);
+        throw new Error('Invalid suggestions format - expected array of 3 strings');
       }
 
       return suggestions;
@@ -494,18 +521,14 @@ Return ONLY a JSON array of 3 strings.
     chatId: string;
     userId: string;
   }): Promise<any> {
-    // Track what operations we've performed for potential rollback
     let chatMarkedAsTested = false;
     let creditsDeducted = false;
     let quizLimitDeducted = false;
 
     try {
-      // Validate inputs
       if (!chatId || !userId) {
         throw new Error('Chat ID and User ID are required');
       }
-
-      // Check if chat exists and user has permission
       const chat = await this.chatService.getChatById(chatId);
       if (!chat) {
         throw new NotFoundException('Chat not found');
@@ -516,14 +539,11 @@ Return ONLY a JSON array of 3 strings.
       if (chat.tested) {
         throw new ForbiddenException('This chat has already been tested. Each chat can only be used for one quiz.');
       }
-
-      // Check user credits before proceeding
       const userCredits = await this.checkUserCredits(userId);
       if (userCredits < 0.5) {
         throw new ForbiddenException('Insufficient credits. You need at least 0.5 credits to generate a quiz.');
       }
 
-      // Check quiz limits
       const user = await this.authService.getUserById(userId);
       if (!user) {
         throw new NotFoundException('User not found');
@@ -534,13 +554,11 @@ Return ONLY a JSON array of 3 strings.
         throw new ForbiddenException('No quiz attempts left for today. Quiz limits reset daily.');
       }
 
-      // Get chat messages
       const messages = await this.chatService.getMessagesInChat(chatId);
       if (!messages || messages.length === 0) {
         throw new Error('No messages found in this chat. A conversation is needed to generate a quiz.');
       }
 
-      // Check if there's enough content for a meaningful quiz
       const userMessages = messages.filter(msg => msg.role === 'user');
       if (userMessages.length < 2) {
         throw new Error('Not enough conversation content. Have at least 2 exchanges with the AI to generate a meaningful quiz.');
@@ -553,7 +571,6 @@ Return ONLY a JSON array of 3 strings.
         ],
       }));
 
-      // Generate quiz with timeout and retry logic
       let result;
       let attempts = 0;
       const maxAttempts = 2;
@@ -574,7 +591,7 @@ Return ONLY a JSON array of 3 strings.
               setTimeout(() => reject(new Error('Request timeout - AI service took too long to respond')), 20000)
             )
           ]);
-          break; // Success, exit retry loop
+          break; 
         } catch (attemptError) {
           attempts++;
           console.error(`Quiz generation attempt ${attempts} failed:`, attemptError);
@@ -583,7 +600,7 @@ Return ONLY a JSON array of 3 strings.
             throw new Error(`Failed to generate quiz after ${maxAttempts} attempts. ${attemptError.message || 'AI service unavailable'}`);
           }
           
-          // Wait before retrying
+          
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
@@ -592,14 +609,14 @@ Return ONLY a JSON array of 3 strings.
         throw new Error('Failed to get response from AI service');
       }
 
-      // Process the AI response
+      
       const response = result.text ?? '';
       
       if (!response || response.trim().length === 0) {
         throw new Error('AI service returned empty response. Please try again.');
       }
 
-      // Clean and extract JSON from the response
+
       let jsonStr = this.extractAndCleanJSON(response);
       
       if (!jsonStr) {
@@ -614,22 +631,21 @@ Return ONLY a JSON array of 3 strings.
         throw new Error('Unable to generate quiz questions from this conversation. The discussion may not contain enough educational content.');
       }
 
-      // Validate quiz quality
+
       if (quizQuestions.length < 3) {
         throw new Error('Generated quiz has too few questions. A minimum of 3 questions is required.');
       }
 
-      // All validations passed, now perform the operations
+
       try {
-        // Mark chat as tested
+
         await this.chatService.markChatAsTested(chatId);
         chatMarkedAsTested = true;
 
-        // Deduct user credits
         await this.authService.deductUserCredits(userId);
         creditsDeducted = true;
 
-        // Deduct quiz limit
+
         await this.authService.deductQuizLimit(userId);
         quizLimitDeducted = true;
 
@@ -638,14 +654,11 @@ Return ONLY a JSON array of 3 strings.
 
       } catch (operationError) {
         console.error('Error performing post-generation operations:', operationError);
-        // Operations failed, but we have valid questions - let's try to rollback what we can
         throw new Error('Quiz generated successfully but failed to update user account. Please contact support.');
       }
 
     } catch (error) {
       console.error('Error in generateQuiz:', error);
-
-      // Attempt rollback of any completed operations
       if (chatMarkedAsTested || creditsDeducted || quizLimitDeducted) {
         try {
           // Note: In a real scenario, you'd want proper transaction management
@@ -655,13 +668,10 @@ Return ONLY a JSON array of 3 strings.
           console.error('Failed to rollback operations:', rollbackError);
         }
       }
-
-      // Re-throw with more specific error messages
       if (error instanceof NotFoundException || error instanceof ForbiddenException) {
         throw error;
       }
 
-      // Handle specific error types with user-friendly messages
       if (error.message) {
         if (error.message.includes('timeout')) {
           throw new Error('Request timed out. The AI service is currently slow. Please try again in a few moments.');
@@ -677,7 +687,7 @@ Return ONLY a JSON array of 3 strings.
         }
       }
 
-      // Generic fallback error
+ 
       throw new Error('Unable to generate quiz at this time. Please ensure you have an educational conversation and try again later.');
     }
   }
@@ -701,15 +711,26 @@ Return ONLY a JSON array of 3 strings.
     const arrayEnd = jsonStr.lastIndexOf(']');
     
     if (arrayStart === -1 || arrayEnd === -1 || arrayStart >= arrayEnd) {
-      return null;
+
+      const objectStart = jsonStr.indexOf('{');
+      const objectEnd = jsonStr.lastIndexOf('}');
+      
+      if (objectStart !== -1 && objectEnd !== -1 && objectStart < objectEnd) {
+        jsonStr = jsonStr.substring(objectStart, objectEnd + 1);
+      } else {
+        return null;
+      }
+    } else {
+      jsonStr = jsonStr.substring(arrayStart, arrayEnd + 1);
     }
     
-    jsonStr = jsonStr.substring(arrayStart, arrayEnd + 1);
-    
+    // Clean up control characters and normalize line endings
     jsonStr = jsonStr
       .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') 
       .replace(/\r\n/g, '\n') 
-      .replace(/\r/g, '\n'); 
+      .replace(/\r/g, '\n')
+      .replace(/\n\s*\n/g, '\n')
+      .trim();
     
     return jsonStr;
   }
@@ -762,6 +783,8 @@ Return ONLY a JSON array of 3 strings.
   private attemptJSONFix(jsonStr: string): string | null {
     try {
       let fixed = jsonStr;
+      
+      // Fix unmatched quotes
       const quoteCount = (fixed.match(/"/g) || []).length;
       if (quoteCount % 2 !== 0) {
         const lastQuoteIndex = fixed.lastIndexOf('"');
@@ -777,12 +800,33 @@ Return ONLY a JSON array of 3 strings.
       
       let openBraces = 0;
       let openBrackets = 0;
+      let inString = false;
+      let escaped = false;
       
       for (let i = 0; i < fixed.length; i++) {
-        if (fixed[i] === '{') openBraces++;
-        else if (fixed[i] === '}') openBraces--;
-        else if (fixed[i] === '[') openBrackets++;
-        else if (fixed[i] === ']') openBrackets--;
+        const char = fixed[i];
+        
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        
+        if (char === '\\') {
+          escaped = true;
+          continue;
+        }
+        
+        if (char === '"') {
+          inString = !inString;
+          continue;
+        }
+        
+        if (!inString) {
+          if (char === '{') openBraces++;
+          else if (char === '}') openBraces--;
+          else if (char === '[') openBrackets++;
+          else if (char === ']') openBrackets--;
+        }
       }
       
       while (openBraces > 0) {
@@ -793,6 +837,8 @@ Return ONLY a JSON array of 3 strings.
         fixed += ']';
         openBrackets--;
       }
+      
+      fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
       
       return fixed;
     } catch (error) {
