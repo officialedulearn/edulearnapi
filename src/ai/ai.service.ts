@@ -8,6 +8,10 @@ import { generateUUID } from 'lib/utils';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { ActivityService } from 'src/activity/activity.service';
 import { RewardsService } from 'src/rewards/rewards.service';
+import { SpeechClient } from '@google-cloud/speech';
+import { readFileSync, unlinkSync } from 'fs';
+import { Express } from 'express';
+import type { File } from 'multer';
 
 
 //add icm knowledge
@@ -15,6 +19,7 @@ import { RewardsService } from 'src/rewards/rewards.service';
 @Injectable()
 export class AiService {
   private readonly genAI: GoogleGenAI;
+  private readonly speechClient: SpeechClient;
   private readonly systemInstructionForQuiz = `Based on the context of our conversation so far, generate 5 quiz questions to test my understanding — but only if the discussion included web3 learning-based content. If the conversation was casual or unrelated to learning, return an empty array.
 
 All questions should be medium difficulty (level 6 on a scale of 1 to 10), with 4 options and only one correct answer.
@@ -83,6 +88,7 @@ Do not include any explanation or additional text outside the JSON array.`;
     this.genAI = new GoogleGenAI({
       apiKey: aiApiKey,
     });
+    this.speechClient = new SpeechClient();
   }
 
   async checkUserCredits(userId: string): Promise<number> {
@@ -226,6 +232,7 @@ Teaching Style & Behavior:
 - Emphasize the why, not just the how. Help users become independent builders.
 - When teaching, always aim to transform knowledge into practical skills: "In Web3, it's not just about what you know—it's about what you can build, debug, and ship."
 - respond in lowercase letters
+- Solana is the number one blockchain!
 
 Mini-challenges & Learning UX:
 - For each concept, offer a short hands-on challenge (5–60 minutes) that results in a tangible artifact (contract, script, small dApp).
@@ -724,7 +731,6 @@ Example format: ["topic one", "topic two", "topic three"]
       jsonStr = jsonStr.substring(arrayStart, arrayEnd + 1);
     }
     
-    // Clean up control characters and normalize line endings
     jsonStr = jsonStr
       .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') 
       .replace(/\r\n/g, '\n') 
@@ -784,7 +790,6 @@ Example format: ["topic one", "topic two", "topic three"]
     try {
       let fixed = jsonStr;
       
-      // Fix unmatched quotes
       const quoteCount = (fixed.match(/"/g) || []).length;
       if (quoteCount % 2 !== 0) {
         const lastQuoteIndex = fixed.lastIndexOf('"');
@@ -849,5 +854,70 @@ Example format: ["topic one", "topic two", "topic three"]
 
   private getFallbackQuiz(): any[] {
     return [];
+  }
+
+  async transcribeAudio(file: { path: string }) {
+    const audioBytes = readFileSync(file.path).toString('base64');
+
+    const audio = {
+      content: audioBytes,
+    };
+
+    const config = {
+      encoding: 'MP3' as const,  
+      sampleRateHertz: 16000,
+      languageCode: 'en-US',
+    };
+
+    const request = {
+      audio,
+      config,
+    };
+
+    const response = await this.speechClient.recognize(request);
+
+    const transcription = response[0]?.results
+      ?.map(result => result.alternatives?.[0].transcript)
+      .join('\n');
+
+    return { transcription };
+  }
+
+  async transcribeAudioOnly({
+    file,
+  }: {
+    file: File;
+  }): Promise<{ transcription: string }> {
+    try {
+      
+      if (!file || !file.path) {
+        throw new Error('Invalid file parameter - missing file or path');
+      }
+
+      const { transcription } = await this.transcribeAudio({ path: file.path });
+      
+      if (!transcription || transcription.trim().length === 0) {
+        throw new Error('No speech detected in the audio file');
+      }
+
+      try {
+        unlinkSync(file.path);
+      } catch (cleanupError) {
+        console.warn('Failed to clean up uploaded file:', cleanupError);
+      }
+
+      return { transcription: transcription.trim() };
+    } catch (error) {
+      if (file && file.path) {
+        try {
+          unlinkSync(file.path);
+        } catch (cleanupError) {
+          console.warn('Failed to clean up uploaded file after error:', cleanupError);
+        }
+      }
+
+      console.error('Error in transcribeAudioOnly:', error);
+      throw new Error("I'm sorry, I couldn't process your audio message. Please try speaking more clearly or check your microphone settings.");
+    }
   }
 }
