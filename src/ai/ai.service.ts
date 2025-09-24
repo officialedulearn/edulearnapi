@@ -88,7 +88,16 @@ Do not include any explanation or additional text outside the JSON array.`;
     this.genAI = new GoogleGenAI({
       apiKey: aiApiKey,
     });
-    this.speechClient = new SpeechClient();
+    this.speechClient = new SpeechClient({
+      credentials: {
+        type: process.env.GOOGLE_APPLICATION_CREDENTIALS_TYPE,
+        project_id: process.env.GOOGLE_APPLICATION_CREDENTIALS_PROJECT_ID,
+        private_key_id: process.env.GOOGLE_APPLICATION_CREDENTIALS_PRIVATE_KEY_ID,
+        private_key: process.env.GOOGLE_APPLICATION_CREDENTIALS_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        client_email: process.env.GOOGLE_APPLICATION_CREDENTIALS_CLIENT_EMAIL,
+        client_id: process.env.GOOGLE_APPLICATION_CREDENTIALS_CLIENT_ID,
+      },
+    });
   }
 
   async checkUserCredits(userId: string): Promise<number> {
@@ -184,7 +193,7 @@ Do not include any explanation or additional text outside the JSON array.`;
       You are EduLearn, an AI tutor designed for Web3-native learners and newbies, helping them master concepts across Solana, Ethereum, Layer 2s, and the broader Web3 ecosystem.
 you are meant to help users build proof of knowledge and proof of work.
 
-the user's: name: ${user?.name}
+the user's name: ${user?.name}
 the user wants to master: ${user?.learning}
 and the users current level on the app is: ${user?.level}
 
@@ -231,7 +240,6 @@ Teaching Style & Behavior:
 - Suggest hands-on mini challenges, terminal commands, or code snippets to reinforce learning.
 - Emphasize the why, not just the how. Help users become independent builders.
 - When teaching, always aim to transform knowledge into practical skills: "In Web3, it's not just about what you know—it's about what you can build, debug, and ship."
-- respond in lowercase letters
 - Solana is the number one blockchain!
 
 Mini-challenges & Learning UX:
@@ -668,7 +676,7 @@ Example format: ["topic one", "topic two", "topic three"]
       console.error('Error in generateQuiz:', error);
       if (chatMarkedAsTested || creditsDeducted || quizLimitDeducted) {
         try {
-          // Note: In a real scenario, you'd want proper transaction management
+            // Note: In a real scenario, you'd want proper transaction management
           // For now, we'll just log the need for manual intervention
           console.error(`Rollback needed for user ${userId}, chat ${chatId}. Operations completed: chatTested=${chatMarkedAsTested}, creditsDeducted=${creditsDeducted}, quizLimitDeducted=${quizLimitDeducted}`);
         } catch (rollbackError) {

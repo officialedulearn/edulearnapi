@@ -5,7 +5,10 @@ import {
     UseGuards,
     UseInterceptors,
     UploadedFile,
-    BadRequestException
+    BadRequestException,
+    InternalServerErrorException,
+    HttpException,
+    HttpStatus
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Message } from 'lib/db/schema';
@@ -22,7 +25,19 @@ export class AiController {
 
   @Post('title')
   async getTitle(@Body() messageDto: Message) {
-    return await this.aiService.generateTitleFromMessage(messageDto);
+    try {
+      return await this.aiService.generateTitleFromMessage(messageDto);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      if (error instanceof Error) {
+        throw new BadRequestException(error.message);
+      }
+
+      throw new InternalServerErrorException('An unexpected error occurred while generating the title');
+    }
   }
 
   @Post('message')
@@ -34,17 +49,53 @@ export class AiController {
       userId: string;
     },
   ) {
-    return await this.aiService.generateResponse(messageDto);
+    try {
+      return await this.aiService.generateResponse(messageDto);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      if (error instanceof Error) {
+        throw new BadRequestException(error.message);
+      }
+      
+      throw new InternalServerErrorException('An unexpected error occurred while generating the response');
+    }
   }
 
   @Post('quiz')
   async generateQuiz(@Body() quizDto: { chatId: string; userId: string }) {
-    return await this.aiService.generateQuiz(quizDto);
+    try {
+      return await this.aiService.generateQuiz(quizDto);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      if (error instanceof Error) {
+        throw new BadRequestException(error.message);
+      }
+      
+      throw new InternalServerErrorException('An unexpected error occurred while generating the quiz');
+    }
   }
 
   @Post('suggestions')
   async generateSuggestions(@Body() suggestionsDto: { userId: string }) {
-    return await this.aiService.generateSuggestions(suggestionsDto);
+    try {
+      return await this.aiService.generateSuggestions(suggestionsDto);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      if (error instanceof Error) {
+        throw new BadRequestException(error.message);
+      }
+      
+      throw new InternalServerErrorException('An unexpected error occurred while generating suggestions');
+    }
   }
 
   @Post('transcribe-audio')
@@ -93,8 +144,20 @@ export class AiController {
       throw new BadRequestException('No audio file provided');
     }
 
-    return await this.aiService.transcribeAudioOnly({
-      file,
-    });
+    try {
+      return await this.aiService.transcribeAudioOnly({
+        file,
+      });
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      if (error instanceof Error) {
+        throw new BadRequestException(error.message);
+      }
+      
+      throw new InternalServerErrorException('An unexpected error occurred while transcribing audio');
+    }
   }
 }
