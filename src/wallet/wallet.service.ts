@@ -279,9 +279,7 @@ export class WalletService {
     });
     
     const jupiterApiEndpoints = [
-      'https://quote-api.jup.ag/v6',
-      'https://jupiter-quote-api.saihubd.xyz/v6',
-      'https://jupiter-quote-api.bonfida.com/v6'
+      'https://lite-api.jup.ag/swap/v1',
     ];
     
     try {
@@ -324,10 +322,28 @@ export class WalletService {
           swapTx = await axiosInstance.post(swapUrl, {
             quoteResponse: quoteResponse.data,
             userPublicKey: wallet.publicKey.toString(),
-            wrapAndUnwrapSol: true,
-            feeAccount: 'BTxbf6nkRX2wUiNpBVhA5SytPvST7KvEQoBDWVfpcvtv',
+            
+            dynamicComputeUnitLimit: true,
+            dynamicSlippage: true,
+            prioritizationFeeLamports: {
+              priorityLevelWithMaxLamports: {
+                maxLamports: 1000000,
+                priorityLevel: "veryHigh"
+              }
+            }
           });
-          console.log('Swap transaction received');
+          console.log('Swap transaction received with optimization parameters');
+          
+          if (swapTx.data.prioritizationFeeLamports) {
+            console.log('Prioritization fee lamports:', swapTx.data.prioritizationFeeLamports);
+          }
+          if (swapTx.data.computeUnitLimit) {
+            console.log('Compute unit limit:', swapTx.data.computeUnitLimit);
+          }
+          if (swapTx.data.dynamicSlippageReport) {
+            console.log('Dynamic slippage report:', swapTx.data.dynamicSlippageReport);
+          }
+          
         } catch (error) {
           console.warn(`Failed to get swap transaction from ${baseUrl}:`, error.message);
           currentEndpointIndex++;
@@ -338,11 +354,35 @@ export class WalletService {
         throw new Error('Failed to get swap transaction from any Jupiter API endpoint');
       }
 
-      const { swapTransaction } = swapTx.data;
+      const { 
+        swapTransaction, 
+        lastValidBlockHeight,
+        prioritizationFeeLamports,
+        computeUnitLimit,
+        prioritizationType,
+        dynamicSlippageReport,
+        simulationError
+      } = swapTx.data;
+      
+      if (simulationError) {
+        console.warn('Simulation error detected:', simulationError);
+        throw new Error(`Transaction simulation failed: ${simulationError.message || 'Unknown simulation error'}`);
+      }
+      
       const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
       const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
 
-      transaction.sign([adminKeypair]);
+      if (prioritizationFeeLamports) {
+        console.log(`Transaction will use prioritization fee: ${prioritizationFeeLamports} lamports`);
+      }
+      if (computeUnitLimit) {
+        console.log(`Transaction compute unit limit: ${computeUnitLimit}`);
+      }
+      if (dynamicSlippageReport) {
+        console.log(`Dynamic slippage applied: ${dynamicSlippageReport.slippageBps} bps`);
+      }
+
+      transaction.sign([keypair]);
 
       const blockhashWithExpiryBlockHeight = await this.heliusConnection.getLatestBlockhash();
 
@@ -616,7 +656,7 @@ export class WalletService {
       
       const destinationTokenAccount = await getOrCreateAssociatedTokenAccount(
         this.heliusConnection,
-        adminKeypair, // fee payer
+        adminKeypair,
         this.EDLN,
         toPubkey
       );
