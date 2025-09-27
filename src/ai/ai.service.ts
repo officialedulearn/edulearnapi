@@ -123,7 +123,7 @@ Do not include any explanation or additional text outside the JSON array.`;
       
       const result = await Promise.race([
         this.genAI.models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash',
           contents: [formattedMessage],
           config: {
             maxOutputTokens: 500,
@@ -301,7 +301,7 @@ Safety & Boundaries:
 
       const result = await Promise.race([
         this.genAI.models.generateContent({
-          model: user?.isPremium ? 'gemini-2.5-flash' : 'gemini-1.5-flash',
+          model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
           contents: formattedMessages,
           config: {
             tools: [{ functionDeclarations: [this.scoreUser, this.rewardUser] }],
@@ -447,7 +447,7 @@ Example format: ["topic one", "topic two", "topic three"]
 `;
     try {
       const result = await this.genAI.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-2.5-flash",
         contents: `Generate 3 personalized learning suggestions for a ${userLevel} level user interested in ${userLearning} with ${user.xp} XP points.`,
         config: {
           maxOutputTokens: 300,
@@ -594,7 +594,7 @@ Example format: ["topic one", "topic two", "topic three"]
         try {
           result = await Promise.race([
             this.genAI.models.generateContent({
-              model: user?.isPremium ? 'gemini-2.0-flash' : 'gemini-1.5-flash',
+              model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
               contents: `Our conversation: ${JSON.stringify(formattedMessages)}`,
               config: {
                 temperature: 0.1, 
