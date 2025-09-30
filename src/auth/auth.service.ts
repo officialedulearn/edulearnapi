@@ -1,13 +1,14 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { eq, desc, ilike } from 'drizzle-orm';
 import db from '../../drizzle';
-import { user, claim, type User } from '../../lib/db/schema';
+import { user, claim, type User, message, chat, xpActivity, userReward, earning, roadmap, roadMapStep, premiumTransactions } from '../../lib/db/schema';
 import { signUpDetails } from 'types/auth';
 import { generateReferralCode } from 'lib/constants';
 import { UUID } from 'crypto';
 import { ActivityService } from 'src/activity/activity.service';
 import { WalletService } from 'src/wallet/wallet.service';
 import { RewardsService } from 'src/rewards/rewards.service';
+import { CronTasksService } from 'src/cron-tasks/cron-tasks.service';
 
 @Injectable()
 export class AuthService {
@@ -16,6 +17,8 @@ export class AuthService {
     @Inject(forwardRef(() => WalletService))
     private walletService: WalletService,
     private rewardService: RewardsService,
+    @Inject(forwardRef(() => CronTasksService))
+    private cronTasksService: CronTasksService,
   ) {}
   async createUser(data: signUpDetails): Promise<User | Error> {
     try {
@@ -507,6 +510,63 @@ export class AuthService {
       return affiliate[0];
     } catch (error) {
       console.error('Failed to get user by referral code', error);
+      throw error;
+    }
+  }
+  async deleteUserDataAsync(userId: string): Promise<{ message: string; deletionStarted: boolean }> {
+    try {
+      const userToDelete = await this.getUserById(userId);
+      if (!userToDelete) {
+        throw new Error(`User with id ${userId} not found`);
+      }
+
+      this.deleteUserData(userId).catch((error) => {
+        console.error(`Background deletion failed for user ${userId}:`, error);
+      });
+
+      return {
+        message: 'User deletion process has been initiated and will complete in the background',
+        deletionStarted: true
+      };
+    } catch (error) {
+      console.error('Failed to initiate user deletion', error);
+      throw error;
+    }
+  }
+
+  async deleteUserData(userId: string): Promise<boolean> {
+    try {
+      console.log(`Starting deletion process for user: ${userId}`);
+      
+      const userChats = await db.select().from(chat).where(eq(chat.userId, userId));
+      console.log(`Found ${userChats.length} chats to delete for user ${userId}`);
+
+      for (const userChat of userChats) {
+        const messagesResult = await db.delete(message).where(eq(message.chatId, userChat.id));
+        console.log(`Deleted messages for chat ${userChat.id}`);
+      }
+
+      const chatsResult = await db.delete(chat).where(eq(chat.userId, userId));
+      console.log(`Deleted ${userChats.length} chats for user ${userId}`);
+
+      const activitiesResult = await db.delete(xpActivity).where(eq(xpActivity.userId, userId));
+      console.log(`Deleted XP activities for user ${userId}`);
+
+      const userRewardsResult = await db.delete(userReward).where(eq(userReward.userId, userId));
+      console.log(`Deleted user rewards for user ${userId}`);
+
+      const earningsResult = await db.delete(earning).where(eq(earning.userId, userId));
+      console.log(`Deleted earnings for user ${userId}`);
+
+      const premiumTransactionsResult = await db.delete(premiumTransactions).where(eq(premiumTransactions.userId, userId));
+      console.log(`Deleted premium transactions for user ${userId}`);
+
+      const userResult = await db.delete(user).where(eq(user.id, userId));
+      console.log(`Successfully deleted user: ${userId}`);
+
+      return true;
+    } catch (error) {
+      console.error('Failed to delete user data', error);
       throw error;
     }
   }

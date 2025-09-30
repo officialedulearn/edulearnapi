@@ -24,9 +24,7 @@ import { createTransferCheckedInstruction, getAssociatedTokenAddress, getOrCreat
 
 @Injectable()
 export class RewardsService {
-  private readonly connection = new Connection(
-    'https://mainnet.helius-rpc.com/?api-key=36181439-ce38-4a9f-8adc-d413c0a4e218',
-  );
+  private readonly connection = new Connection(clusterApiUrl('mainnet-beta'));
 
   private readonly tokenMint = new PublicKey("CFw2KxMpWuxivoowkF8vRCrnMuDeg5VMHRR7zjE7pBLV")
   private readonly reciepient = new PublicKey("CPfwdgYWhKL9Lshsdm5TKxB7sC8tHyKuLWzRTZtKCR7p")

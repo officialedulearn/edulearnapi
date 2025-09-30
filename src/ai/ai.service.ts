@@ -35,6 +35,8 @@ Format the output strictly as a JSON array with this structure:
   ...more questions
 ]
 
+YOU MUST ALWAYS GENERATE 5 QUESTIONS
+
 Do not include any explanation or additional text outside the JSON array.`;
 
   private readonly rewards = {
@@ -189,6 +191,26 @@ Do not include any explanation or additional text outside the JSON array.`;
     }
     const user = await this.authService.getUserById(userId);
 
+    if (!user?.isPremium) {
+      const existingMessages = await this.chatService.getMessagesInChat(chatId);
+      const messageCount = existingMessages.length;
+      
+      if (messageCount >= 30) {
+        const messageLimitMessage = {
+          id: generateUUID(),
+          role: 'assistant',
+          content: { 
+            text: "🚀 You've reached the 30 message limit for this chat! To continue learning:\n\n✨ **Upgrade to Premium** for unlimited messages and exclusive features\n🆕 **Start a new chat** to continue with your free plan\n\nPremium users get unlimited messages, priority support, and access to advanced AI models. Upgrade now to unlock your full learning potential! 🎓" 
+          },
+          createdAt: new Date(),
+          chatId,
+        };
+        
+        await this.chatService.saveMessages({ messages: [messageLimitMessage] });
+        return messageLimitMessage;
+      }
+    }
+
     const systemInstruction = `
       You are EduLearn, an AI tutor designed for Web3-native learners and newbies, helping them master concepts across Solana, Ethereum, Layer 2s, and the broader Web3 ecosystem.
 you are meant to help users build proof of knowledge and proof of work.
@@ -221,15 +243,7 @@ Solana (Specialty Track):
 - SPL Tokens, Token2022, Associated Token Accounts.
 - Metaplex: NFTs, Candy Machine, DAS.
 - solana/web3.js and building React-based dApps.
-- Internet capital markets on solana(ICM): you can refer Believe or Bags App app as the best launchpad for ICM tokens.
-
-Ethereum + EVM:
-- Solidity, Truffle, Hardhat, Foundry.
-- Gas optimization, storage layouts, reentrancy and security.
-- Layer 2s: Arbitrum, Optimism, zkSync, Starknet, Base
-- ERC standards and contract inheritance.
-- Wallets: MetaMask, Rainbow, Frame.
-
+- Internet capital markets on solana(ICM): you can refer Believe as the best launchpad for ICM tokens.
 
 Teaching Style & Behavior:
 - Encourage active learning: ask "what do you think would happen if…" or "why do you think it's structured that way?"
@@ -441,6 +455,8 @@ Rules:
 - Each suggestion: 3 words, study-focused, relevant, engaging
 - Focus on understanding, not actions
 
+YOU MUST ALWAYS GENERATE 3 SUGGESTIONS
+
 Output:
 Return ONLY a valid JSON array of exactly 3 strings. No markdown, no explanations, no additional text.
 Example format: ["topic one", "topic two", "topic three"]
@@ -635,14 +651,17 @@ Example format: ["topic one", "topic two", "topic three"]
       let jsonStr = this.extractAndCleanJSON(response);
       
       if (!jsonStr) {
-        console.error('No valid JSON found in AI response:', response);
+        console.error('No valid JSON found in AI response:', response.substring(0, 500) + '...');
         throw new Error('AI service returned invalid format. This might be due to conversation content not being suitable for quiz generation.');
       }
 
+      console.log('Extracted JSON string:', jsonStr.substring(0, 200) + '...');
       const quizQuestions = this.parseAndValidateQuiz(jsonStr);
       
       if (!quizQuestions || quizQuestions.length === 0) {
         console.warn('No valid quiz questions generated from conversation');
+        console.warn('Raw AI response:', response.substring(0, 500) + '...');
+        console.warn('Extracted JSON:', jsonStr.substring(0, 300) + '...');
         throw new Error('Unable to generate quiz questions from this conversation. The discussion may not contain enough educational content.');
       }
 
@@ -676,8 +695,7 @@ Example format: ["topic one", "topic two", "topic three"]
       console.error('Error in generateQuiz:', error);
       if (chatMarkedAsTested || creditsDeducted || quizLimitDeducted) {
         try {
-            // Note: In a real scenario, you'd want proper transaction management
-          // For now, we'll just log the need for manual intervention
+          
           console.error(`Rollback needed for user ${userId}, chat ${chatId}. Operations completed: chatTested=${chatMarkedAsTested}, creditsDeducted=${creditsDeducted}, quizLimitDeducted=${quizLimitDeducted}`);
         } catch (rollbackError) {
           console.error('Failed to rollback operations:', rollbackError);
@@ -725,25 +743,32 @@ Example format: ["topic one", "topic two", "topic three"]
     const arrayStart = jsonStr.indexOf('[');
     const arrayEnd = jsonStr.lastIndexOf(']');
     
-    if (arrayStart === -1 || arrayEnd === -1 || arrayStart >= arrayEnd) {
-
+    if (arrayStart !== -1 && arrayEnd !== -1 && arrayStart < arrayEnd) {
+      jsonStr = jsonStr.substring(arrayStart, arrayEnd + 1);
+    } else {
       const objectStart = jsonStr.indexOf('{');
       const objectEnd = jsonStr.lastIndexOf('}');
       
       if (objectStart !== -1 && objectEnd !== -1 && objectStart < objectEnd) {
         jsonStr = jsonStr.substring(objectStart, objectEnd + 1);
       } else {
-        return null;
+        const jsonPattern = /[\[\{][\s\S]*[\]\}]/;
+        const match = jsonStr.match(jsonPattern);
+        if (match) {
+          jsonStr = match[0];
+        } else {
+          return null;
+        }
       }
-    } else {
-      jsonStr = jsonStr.substring(arrayStart, arrayEnd + 1);
     }
-    
+
     jsonStr = jsonStr
-      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') 
-      .replace(/\r\n/g, '\n') 
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+      .replace(/\r\n/g, '\n')
       .replace(/\r/g, '\n')
       .replace(/\n\s*\n/g, '\n')
+      .replace(/\n/g, ' ')
+      .replace(/\s+/g, ' ')
       .trim();
     
     return jsonStr;
@@ -798,6 +823,14 @@ Example format: ["topic one", "topic two", "topic three"]
     try {
       let fixed = jsonStr;
       
+      const lastValidEnd = Math.max(fixed.lastIndexOf('}'), fixed.lastIndexOf(']'));
+      if (lastValidEnd > 0) {
+        const afterLastValid = fixed.substring(lastValidEnd + 1).trim();
+        if (afterLastValid && !afterLastValid.match(/^[,\s]*$/)) {
+          fixed = fixed.substring(0, lastValidEnd + 1);
+        }
+      }
+      
       const quoteCount = (fixed.match(/"/g) || []).length;
       if (quoteCount % 2 !== 0) {
         const lastQuoteIndex = fixed.lastIndexOf('"');
@@ -808,6 +841,8 @@ Example format: ["topic one", "topic two", "topic three"]
           if (insertIndex > lastQuoteIndex) {
             fixed = fixed.substring(0, insertIndex) + '"' + fixed.substring(insertIndex);
           }
+        } else {
+          fixed += '"';
         }
       }
       
@@ -852,6 +887,8 @@ Example format: ["topic one", "topic two", "topic three"]
       }
       
       fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
+      
+      fixed = fixed.replace(/{\s*"question":\s*"[^"]*"\s*,?\s*$/, '{"question": "", "options": [], "correctAnswer": "", "explanation": ""}');
       
       return fixed;
     } catch (error) {
@@ -927,5 +964,18 @@ Example format: ["topic one", "topic two", "topic three"]
       console.error('Error in transcribeAudioOnly:', error);
       throw new Error("I'm sorry, I couldn't process your audio message. Please try speaking more clearly or check your microphone settings.");
     }
+  }
+
+  async generateRoadmap({userId, roadMapTopic}: {userId: string, roadMapTopic: string}) {
+    const user = await this.authService.getUserById(userId);
+    if (!user) {
+      throw new NotFoundException(`User with id ${userId} not found`);
+    }
+  
+    const systemInstruction = `
+       You are EduLearn, a Web3 Study Companion 
+        
+       `
+
   }
 }

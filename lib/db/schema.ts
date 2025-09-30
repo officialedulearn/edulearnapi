@@ -78,9 +78,6 @@ export const userReward = pgTable(
     earnedAt: timestamp('earnedAt').notNull().defaultNow(),
     signature: text('signature').unique(),
     lockTransactionId: text('lockTransactionId'),
-    // Add a composite primary key to ensure a user can only earn a specific reward once
-    // If you want users to earn the same reward multiple times, you'd need to add another unique identifier
-    // in this table and remove this composite primary key
   },
   (table) => {
     return {
@@ -156,3 +153,29 @@ export const earning = pgTable('earning', {
 });
 
 export type Earning = InferSelectModel<typeof earning>;
+
+export const roadmap = pgTable('roadmap', {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  userId: uuid('userId')
+  .notNull()
+  .references(() => user.id),
+  chatId: uuid('chatId')
+  .notNull()
+  .references(() => chat.id),
+  topic: text('topic').notNull(),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+})
+
+export type Roadmap = InferSelectModel<typeof roadmap>;
+
+export const roadMapStep = pgTable('roadmap_step', {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  roadmapId: uuid('roadmapId')
+  .notNull()
+  .references(() => roadmap.id),
+  prompt: text('prompt').notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  time: integer('time').notNull(),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+})

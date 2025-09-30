@@ -12,6 +12,7 @@ import { WalletModule } from './wallet/wallet.module';
 import { CronTasksModule } from './cron-tasks/cron-tasks.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TwitterModule } from './twitter/twitter.module';
+import { RoadmapModule } from './roadmap/roadmap.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { TwitterModule } from './twitter/twitter.module';
     WalletModule,
     CronTasksModule,
     TwitterModule,
+    RoadmapModule,
   ],
   controllers: [AppController],
   providers: [AppService],

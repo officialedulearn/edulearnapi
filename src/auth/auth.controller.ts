@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -195,5 +196,23 @@ export class AuthController {
     const limitValue = limit ? parseInt(limit.toString(), 10) : 10;
     
     return this.authService.searchUsersByUsername(username, limitValue);
+  }
+
+  @Delete('user/:userId')
+  @UseGuards(JwtAuthGuard)
+  async deleteUser(@Param('userId') userId: string) {
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+    
+    try {
+      const result = await this.authService.deleteUserDataAsync(userId);
+      return result;
+    } catch (error) {
+      if (error.message.includes('not found')) {
+        throw new NotFoundException(error.message);
+      }
+      throw new BadRequestException('Failed to initiate user deletion');
+    }
   }
 }

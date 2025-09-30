@@ -1,15 +1,19 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { AuthService } from 'src/auth/auth.service';
 import { WalletService } from 'src/wallet/wallet.service';
 import db from '../../drizzle';
-import { desc } from 'drizzle-orm';
+import { desc, and, eq, lt } from 'drizzle-orm';
 import {  user } from '../../lib/db/schema';
 
 @Injectable()
 export class CronTasksService {
     private readonly logger = new Logger(CronTasksService.name);
-    constructor(private authService: AuthService, private walletService: WalletService) {}
+    constructor(
+        @Inject(forwardRef(() => AuthService))
+        private authService: AuthService,
+        private walletService: WalletService
+    ) {}
 
     @Cron('0 0 * * *')
     async handleCreditRenewal() {
@@ -75,4 +79,37 @@ export class CronTasksService {
         this.logger.error('Failed to process monthly top user rewards', error);
       }
     }
+
+    @Cron('0 0 * * *') 
+    async handlePremiumExpiration() {
+      this.logger.log('Checking for expired premium subscriptions');
+      try {
+        const now = new Date();
+        const expiredUsers = await db.select()
+          .from(user)
+          .where(
+            and(
+              eq(user.isPremium, true),
+              lt(user.premiumUntil, now)
+            )
+          );
+        
+        this.logger.log(`Found ${expiredUsers.length} users with expired premium subscriptions`);
+        
+        for (const expiredUser of expiredUsers) {
+          try {
+            await this.authService.updateUserPremiumStatus(expiredUser.id, false);
+            this.logger.log(`Reset premium status for user ${expiredUser.id} (${expiredUser.email})`);
+          } catch (error) {
+            this.logger.error(`Failed to reset premium status for user ${expiredUser.id}`, error);
+          }
+        }
+        
+        this.logger.log(`Premium expiration check completed - processed ${expiredUsers.length} expired subscriptions`);
+      } catch (error) {
+        this.logger.error('Failed to process premium expirations', error);
+      }
+    }
+
+    
 }

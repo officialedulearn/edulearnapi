@@ -384,12 +384,12 @@ export class WalletService {
 
       transaction.sign([keypair]);
 
-      const blockhashWithExpiryBlockHeight = await this.heliusConnection.getLatestBlockhash();
+      const blockhashWithExpiryBlockHeight = await this.connection.getLatestBlockhash();
 
       
       console.log('Sending transaction with improved transaction sender...');
       const txResponse = await transactionSenderAndConfirmationWaiter({
-        connection: this.heliusConnection,
+        connection: this.connection,
         serializedTransaction: Buffer.from(transaction.serialize()),
         blockhashWithExpiryBlockHeight,
       });
