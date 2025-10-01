@@ -9,6 +9,7 @@ import { ActivityService } from 'src/activity/activity.service';
 import { WalletService } from 'src/wallet/wallet.service';
 import { RewardsService } from 'src/rewards/rewards.service';
 import { CronTasksService } from 'src/cron-tasks/cron-tasks.service';
+import { supabaseAdmin } from '../../lib/supabase';
 
 @Injectable()
 export class AuthService {
@@ -513,14 +514,14 @@ export class AuthService {
       throw error;
     }
   }
-  async deleteUserDataAsync(userId: string): Promise<{ message: string; deletionStarted: boolean }> {
+  async deleteUserDataAsync(userId: string, supabaseUserId: string): Promise<{ message: string; deletionStarted: boolean }> {
     try {
       const userToDelete = await this.getUserById(userId);
       if (!userToDelete) {
         throw new Error(`User with id ${userId} not found`);
       }
 
-      this.deleteUserData(userId).catch((error) => {
+      this.deleteUserData(userId, supabaseUserId).catch((error) => {
         console.error(`Background deletion failed for user ${userId}:`, error);
       });
 
@@ -534,9 +535,19 @@ export class AuthService {
     }
   }
 
-  async deleteUserData(userId: string): Promise<boolean> {
+  async deleteUserData(userId: string, supabaseUserId: string): Promise<boolean> {
     try {
-      console.log(`Starting deletion process for user: ${userId}`);
+      console.log(`Starting deletion process for user: ${supabaseUserId}`);
+      try {
+        const { error: supabaseError } = await supabaseAdmin.auth.admin.deleteUser(supabaseUserId as UUID);
+        if (supabaseError) {
+          console.error(`Failed to delete user from Supabase Auth: ${supabaseError.message}`);
+        } else {
+          console.log(`Successfully deleted user from Supabase Auth: ${supabaseUserId}`);
+        }
+      } catch (supabaseError) {
+        console.error(`Error deleting user from Supabase Auth:`, supabaseError);
+      }
       
       const userChats = await db.select().from(chat).where(eq(chat.userId, userId));
       console.log(`Found ${userChats.length} chats to delete for user ${userId}`);
@@ -562,7 +573,7 @@ export class AuthService {
       console.log(`Deleted premium transactions for user ${userId}`);
 
       const userResult = await db.delete(user).where(eq(user.id, userId));
-      console.log(`Successfully deleted user: ${userId}`);
+      console.log(`Successfully deleted user from database: ${userId}`);
 
       return true;
     } catch (error) {

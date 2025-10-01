@@ -319,7 +319,7 @@ Safety & Boundaries:
           contents: formattedMessages,
           config: {
             tools: [{ functionDeclarations: [this.scoreUser, this.rewardUser] }],
-            maxOutputTokens: 3000,
+            maxOutputTokens: 5000,
             temperature: 1,
             systemInstruction: systemInstruction,
           },

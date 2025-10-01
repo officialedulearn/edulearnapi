@@ -200,13 +200,13 @@ export class AuthController {
 
   @Delete('user/:userId')
   @UseGuards(JwtAuthGuard)
-  async deleteUser(@Param('userId') userId: string) {
+  async deleteUser(@Param('userId') userId: string, @Query('supabaseUserId') supabaseUserId: string) {
     if (!userId) {
       throw new BadRequestException('User ID is required');
     }
     
     try {
-      const result = await this.authService.deleteUserDataAsync(userId);
+      const result = await this.authService.deleteUserDataAsync(userId, supabaseUserId);
       return result;
     } catch (error) {
       if (error.message.includes('not found')) {
