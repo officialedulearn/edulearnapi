@@ -8,6 +8,7 @@ import { generateUUID } from 'lib/utils';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { ActivityService } from 'src/activity/activity.service';
 import { RewardsService } from 'src/rewards/rewards.service';
+import { RoadmapService } from 'src/roadmap/roadmap.service';
 import { SpeechClient } from '@google-cloud/speech';
 import { readFileSync, unlinkSync } from 'fs';
 import { Express } from 'express';
@@ -78,10 +79,31 @@ Do not include any explanation or additional text outside the JSON array.`;
       required: ['certificate', 'confidenceLevel'],  
     }
   }
+
+  private readonly createRoadmapTool = {
+    name: "createLearningRoadmap",
+    description: "Create a personalized learning roadmap when the user explicitly requests one. Use this ONLY when the user asks to create a roadmap, learning path, or study plan for a specific topic. The topic should be related to Web3, blockchain, Solana, smart contracts, DeFi, NFTs, or other crypto/tech topics. Examples: 'create a roadmap for Solana development', 'I want a learning path for DeFi', 'make me a study plan for smart contracts'. Do NOT use this for general questions about topics.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        topic: {
+          type: Type.STRING,
+          description: "The specific topic the user wants to learn. Should be clear and focused (e.g., 'Solana Smart Contracts', 'DeFi Fundamentals', 'NFT Development on Ethereum'). Extract this from the user's request.",
+        },
+        userIntent: {
+          type: Type.STRING,
+          description: "Brief explanation of why you believe the user wants a roadmap based on their message. This helps validate the request.",
+        }
+      },
+      required: ['topic', 'userIntent'],
+    }
+  }
+
   constructor(
     private chatService: ChatService,
     private authService: AuthService,
     private rewardsService: RewardsService,
+    private roadmapService: RoadmapService,
   ) {
     const aiApiKey = process.env.GEMINI_API_KEY;
     if (!aiApiKey) {
@@ -255,6 +277,7 @@ Teaching Style & Behavior:
 - Emphasize the why, not just the how. Help users become independent builders.
 - When teaching, always aim to transform knowledge into practical skills: "In Web3, it's not just about what you know—it's about what you can build, debug, and ship."
 - Solana is the number one blockchain!
+- When users ask for a structured learning path, roadmap, or study plan for a topic, use the createLearningRoadmap tool to generate a personalized step-by-step roadmap tailored to their level.
 
 Mini-challenges & Learning UX:
 - For each concept, offer a short hands-on challenge (5–60 minutes) that results in a tangible artifact (contract, script, small dApp).
@@ -303,29 +326,38 @@ Safety & Boundaries:
         return outOfCreditsMessage;
       }
 
-      const formattedMessages = messages.map((msg: any) => ({
-        role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [
-          {
-            text:
-              typeof msg.content === 'string' ? msg.content : msg.content.text,
-          },
-        ],
-      }));
+      const formattedMessages = messages.map((msg: any) => {
+        let textContent = '';
+        
+        if (typeof msg.content === 'string') {
+          textContent = msg.content;
+        } else if (msg.content && typeof msg.content.text === 'string') {
+          textContent = msg.content.text;
+        } else if (msg.content && typeof msg.content === 'object') {
+          textContent = JSON.stringify(msg.content);
+        } else {
+          textContent = String(msg.content || '');
+        }
+
+        return {
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: textContent }],
+        };
+      });
 
       const result = await Promise.race([
         this.genAI.models.generateContent({
           model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
           contents: formattedMessages,
           config: {
-            tools: [{ functionDeclarations: [this.scoreUser, this.rewardUser] }],
+            tools: [{ functionDeclarations: [this.scoreUser, this.rewardUser, this.createRoadmapTool] }],
             maxOutputTokens: 5000,
             temperature: 1,
             systemInstruction: systemInstruction,
           },
         }),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Request timeout')), 15000)
+          setTimeout(() => reject(new Error('Request timeout')), 30000)
         )
       ]);
 
@@ -347,14 +379,19 @@ Safety & Boundaries:
       const certificatePart = parts.find(
         (part: any) => part.functionCall?.name === 'giveACertificate',
       );
+
+      const roadmapPart = parts.find(
+        (part: any) => part.functionCall?.name === 'createLearningRoadmap',
+      );
       
       let score = 0;
       let scoreAcknowledgement = '';
       let certificateAcknowledgement = '';
+      let roadmapAcknowledgement = '';
 
       if (functionPart) {
         score = Number(functionPart.functionCall?.args?.score || 0);
-        if (!isNaN(score) && score > 0) {
+        if (!isNaN(score) && score > 0 && score <= 10) {
           await this.authService.updateUserXP(userId, chat.title, score, 'chat');
           scoreAcknowledgement = `✅ Great job! I've awarded you ${score} point${score !== 1 ? 's' : ''} for your answer 🎉\n\n`;
         }
@@ -365,7 +402,7 @@ Safety & Boundaries:
         const confidenceLevel = Number(certificatePart.functionCall?.args?.confidenceLevel || 0);
         console.log(`Certificate type requested: ${certificateType} with confidence level: ${confidenceLevel}`);
         
-        if (certificateType && this.rewards[certificateType] && confidenceLevel >= 8) {
+        if (certificateType && this.rewards[certificateType] && confidenceLevel >= 8 && confidenceLevel <= 10) {
           try {
             const rewardId = this.rewards[certificateType];
             await this.rewardsService.awardRewardToUser(userId, rewardId);
@@ -381,11 +418,39 @@ Safety & Boundaries:
             }
           }
         } else {
-          console.log(`Certificate request denied - confidence level ${confidenceLevel} is below threshold (8)`);
+          console.log(`Certificate request denied - confidence level ${confidenceLevel} is below threshold (8) or invalid`);
         }
       }
 
-      const fullResponse = `${scoreAcknowledgement}${certificateAcknowledgement}${responseText}`.trim();
+      if (roadmapPart) {
+        const topic = roadmapPart.functionCall?.args?.topic;
+        const userIntent = roadmapPart.functionCall?.args?.userIntent;
+        console.log(`Roadmap creation requested for topic: ${topic}, intent: ${userIntent}`);
+        
+        if (topic && typeof topic === 'string' && topic.trim().length > 0) {
+          try {
+            const roadmapResult = await this.roadmapService.generateRoadmap(userId, topic.trim());
+            
+            const stepCount = roadmapResult.steps.length;
+            const totalTime = roadmapResult.steps.reduce((sum, step) => sum + (step.time || 0), 0);
+            
+            roadmapAcknowledgement = `🗺️ I've created a personalized learning roadmap for "${topic}"!\n\n` +
+              `📚 **${roadmapResult.roadmap.title}**\n` +
+              `${roadmapResult.roadmap.description}\n\n` +
+              `✨ Your roadmap has ${stepCount} step${stepCount !== 1 ? 's' : ''} (${totalTime} minutes total)\n` +
+              `You can start your first step by using the roadmap feature in the app! Each step includes interactive lessons tailored to your learning style.\n\n`;
+            
+            console.log(`Created roadmap ${roadmapResult.roadmap.id} for user ${userId}, topic: ${topic}`);
+          } catch (error) {
+            console.error(`Failed to create roadmap for user ${userId}, topic ${topic}:`, error);
+            roadmapAcknowledgement = `I tried to create a roadmap for "${topic}", but encountered an issue. Please try again or rephrase your request. 🔄\n\n`;
+          }
+        } else {
+          console.log(`Roadmap creation skipped - invalid topic: ${topic}`);
+        }
+      }
+
+      const fullResponse = `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${responseText}`.trim();
       const assistantMessage = {
         id: generateUUID(),
         role: 'assistant',
@@ -966,16 +1031,4 @@ Example format: ["topic one", "topic two", "topic three"]
     }
   }
 
-  async generateRoadmap({userId, roadMapTopic}: {userId: string, roadMapTopic: string}) {
-    const user = await this.authService.getUserById(userId);
-    if (!user) {
-      throw new NotFoundException(`User with id ${userId} not found`);
-    }
-  
-    const systemInstruction = `
-       You are EduLearn, a Web3 Study Companion 
-        
-       `
-
-  }
 }

@@ -1,14 +1,16 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
 import { ChatModule } from 'src/chat/chat.module';
 import { AuthModule } from 'src/auth/auth.module';
 import { ActivityModule } from 'src/activity/activity.module';
 import { RewardsModule } from 'src/rewards/rewards.module';
+import { RoadmapModule } from 'src/roadmap/roadmap.module';
 
 @Module({
-  imports: [ChatModule, AuthModule, ActivityModule, RewardsModule],
+  imports: [ChatModule, AuthModule, ActivityModule, RewardsModule, forwardRef(() => RoadmapModule)],
   controllers: [AiController],
-  providers: [AiService]
+  providers: [AiService],
+  exports: [AiService]
 })
 export class AiModule {}

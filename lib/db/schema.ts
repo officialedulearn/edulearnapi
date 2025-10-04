@@ -163,6 +163,8 @@ export const roadmap = pgTable('roadmap', {
   .notNull()
   .references(() => chat.id),
   topic: text('topic').notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 })
 

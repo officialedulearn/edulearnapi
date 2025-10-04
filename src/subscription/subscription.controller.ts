@@ -52,10 +52,20 @@ export class SubscriptionController {
         throw new UnauthorizedException('Webhook authentication not configured');
       }
 
-      if (!authHeader || authHeader !== `Bearer ${expectedAuth}`) {
-        this.logger.warn('Unauthorized webhook attempt');
+      this.logger.debug(`Expected auth format: Bearer ${expectedAuth.substring(0, 10)}...`);
+      this.logger.debug(`Received auth header: ${authHeader ? authHeader.substring(0, 20) + '...' : 'MISSING'}`);
+
+      if (!authHeader) {
+        this.logger.warn('Unauthorized webhook attempt: No authorization header provided');
+        throw new UnauthorizedException('Authorization header is required');
+      }
+
+      if (authHeader !== `Bearer ${expectedAuth}`) {
+        this.logger.warn('Unauthorized webhook attempt: Invalid authorization header');
         throw new UnauthorizedException('Invalid authorization header');
       }
+
+      this.logger.log('Webhook authorization successful');
 
       this.logger.log(
         `Received RevenueCat webhook: ${payload.event.type} for user ${payload.event.app_user_id}`,
