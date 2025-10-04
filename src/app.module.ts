@@ -13,6 +13,7 @@ import { CronTasksModule } from './cron-tasks/cron-tasks.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TwitterModule } from './twitter/twitter.module';
 import { RoadmapModule } from './roadmap/roadmap.module';
+import { SubscriptionModule } from './subscription/subscription.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { RoadmapModule } from './roadmap/roadmap.module';
     CronTasksModule,
     TwitterModule,
     RoadmapModule,
+    SubscriptionModule,
   ],
   controllers: [AppController],
   providers: [AppService],

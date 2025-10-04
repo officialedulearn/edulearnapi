@@ -20,7 +20,6 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  // Public endpoints that don't need authentication
   @Post('signup')
   async signUp(@Body() data: signUpDetails) {
     const result = await this.authService.createUser(data);
@@ -29,9 +28,6 @@ export class AuthController {
     }
     return result;
   }
-
-  // These endpoints should support both auth methods during transition
-  // GET /auth/email/:email
   @Get('email/:email')
   @UseGuards(JwtAuthGuard)
   async getUserByEmail(@Param('email') email: string) {
@@ -42,7 +38,6 @@ export class AuthController {
     return user;
   }
 
-  // GET /auth/id/:id
   @Get('id/:id')
   @UseGuards(JwtAuthGuard)
   async getUserById(@Param('id') id: string) {
@@ -71,7 +66,6 @@ export class AuthController {
     return updatedUser;
   }
 
-  // PUT /auth/address?email=someone@email.com&address=solanaWallet
   @Put('address')
   @UseGuards(JwtAuthGuard)
   async updateUserAddress(
@@ -84,7 +78,7 @@ export class AuthController {
     return await this.authService.updateUserAddress(email, address);
   }
 
-  // POST /auth/referral?code=abc123
+
   @Post('referral')
   @UseGuards(JwtAuthGuard)
   async incrementReferral(@Query('code') code: string) {
@@ -94,9 +88,8 @@ export class AuthController {
     return { referrer: name };
   }
 
-  // GET /auth/leaderboard
+
   @Get('leaderboard')
-  // Public leaderboard endpoint
   async getLeaderboard() {
     try {
       const users = await this.authService.getAllUsersAndXP();
@@ -105,8 +98,6 @@ export class AuthController {
       throw new BadRequestException('Failed to fetch leaderboard');
     }
   }
-
-  // PUT /auth/xp/:userId
   @Put('xp/:userId')
   @UseGuards(JwtAuthGuard)
   async updateXP(
@@ -123,8 +114,6 @@ export class AuthController {
       throw new NotFoundException(error.message);
     }
   }
-
-  // PUT /auth/streak/:userId
   @Put('streak/:userId')
   @UseGuards(JwtAuthGuard)
   async updateStreak(
@@ -145,7 +134,6 @@ export class AuthController {
     }
   }
 
-  // PUT /auth/level/:userId
   @Put('level/:userId')
   @UseGuards(JwtAuthGuard)
   async setLevel(
@@ -167,8 +155,7 @@ export class AuthController {
       throw new NotFoundException(error.message);
     }
   }
-  
-  // PUT /auth/credits/:userId
+ 
   @Put('credits/:userId')
   @UseGuards(JwtAuthGuard)
   async updateCredits(

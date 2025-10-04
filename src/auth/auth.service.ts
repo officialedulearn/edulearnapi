@@ -108,6 +108,7 @@ export class AuthService {
         premiumUntil: result[0]?.premiumUntil,
         streak: result[0]?.streak,
         referralCode: result[0]?.referralCode,
+        lastLoggedIn: result[0]?.lastLoggedIn,
       }
       return userObject as User || null;
     } catch (error) {
@@ -310,7 +311,7 @@ export class AuthService {
 
       await db
         .update(user)
-        .set({ streak: newStreak })
+        .set({ streak: newStreak, lastLoggedIn: new Date() })
         .where(eq(user.id, userId));
 
       return newStreak;
