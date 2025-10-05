@@ -1,7 +1,7 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { eq, desc, ilike } from 'drizzle-orm';
 import db from '../../drizzle';
-import { user, claim, type User, message, chat, xpActivity, userReward, earning, roadmap, roadMapStep, premiumTransactions } from '../../lib/db/schema';
+import { user, type User, message, chat, xpActivity, userReward, earning, roadmap, premiumTransactions, roadMapStep } from '../../lib/db/schema';
 import { signUpDetails } from 'types/auth';
 import { generateReferralCode } from 'lib/constants';
 import { UUID } from 'crypto';
@@ -550,31 +550,41 @@ export class AuthService {
         console.error(`Error deleting user from Supabase Auth:`, supabaseError);
       }
       
+      
+      const userRoadmaps = await db.select().from(roadmap).where(eq(roadmap.userId, userId));
+      console.log(`Found ${userRoadmaps.length} roadmaps for user ${userId}`);
+      
+      for (const userRoadmap of userRoadmaps) {
+        await db.delete(roadMapStep).where(eq(roadMapStep.roadmapId, userRoadmap.id));
+        console.log(`Deleted roadmap steps for roadmap ${userRoadmap.id}`);
+      }
       const userChats = await db.select().from(chat).where(eq(chat.userId, userId));
-      console.log(`Found ${userChats.length} chats to delete for user ${userId}`);
-
+      console.log(`Found ${userChats.length} chats for user ${userId}`)
       for (const userChat of userChats) {
-        const messagesResult = await db.delete(message).where(eq(message.chatId, userChat.id));
+        await db.delete(message).where(eq(message.chatId, userChat.id));
         console.log(`Deleted messages for chat ${userChat.id}`);
       }
+      await db.delete(roadmap).where(eq(roadmap.userId, userId));
+      console.log(`Deleted ${userRoadmaps.length} roadmaps for user ${userId}`);
 
-      const chatsResult = await db.delete(chat).where(eq(chat.userId, userId));
+      await db.delete(chat).where(eq(chat.userId, userId));
       console.log(`Deleted ${userChats.length} chats for user ${userId}`);
 
-      const activitiesResult = await db.delete(xpActivity).where(eq(xpActivity.userId, userId));
+      await db.delete(xpActivity).where(eq(xpActivity.userId, userId));
       console.log(`Deleted XP activities for user ${userId}`);
 
-      const userRewardsResult = await db.delete(userReward).where(eq(userReward.userId, userId));
+      await db.delete(userReward).where(eq(userReward.userId, userId));
       console.log(`Deleted user rewards for user ${userId}`);
 
-      const earningsResult = await db.delete(earning).where(eq(earning.userId, userId));
+      await db.delete(earning).where(eq(earning.userId, userId));
       console.log(`Deleted earnings for user ${userId}`);
 
-      const premiumTransactionsResult = await db.delete(premiumTransactions).where(eq(premiumTransactions.userId, userId));
+      await db.delete(premiumTransactions).where(eq(premiumTransactions.userId, userId));
       console.log(`Deleted premium transactions for user ${userId}`);
-
-      const userResult = await db.delete(user).where(eq(user.id, userId));
+      
+      await db.delete(user).where(eq(user.id, userId));
       console.log(`Successfully deleted user from database: ${userId}`);
+
 
       return true;
     } catch (error) {
