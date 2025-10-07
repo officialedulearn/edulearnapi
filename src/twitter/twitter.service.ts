@@ -13,15 +13,29 @@ export class TwitterService {
     try {
       const finalRedirectUri = providedRedirectUri || this.redirectUri || '';
       
-      console.log('Using redirect URI:', finalRedirectUri);
+      console.log('🐦 [Twitter Service] Getting access token');
+      console.log('🐦 [Twitter Service] Code present:', !!code);
+      console.log('🐦 [Twitter Service] Redirect URI:', finalRedirectUri);
+      console.log('🐦 [Twitter Service] Code verifier present:', !!providedCodeVerifier);
+      console.log('🐦 [Twitter Service] Code verifier length:', providedCodeVerifier?.length || 0);
+      
+      if (!providedCodeVerifier) {
+        throw new BadRequestException('Code verifier is required for PKCE flow');
+      }
       
       const params = new URLSearchParams({
         code,
         grant_type: "authorization_code",
         client_id: this.clientId || '',
         redirect_uri: finalRedirectUri,
-        code_verifier: providedCodeVerifier || '',
+        code_verifier: providedCodeVerifier,
       });
+
+      // Create Basic Auth header with client credentials
+      const credentials = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
+      
+      console.log('🐦 [Twitter Service] Client ID present:', !!this.clientId);
+      console.log('🐦 [Twitter Service] Client Secret present:', !!this.clientSecret);
        
       const res = await axios.post(
         "https://api.twitter.com/2/oauth2/token",
@@ -29,6 +43,7 @@ export class TwitterService {
         { 
           headers: { 
             "Content-Type": "application/x-www-form-urlencoded",
+            "Authorization": `Basic ${credentials}`,
           } 
         }
       );

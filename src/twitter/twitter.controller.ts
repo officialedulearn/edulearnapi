@@ -13,9 +13,16 @@ export class TwitterController {
       if (!data.code || !data.userEmail) {
         throw new HttpException('Missing required parameters', HttpStatus.BAD_REQUEST);
       }
-      console.log('Received Twitter callback with code and email');
-      const accessToken = await this.twitterService.getAccessToken(data.code, data.redirectUri);
+      console.log('🐦 [Twitter Controller] Received callback with code and email');
+      console.log('🐦 [Twitter Controller] Code verifier present:', !!data.providedCodeVerifier);
+      
+      const accessToken = await this.twitterService.getAccessToken(
+        data.code, 
+        data.redirectUri, 
+        data.providedCodeVerifier
+      );
       const profile = await this.twitterService.getUserProfile(accessToken, data.userEmail);
+      console.log('🐦 [Twitter Controller] Profile:', profile);
       return profile;
     } catch (error) {
       console.error('Twitter callback error:', error);
