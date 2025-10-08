@@ -355,7 +355,7 @@ export class AuthService {
       const hoursSinceLastRenewal = Math.floor((now.getTime() - lastCreditRenewal.getTime()) / (1000 * 60 * 60));
       
       if (hoursSinceLastRenewal >= 24) {
-        const newCredits = currentUser.isPremium ? currentCredits + 20 : 5
+        const newCredits = currentUser.isPremium ? currentCredits + 20 : 10
         const newUploadLimit = currentUser.isPremium ? 5 : 2;
         
         await db
