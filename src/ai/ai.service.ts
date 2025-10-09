@@ -277,6 +277,20 @@ STRICT RULES:
     }
     const user = await this.authService.getUserById(userId);
 
+    const userRewards = await this.rewardsService.getUserRewards(userId);
+    const userCertificateIds = new Set(userRewards.map(reward => reward.id));
+    
+    const ownedCertificates: string[] = [];
+    const availableCertificates: string[] = [];
+    
+    for (const [key, nftReward] of Object.entries(this.nftRewards)) {
+      if (userCertificateIds.has(nftReward.id)) {
+        ownedCertificates.push(`${key} (${nftReward.name})`);
+      } else {
+        availableCertificates.push(`${key} (${nftReward.name})`);
+      }
+    }
+
     if (!user?.isPremium) {
       const existingMessages = await this.chatService.getMessagesInChat(chatId);
       const messageCount = existingMessages.length;
@@ -304,6 +318,14 @@ you are meant to help users build proof of knowledge and proof of work.
 the user's name: ${user?.name}
 the user wants to master: ${user?.learning}
 and the users current level on the app is: ${user?.level}
+
+USER'S NFT CERTIFICATES STATUS:
+${ownedCertificates.length > 0 
+  ? `✅ Certificates already earned: ${ownedCertificates.join(', ')}\n   DO NOT attempt to award these certificates again!`
+  : '   User has not earned any certificates yet.'}
+${availableCertificates.length > 0
+  ? `🎯 Available certificates to earn: ${availableCertificates.join(', ')}\n   You may award these if the user demonstrates mastery.`
+  : '   User has earned all available certificates! 🎉'}
 
 
 Mission:
@@ -482,43 +504,52 @@ Safety & Boundaries:
           - Reasoning: ${reasoning}
           - User: ${userId}`);
         
-        if (!certificateType || !this.nftRewards[certificateType]) {
-          console.log(`Certificate request denied - invalid certificate type: ${certificateType}`);
-        }
-        else if (confidenceLevel < 8 || confidenceLevel > 10) {
-          console.log(`Certificate request denied - confidence level ${confidenceLevel} is below minimum threshold (8) or invalid`);
-        }
-        else if (!reasoning || reasoning.trim().length < 10) {
-          console.log(`Certificate request denied - insufficient reasoning provided`);
-        }
-        else {
-          try {
+          if (!certificateType || !this.nftRewards[certificateType]) {
+            console.log(`❌ Certificate request denied - invalid certificate type: ${certificateType}`);
+          }
+          else if (confidenceLevel < 8 || confidenceLevel > 10) {
+            console.log(`❌ Certificate request denied - confidence level ${confidenceLevel} is below minimum threshold (8) or invalid`);
+          }
+          else if (!reasoning || reasoning.trim().length < 10) {
+            console.log(`❌ Certificate request denied - insufficient reasoning provided: "${reasoning}"`);
+          }
+
+          else if (userCertificateIds.has(this.nftRewards[certificateType].id)) {
             const nftReward = this.nftRewards[certificateType];
-            await this.rewardsService.awardRewardToUser(userId, nftReward.id);
+            console.log(`⚠️ Certificate award attempted but user already has ${certificateType} (${nftReward.name})
+              - This should not happen as AI was informed of owned certificates
+              - AI may have hallucinated or ignored instructions`);
+
+            certificateAcknowledgement = '';
+          }
+          else {
+            try {
+              const nftReward = this.nftRewards[certificateType];
+              await this.rewardsService.awardRewardToUser(userId, nftReward.id);
+              
+              certificateAcknowledgement = `🏆 **Congratulations!** 🎉\n\n` +
+                `You've earned the **${nftReward.name}** NFT certificate!\n\n` +
+                `${nftReward.description}\n\n` +
+                `💎 You can view and claim your NFT in the rewards section. Keep up the amazing learning! 🎓\n\n`;
             
-            certificateAcknowledgement = `🏆 **Congratulations!** 🎉\n\n` +
-              `You've earned the **${nftReward.name}** NFT certificate!\n\n` +
-              `${nftReward.description}\n\n` +
-              `💎 You can view and claim your NFT in the rewards section. Keep up the amazing learning! 🎓\n\n`;
-            
-            console.log(`✅ Successfully awarded ${certificateType} (${nftReward.name}) to user ${userId}
+              console.log(`✅ Successfully awarded ${certificateType} (${nftReward.name}) to user ${userId}
               - Confidence: ${confidenceLevel}/10
               - Reasoning: ${reasoning}`);
               
-          } catch (error) {
-            if (error.message && error.message.includes('already has this reward')) {
-              const nftReward = this.nftRewards[certificateType];
-              certificateAcknowledgement = `You've already earned the **${nftReward.name}** certificate! 🎓\n` +
-                `You can view it in your rewards section. Keep learning to unlock more certificates! 💪\n\n`;
-              console.log(`ℹ️ User ${userId} already has ${certificateType} certificate`);
-            } 
-            else {
-              console.error(`❌ Failed to award ${certificateType} certificate to user ${userId}:`, error);
-              certificateAcknowledgement = '';
+            } catch (error) {
+              if (error.message && error.message.includes('already has this reward')) {
+                console.log(`⚠️ User ${userId} already has ${certificateType} certificate (caught at DB level)
+                  - This is a backup catch; should have been prevented earlier`);
+
+                certificateAcknowledgement = '';
+              } 
+              else {
+                console.error(`❌ Failed to award ${certificateType} certificate to user ${userId}:`, error);
+                certificateAcknowledgement = '';
+              }
             }
           }
         }
-      }
 
       if (roadmapPart) {
         const topic = roadmapPart.functionCall?.args?.topic;
