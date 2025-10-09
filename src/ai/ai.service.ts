@@ -63,7 +63,7 @@ Do not include any explanation or additional text outside the JSON array.`;
       requiredTopics: ["icm", "capital markets", "solana", "tokenization", "believe"]
     },
     eduLearnWelcome: {
-      id: "member",
+      id: "aed65cb8-c7d9-43f0-ad72-d77909bd0972",
       name: "EduLearn Welcome Badge",
       description: "Welcome to EduLearn! This NFT celebrates your journey into the world of blockchain education. You've taken the first step towards mastering decentralized technologies.",
       criteria: "Awarded automatically to new users or when they complete their first meaningful learning interaction, showing enthusiasm to learn about Web3 and blockchain technology.",
