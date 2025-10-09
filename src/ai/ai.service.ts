@@ -40,8 +40,35 @@ YOU MUST ALWAYS GENERATE 5 QUESTIONS
 
 Do not include any explanation or additional text outside the JSON array.`;
 
-  private readonly rewards = {
-    web3Basics: "4c5d895a-3479-481a-9db6-4327f6ae53cd",
+  private readonly nftRewards = {
+    web3Basics: {
+      id: "d3b0cced-5465-4582-a740-c9810b8282a8",
+      name: "Blockchain Basics",
+      description: "Awarded for completing the Blockchain Basics course, this NFT marks your achievement in understanding the core principles of blockchain technology, from decentralized networks to cryptographic security.",
+      criteria: "User must demonstrate comprehensive understanding of: blockchain fundamentals, decentralized networks, cryptographic security, consensus mechanisms, and how blockchain technology works. They should have engaged in multiple meaningful exchanges about these topics and correctly answered questions.",
+      requiredTopics: ["blockchain", "decentralization", "consensus", "cryptography", "nodes"]
+    },
+    defiFoundations: {
+      id: "d97ced2e-330d-4b62-8777-871ed5d5a5a4",
+      name: "DeFi Foundations",
+      description: "Awarded for mastering DeFi fundamentals and understanding how decentralized finance is revolutionizing traditional financial systems.",
+      criteria: "User must show deep understanding of: DeFi protocols, liquidity pools, yield farming, DEXs, lending protocols, AMMs, and DeFi security practices. They should demonstrate practical knowledge through thoughtful questions and correct answers.",
+      requiredTopics: ["defi", "liquidity", "amm", "dex", "yield", "lending"]
+    },
+    icm: {
+      id: "4c7fc27a-3156-49f7-8ed4-1d3116c7b5ce",
+      name: "Internet Capital Markets (ICM)",
+      description: "Awarded for understanding how Solana is transforming global finance with decentralized, internet-native capital markets.",
+      criteria: "User must demonstrate understanding of: Internet Capital Markets concept, Solana's role in global finance, tokenization of assets, on-chain trading, and how blockchain enables permissionless capital markets. Should show engagement with ICM-specific topics.",
+      requiredTopics: ["icm", "capital markets", "solana", "tokenization", "believe"]
+    },
+    eduLearnWelcome: {
+      id: "member",
+      name: "EduLearn Welcome Badge",
+      description: "Welcome to EduLearn! This NFT celebrates your journey into the world of blockchain education. You've taken the first step towards mastering decentralized technologies.",
+      criteria: "Awarded automatically to new users or when they complete their first meaningful learning interaction, showing enthusiasm to learn about Web3 and blockchain technology.",
+      requiredTopics: ["welcome", "introduction", "getting started"]
+    }
   }
 
   private readonly scoreUser = {
@@ -62,21 +89,48 @@ Do not include any explanation or additional text outside the JSON array.`;
 
   private readonly rewardUser = {
     name: "giveACertificate",
-    description: "ONLY give a certificate when the user has CLEARLY demonstrated deep understanding of a topic through multiple interactions. The user must have asked thoughtful questions AND correctly answered your questions AND engaged meaningfully with the topic over multiple exchanges. Available certificates: 'web3 Basics'. NEVER give certificates for basic questions or simple interactions - the standard must be high.",
+    description: `Award NFT certificates ONLY when users demonstrate DEEP understanding through multiple meaningful interactions. Standards are HIGH - users must show mastery, not just basic comprehension.
+
+AVAILABLE CERTIFICATES:
+
+1. 'web3Basics' - Blockchain Basics NFT
+   Criteria: User demonstrates comprehensive understanding of blockchain fundamentals, decentralized networks, cryptographic security, consensus mechanisms. They must have engaged in multiple exchanges, asked thoughtful questions, and correctly answered your questions about core blockchain concepts.
+
+2. 'defiFoundations' - DeFi Foundations NFT
+   Criteria: User shows deep understanding of DeFi protocols, liquidity pools, yield farming, DEXs, lending protocols, AMMs, and DeFi security. They must demonstrate practical knowledge and understand the risks and mechanisms of decentralized finance.
+
+3. 'icm' - Internet Capital Markets NFT
+   Criteria: User demonstrates understanding of Internet Capital Markets, Solana's role in global finance, tokenization, on-chain trading, and how blockchain enables permissionless capital markets. Should reference Believe launchpad or ICM concepts specifically.
+
+4. 'eduLearnWelcome' - EduLearn Welcome Badge
+   Criteria: Award to new users who complete their first meaningful learning interaction or show genuine enthusiasm to learn about Web3. This is the most accessible certificate for beginners taking their first steps.
+
+STRICT RULES:
+- NEVER award certificates for single questions or brief exchanges
+- User must demonstrate understanding across MULTIPLE related concepts
+- User must have both ASKED thoughtful questions AND ANSWERED your questions correctly
+- Look for practical application thinking, not just theoretical knowledge
+- Confidence level must be 8+ (scale 1-10) based on conversation depth
+- Each certificate can only be awarded once per user
+- Quality over speed - it's better to withhold than award prematurely`,
     parameters: {
       type: Type.OBJECT,
       properties: {
         certificate: {
           type: Type.STRING,
-          description: "The certificate type to give the user. Must be one of: 'web3Basics'",
-          enum: ["web3Basics"]
+          description: "The certificate type to award. Choose the ONE that best matches the user's demonstrated knowledge.",
+          enum: ["web3Basics", "defiFoundations", "icm", "eduLearnWelcome"]
         },
         confidenceLevel: {
           type: Type.NUMBER,
-          description: "Your confidence (1-10) that the user truly understands this topic deeply. ONLY award certificates when confidence is 8 or higher.",
+          description: "Your confidence (1-10) that the user truly masters this topic. Minimum 8 required. Base this on: conversation depth, correct answers given, thoughtful questions asked, practical understanding shown.",
+        },
+        reasoning: {
+          type: Type.STRING,
+          description: "Brief explanation of why you're awarding this certificate. What specific knowledge did the user demonstrate? What topics did they master?",
         }
       },
-      required: ['certificate', 'confidenceLevel'],  
+      required: ['certificate', 'confidenceLevel', 'reasoning'],  
     }
   }
 
@@ -122,6 +176,16 @@ Do not include any explanation or additional text outside the JSON array.`;
         client_id: process.env.GOOGLE_APPLICATION_CREDENTIALS_CLIENT_ID,
       },
     });
+  }
+  getNFTRewardInfo(certificateType: string) {
+    return this.nftRewards[certificateType] || null;
+  }
+
+  getAllNFTRewards() {
+    return Object.entries(this.nftRewards).map(([key, value]) => ({
+      key,
+      ...value
+    }));
   }
 
   async checkUserCredits(userId: string): Promise<number> {
@@ -246,6 +310,7 @@ Mission:
 - Guide learners toward understanding, not just hand over answers.
 - Help them think like Web3 builders using analogies, strategic hints, guiding questions, and fun metaphors.
 - build users for job readiness
+- Award NFT certificates when users demonstrate true mastery of topics through deep engagement
 
 
 Coverage Areas:
@@ -283,7 +348,16 @@ Mini-challenges & Learning UX:
 - For each concept, offer a short hands-on challenge (5–60 minutes) that results in a tangible artifact (contract, script, small dApp).
 - Provide debugging drills: intentionally broken snippets + hints to guide learners through fixes.
 - Offer "what if" scenarios to stimulate architecture thinking and tradeoff analysis.
-- Encourage learners to produce small portfolio items as proof-of-learning and proof of work .
+- Encourage learners to produce small portfolio items as proof-of-learning and proof of work.
+
+NFT Certificate Rewards System:
+You can award NFT certificates to users who demonstrate mastery. Available certificates:
+1. **Blockchain Basics** (web3Basics) - For comprehensive understanding of blockchain fundamentals, decentralization, consensus, and cryptography
+2. **DeFi Foundations** (defiFoundations) - For mastering DeFi protocols, liquidity pools, AMMs, DEXs, and DeFi security
+3. **Internet Capital Markets** (icm) - For understanding ICM concepts, Solana's role in finance, tokenization, and Believe launchpad
+4. **EduLearn Welcome Badge** (eduLearnWelcome) - For new users completing their first meaningful learning interaction
+
+IMPORTANT: Only award certificates when users show DEEP understanding through multiple exchanges, thoughtful questions, and correct answers. Confidence level must be 8+ out of 10.
 
 Tone:
 - Warm, enthusiastic, and honest.
@@ -400,25 +474,49 @@ Safety & Boundaries:
       if (certificatePart) {
         const certificateType = certificatePart.functionCall?.args?.certificate;
         const confidenceLevel = Number(certificatePart.functionCall?.args?.confidenceLevel || 0);
-        console.log(`Certificate type requested: ${certificateType} with confidence level: ${confidenceLevel}`);
+        const reasoning = certificatePart.functionCall?.args?.reasoning || "No reasoning provided";
         
-        if (certificateType && this.rewards[certificateType] && confidenceLevel >= 8 && confidenceLevel <= 10) {
+        console.log(`Certificate Award Request:
+          - Type: ${certificateType}
+          - Confidence: ${confidenceLevel}/10
+          - Reasoning: ${reasoning}
+          - User: ${userId}`);
+        
+        if (!certificateType || !this.nftRewards[certificateType]) {
+          console.log(`Certificate request denied - invalid certificate type: ${certificateType}`);
+        }
+        else if (confidenceLevel < 8 || confidenceLevel > 10) {
+          console.log(`Certificate request denied - confidence level ${confidenceLevel} is below minimum threshold (8) or invalid`);
+        }
+        else if (!reasoning || reasoning.trim().length < 10) {
+          console.log(`Certificate request denied - insufficient reasoning provided`);
+        }
+        else {
           try {
-            const rewardId = this.rewards[certificateType];
-            await this.rewardsService.awardRewardToUser(userId, rewardId);
+            const nftReward = this.nftRewards[certificateType];
+            await this.rewardsService.awardRewardToUser(userId, nftReward.id);
             
-            certificateAcknowledgement = `🏆 Congratulations! You've earned a ${certificateType} certificate! You can view and claim it in your rewards section 🎓\n\n`;
-            console.log(`Awarded certificate ${certificateType} (${rewardId}) to user ${userId} with confidence level ${confidenceLevel}`);
+            certificateAcknowledgement = `🏆 **Congratulations!** 🎉\n\n` +
+              `You've earned the **${nftReward.name}** NFT certificate!\n\n` +
+              `${nftReward.description}\n\n` +
+              `💎 You can view and claim your NFT in the rewards section. Keep up the amazing learning! 🎓\n\n`;
+            
+            console.log(`✅ Successfully awarded ${certificateType} (${nftReward.name}) to user ${userId}
+              - Confidence: ${confidenceLevel}/10
+              - Reasoning: ${reasoning}`);
+              
           } catch (error) {
             if (error.message && error.message.includes('already has this reward')) {
-              certificateAcknowledgement = `You've already earned the ${certificateType} certificate! You can view it in your rewards section 🎓\n\n`;
-              console.log(`User ${userId} already has the ${certificateType} certificate`);
-            } else {
-              console.error(`Failed to award ${certificateType} certificate to user ${userId}:`, error);
+              const nftReward = this.nftRewards[certificateType];
+              certificateAcknowledgement = `You've already earned the **${nftReward.name}** certificate! 🎓\n` +
+                `You can view it in your rewards section. Keep learning to unlock more certificates! 💪\n\n`;
+              console.log(`ℹ️ User ${userId} already has ${certificateType} certificate`);
+            } 
+            else {
+              console.error(`❌ Failed to award ${certificateType} certificate to user ${userId}:`, error);
+              certificateAcknowledgement = '';
             }
           }
-        } else {
-          console.log(`Certificate request denied - confidence level ${confidenceLevel} is below threshold (8) or invalid`);
         }
       }
 
