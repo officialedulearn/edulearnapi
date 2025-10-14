@@ -21,24 +21,17 @@ import type { File } from 'multer';
 export class AiService {
   private readonly genAI: GoogleGenAI;
   private readonly speechClient: SpeechClient;
-  private readonly systemInstructionForQuiz = `Based on the context of our conversation so far, generate 5 quiz questions to test my understanding — but only if the discussion included web3 learning-based content. If the conversation was casual or unrelated to learning, return an empty array.
+  private readonly systemInstructionForQuiz = `Based on the context of our conversation so far, generate EXACTLY 5 quiz questions to test understanding — but only if the discussion included web3 learning-based content. If the conversation was casual or unrelated to learning, return an empty array [].
 
 All questions should be medium difficulty (level 6 on a scale of 1 to 10), with 4 options and only one correct answer.
 
-Format the output strictly as a JSON array with this structure:
-[
-  {
-    "question": "the question text",
-    "options": ["option1", "option2", "option3", "option4"],
-    "correctAnswer": "the correct option",
-    "explanation": "explanation of the answer"
-  },
-  ...more questions
-]
+CRITICAL REQUIREMENTS:
+- YOU MUST GENERATE EXACTLY 5 QUESTIONS - NOT 4, NOT 6, EXACTLY 5
+- Each question MUST have exactly 4 options
+- The correctAnswer MUST be one of the 4 options (exact match)
+- All fields are required and must be strings (except options which is an array)
 
-YOU MUST ALWAYS GENERATE 5 QUESTIONS
-
-Do not include any explanation or additional text outside the JSON array.`;
+Return ONLY valid JSON, no markdown, no code blocks, no explanations.`;
 
   private readonly nftRewards = {
     web3Basics: {
@@ -646,14 +639,12 @@ Rules:
 - Match ${userLevel} level
 - Build on ${userLearning}
 - Tie to ICM, Solana, DeFi, NFTs, smart contracts, or Web3 tools
-- Each suggestion: 3 words, study-focused, relevant, engaging
+- Each suggestion: 3-5 words, study-focused, relevant, engaging
 - Focus on understanding, not actions
 
-YOU MUST ALWAYS GENERATE 3 SUGGESTIONS
+YOU MUST ALWAYS GENERATE EXACTLY 3 SUGGESTIONS - NO MORE, NO LESS
 
-Output:
-Return ONLY a valid JSON array of exactly 3 strings. No markdown, no explanations, no additional text.
-Example format: ["topic one", "topic two", "topic three"]
+Return ONLY valid JSON with no additional text.
 `;
     try {
       const result = await this.genAI.models.generateContent({
@@ -663,47 +654,60 @@ Example format: ["topic one", "topic two", "topic three"]
           maxOutputTokens: 300,
           temperature: 0.7,
           systemInstruction: systemInstruction,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.STRING,
+              description: "A short learning suggestion (3-5 words)"
+            }
+          }
         }
       });
 
       const responseText = result.text?.trim();
       if (!responseText) {
+        console.error('Empty response from AI for suggestions');
         throw new Error('Empty response from AI');
-      }
-      let jsonStr = this.extractAndCleanJSON(responseText);
-      
-      if (!jsonStr) {
-        console.error('No valid JSON found in AI response:', responseText);
-        throw new Error('AI service returned invalid format for suggestions');
       }
 
       let suggestions;
       try {
-        suggestions = JSON.parse(jsonStr);
+        suggestions = JSON.parse(responseText);
       } catch (parseError) {
-        console.error('JSON parsing failed for suggestions:', parseError);
-        console.error('Attempted to parse:', jsonStr);
+        console.error('JSON parsing failed for suggestions, attempting cleanup:', parseError);
+        const jsonStr = this.extractAndCleanJSON(responseText);
+        
+        if (!jsonStr) {
+          console.error('No valid JSON found in AI response:', responseText);
+          throw new Error('AI service returned invalid format for suggestions');
+        }
 
         try {
-          const fixedJson = this.attemptJSONFix(jsonStr);
-          if (fixedJson) {
-            suggestions = JSON.parse(fixedJson);
-            console.log('Fixed JSON:', fixedJson);
-          } else {
-            throw parseError;
-          }
+          suggestions = JSON.parse(jsonStr);
         } catch (secondError) {
           console.error('Second parsing attempt failed:', secondError);
-          throw parseError;
+          throw new Error('AI service returned invalid format for suggestions');
         }
       }
       
-      if (!Array.isArray(suggestions) || suggestions.length !== 3) {
-        console.error('Invalid suggestions format:', suggestions);
-        throw new Error('Invalid suggestions format - expected array of 3 strings');
+      if (!Array.isArray(suggestions)) {
+        console.error('Suggestions is not an array:', suggestions);
+        throw new Error('Invalid suggestions format - expected an array');
       }
 
-      return suggestions;
+      // Filter out empty or invalid suggestions
+      const validSuggestions = suggestions.filter(s => 
+        typeof s === 'string' && s.trim().length > 0
+      );
+
+      if (validSuggestions.length < 3) {
+        console.error(`Only ${validSuggestions.length} valid suggestions generated, expected 3`);
+        throw new Error('Insufficient valid suggestions generated');
+      }
+
+      // Return exactly 3 suggestions
+      return validSuggestions.slice(0, 3);
     } catch (error) {
       console.error('Error generating suggestions:', error);
       
@@ -808,8 +812,35 @@ Example format: ["topic one", "topic two", "topic three"]
               contents: `Our conversation: ${JSON.stringify(formattedMessages)}`,
               config: {
                 temperature: 0.1, 
-                maxOutputTokens: 1500, 
+                maxOutputTokens: 2000, 
                 systemInstruction: this.systemInstructionForQuiz,
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      question: {
+                        type: Type.STRING,
+                        description: "The quiz question text"
+                      },
+                      options: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                        description: "Array of exactly 4 answer options"
+                      },
+                      correctAnswer: {
+                        type: Type.STRING,
+                        description: "The correct answer, must match one of the options"
+                      },
+                      explanation: {
+                        type: Type.STRING,
+                        description: "Explanation of why this is the correct answer"
+                      }
+                    },
+                    required: ["question", "options", "correctAnswer", "explanation"]
+                  }
+                }
               },
             }),
             new Promise((_, reject) => 
@@ -841,28 +872,50 @@ Example format: ["topic one", "topic two", "topic three"]
         throw new Error('AI service returned empty response. Please try again.');
       }
 
+      let quizQuestions;
+      try {
+        quizQuestions = JSON.parse(response);
+      } catch (parseError) {
+        console.error('Direct JSON parsing failed, attempting cleanup:', parseError);
+        const jsonStr = this.extractAndCleanJSON(response);
+        
+        if (!jsonStr) {
+          console.error('No valid JSON found in AI response:', response.substring(0, 500) + '...');
+          throw new Error('AI service returned invalid format. This might be due to conversation content not being suitable for quiz generation.');
+        }
 
-      let jsonStr = this.extractAndCleanJSON(response);
+        console.log('Extracted JSON string:', jsonStr.substring(0, 200) + '...');
+        quizQuestions = this.parseAndValidateQuiz(jsonStr);
+      }
       
-      if (!jsonStr) {
-        console.error('No valid JSON found in AI response:', response.substring(0, 500) + '...');
-        throw new Error('AI service returned invalid format. This might be due to conversation content not being suitable for quiz generation.');
+      if (!Array.isArray(quizQuestions)) {
+        console.error('Response is not an array:', quizQuestions);
+        throw new Error('AI service returned invalid format - expected an array of questions.');
       }
 
-      console.log('Extracted JSON string:', jsonStr.substring(0, 200) + '...');
-      const quizQuestions = this.parseAndValidateQuiz(jsonStr);
-      
-      if (!quizQuestions || quizQuestions.length === 0) {
-        console.warn('No valid quiz questions generated from conversation');
-        console.warn('Raw AI response:', response.substring(0, 500) + '...');
-        console.warn('Extracted JSON:', jsonStr.substring(0, 300) + '...');
+      if (quizQuestions.length === 0) {
+        console.warn('Empty quiz array generated from conversation');
         throw new Error('Unable to generate quiz questions from this conversation. The discussion may not contain enough educational content.');
       }
 
+      // Validate structure of each question
+      const validQuestions = quizQuestions.filter(q => 
+        q &&
+        typeof q.question === 'string' && q.question.trim().length > 0 &&
+        Array.isArray(q.options) && q.options.length === 4 &&
+        q.options.every(opt => typeof opt === 'string' && opt.trim().length > 0) &&
+        typeof q.correctAnswer === 'string' && q.correctAnswer.trim().length > 0 &&
+        typeof q.explanation === 'string' && q.explanation.trim().length > 0 &&
+        q.options.includes(q.correctAnswer)
+      );
 
-      if (quizQuestions.length < 3) {
-        throw new Error('Generated quiz has too few questions. A minimum of 3 questions is required.');
+      if (validQuestions.length < 5) {
+        console.warn(`Only ${validQuestions.length} valid questions generated, expected 5`);
+        throw new Error(`Generated quiz has insufficient valid questions (${validQuestions.length}/5). Please try generating the quiz again.`);
       }
+
+      // Enforce exactly 5 questions
+      quizQuestions = validQuestions.slice(0, 5);
 
 
       try {
