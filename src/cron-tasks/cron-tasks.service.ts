@@ -1,19 +1,46 @@
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { AuthService } from 'src/auth/auth.service';
 import { WalletService } from 'src/wallet/wallet.service';
+import { TwitterService } from 'src/twitter/twitter.service';
 import db from '../../drizzle';
 import { desc, and, eq, lt } from 'drizzle-orm';
 import {  user } from '../../lib/db/schema';
 
 @Injectable()
 export class CronTasksService {
+
+  
     private readonly logger = new Logger(CronTasksService.name);
     constructor(
         @Inject(forwardRef(() => AuthService))
         private authService: AuthService,
-        private walletService: WalletService
+        private walletService: WalletService,
+        private twitterService: TwitterService
     ) {}
+
+    @Cron(CronExpression.EVERY_MINUTE)
+    async handleLeaderboardPost() {
+      const topUsers = await db.select()
+      .from(user)
+      .orderBy(desc(user.xp))
+      .limit(3);
+
+      const postFormat = `EduLearn Top Users 🏆
+
+First Place: @${topUsers[0].username} - ${topUsers[0].xp} XP
+Second Place: @${topUsers[1].username} - ${topUsers[1].xp} XP
+Third Place: @${topUsers[2].username} - ${topUsers[2].xp} XP
+
+Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
+
+      try {
+        await this.twitterService.postTweet(postFormat);
+        this.logger.log('Successfully posted leaderboard to X');
+      } catch (error) {
+        this.logger.error('Failed to post to social media', error);
+      }
+    }
 
     @Cron('0 0 * * *')
     async handleCreditRenewal() {

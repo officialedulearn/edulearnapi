@@ -25,6 +25,7 @@ import { earning, premiumTransactions, user } from 'lib/db/schema';
 import { eq } from 'drizzle-orm';
 import axios from 'axios';
 import { transactionSenderAndConfirmationWaiter } from '../../lib/transaction/transactionSender';
+import { TwitterService } from 'src/twitter/twitter.service';
 
 @Injectable()
 export class WalletService {
@@ -50,6 +51,7 @@ export class WalletService {
   constructor(
     @Inject(forwardRef(() => AuthService))
     private authService: AuthService,
+    private twitterService: TwitterService
   ) {}
 
   async genereteWallet() {
@@ -590,6 +592,14 @@ export class WalletService {
         }
       }
 
+      const post = `
+        @${user.username} claimed ${totalSol} USDC on EduLearn
+
+        Start learning and earning rewards on edulearn.fun
+      `
+
+      await this.twitterService.postTweet(post);
+      console.log('Successfully posted earnings to X');
       console.log(`Successfully claimed earnings for user ${userId}`, transactions);
       
       return {
