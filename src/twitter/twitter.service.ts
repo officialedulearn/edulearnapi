@@ -1,15 +1,34 @@
-import { Injectable, BadRequestException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, BadRequestException, Inject, forwardRef, OnModuleInit, Logger } from '@nestjs/common';
 import axios from 'axios';
 import { AuthService } from 'src/auth/auth.service';
 import * as crypto from 'crypto';
 import { TwitterApi } from 'twitter-api-v2';
+import { eq, sql } from 'drizzle-orm';
+import db from '../../drizzle';
+import { user, userReward } from '../../lib/db/schema';
 
 @Injectable()
-export class TwitterService {
+export class TwitterService implements OnModuleInit {
+    private readonly logger = new Logger(TwitterService.name);
+    private botClient: TwitterApi;
+
     constructor(
         @Inject(forwardRef(() => AuthService))
         private authService: AuthService
-    ) {}
+    ) {
+        if (process.env.TWITTER_API_KEY && 
+            process.env.TWITTER_API_SECRET && 
+            process.env.TWITTER_ACCESS_TOKEN && 
+            process.env.TWITTER_ACCESS_TOKEN_SECRET) {
+            this.botClient = new TwitterApi({
+                appKey: process.env.TWITTER_API_KEY,
+                appSecret: process.env.TWITTER_API_SECRET,
+                accessToken: process.env.TWITTER_ACCESS_TOKEN,
+                accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET,
+            });
+        }
+    }
+
     private clientId = process.env.TWITTER_CLIENT_ID;
     private clientSecret = process.env.TWITTER_CLIENT_SECRET;
     private redirectUri = process.env.TWITTER_REDIRECT_URI;
@@ -216,6 +235,171 @@ export class TwitterService {
         error.message || 
         'Failed to post tweet'
       );
+    }
+  }
+
+  async onModuleInit() {
+    if (this.botClient) {
+      this.logger.log('🤖 Starting Twitter bot listener...');
+      this.listenToMentions();
+    } else {
+      this.logger.warn('⚠️ Twitter bot credentials not configured. Bot listener not started.');
+    }
+  }
+
+  private async listenToMentions() {
+    try {
+      const rules = await this.botClient.v2.streamRules();
+      if (rules.data?.length) {
+        await this.botClient.v2.updateStreamRules({
+          delete: { ids: rules.data.map((rule) => rule.id) },
+        });
+      }
+
+      await this.botClient.v2.updateStreamRules({
+        add: [{ value: '@edulearnbot score', tag: 'score-requests' }],
+      });
+
+      this.logger.log('✅ Stream rules set up successfully');
+
+      const stream = await this.botClient.v2.searchStream({
+        'tweet.fields': ['author_id', 'conversation_id', 'created_at', 'referenced_tweets'],
+        'user.fields': ['username'],
+        expansions: ['author_id', 'referenced_tweets.id', 'referenced_tweets.id.author_id'],
+        autoConnect: true,
+      });
+
+      stream.on('data', async (tweet) => {
+        this.logger.log(`📩 Received tweet: ${tweet.data?.text}`);
+        if (tweet.data?.text?.toLowerCase().includes('@edulearnbot score')) {
+          await this.handleScoreRequest(tweet.data, tweet.includes);
+        }
+      });
+
+      stream.on('error', (error) => {
+        this.logger.error('❌ Stream error:', error);
+        setTimeout(() => {
+          this.logger.log('🔄 Reconnecting to stream...');
+          this.listenToMentions();
+        }, 5000);
+      });
+
+      this.logger.log('🎧 Now listening for mentions...');
+    } catch (error) {
+      this.logger.error('❌ Error setting up stream:', error);
+    }
+  }
+
+  private async handleScoreRequest(tweet: any, includes: any) {
+    try {
+      const referencedTweets = tweet.referenced_tweets;
+      if (!referencedTweets || referencedTweets.length === 0) {
+        this.logger.warn('⚠️ Tweet is not a reply to another tweet');
+        return;
+      }
+
+      const repliedTo = referencedTweets.find((ref: any) => ref.type === 'replied_to');
+      if (!repliedTo) {
+        this.logger.warn('⚠️ No replied_to tweet found');
+        return;
+      }
+
+      this.logger.log(`🔍 Fetching parent tweet: ${repliedTo.id}`);
+
+      const parentTweet = await this.botClient.v2.singleTweet(repliedTo.id, {
+        'user.fields': ['username'],
+        expansions: ['author_id'],
+      });
+
+      const parentAuthorUsername = parentTweet.includes?.users?.[0]?.username;
+      if (!parentAuthorUsername) {
+        this.logger.warn('⚠️ Could not get parent tweet author username');
+        return;
+      }
+
+      this.logger.log(`🎯 Scoring user: @${parentAuthorUsername}`);
+
+      const requesterUsername = includes?.users?.find((u: any) => u.id === tweet.author_id)?.username || tweet.author_id;
+
+      const scoreData = await this.calculateScore(parentAuthorUsername);
+
+      let replyText: string;
+      if (scoreData.found) {
+        replyText = `@${requesterUsername} 📊 Score for @${parentAuthorUsername}:\n\n` +
+                    `🎯 XP: ${scoreData.xp}\n` +
+                    `📚 Learning: ${scoreData.learning}\n` +
+                    `🏆 Rewards: ${scoreData.rewards}\n` +
+                    `⚡ Total Score: ${scoreData.totalScore}`;
+      } else {
+        replyText = `@${requesterUsername} User @${parentAuthorUsername} is not registered on EduLearn yet! 🚀`;
+      }
+
+      await this.botClient.v2.reply(replyText, tweet.id);
+      
+      this.logger.log(`✅ Replied with score to @${requesterUsername}`);
+    } catch (error) {
+      this.logger.error('❌ Failed to handle score request:', error);
+    }
+  }
+
+  private async calculateScore(username: string): Promise<{
+    found: boolean;
+    xp: number;
+    learning: string;
+    rewards: number;
+    totalScore: number;
+  }> {
+    try {
+      this.logger.log(`📊 Calculating score for ${username}`);
+    
+      const users = await db
+        .select()
+        .from(user)
+        .where(eq(user.username, username))
+        .limit(1);
+
+      if (!users || users.length === 0) {
+        this.logger.log(`⚠️ User ${username} not found in database`);
+        return {
+          found: false,
+          xp: 0,
+          learning: '',
+          rewards: 0,
+          totalScore: 0,
+        };
+      }
+
+      const userData = users[0];
+
+      const rewardsCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(userReward)
+        .where(eq(userReward.userId, userData.id));
+
+      const totalRewards = Number(rewardsCount[0]?.count || 0);
+
+      const xp = userData.xp || 0;
+      const rewardBonus = totalRewards * 100;
+      const totalScore = xp + rewardBonus;
+
+      this.logger.log(`✅ Score calculated for ${username}: XP=${xp}, Rewards=${totalRewards}, Total=${totalScore}`);
+
+      return {
+        found: true,
+        xp,
+        learning: userData.learning || 'Not specified',
+        rewards: totalRewards,
+        totalScore,
+      };
+    } catch (error) {
+      this.logger.error(`❌ Error calculating score for ${username}:`, error);
+      return {
+        found: false,
+        xp: 0,
+        learning: '',
+        rewards: 0,
+        totalScore: 0,
+      };
     }
   }
 }

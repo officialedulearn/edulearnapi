@@ -54,8 +54,8 @@ export class ResendService {
                   <!-- Header -->
                   <tr>
                     <td style="background-color:#121212;padding:40px 30px;text-align:center;border-bottom:2px solid #00FF80;">
-                      <h1 style="margin:0;color:#FFFFFF;font-size:32px;font-weight:700;letter-spacing:-0.5px;">Welcome to EduLearn</h1>
-                      <p style="margin:10px 0 0;color:#BFBFBF;font-size:16px;">Your personalized learning adventure starts now.</p>
+                      <h1 style="margin:0;color:#FFFFFF;font-size:32px;font-weight:700;letter-spacing:-0.5px;">Welcome to EduLearn.fun 💚</h1>
+                      <p style="margin:10px 0 0;color:#BFBFBF;font-size:16px;">Your personalized journey to mastering Web3 and unlocking real opportunities begins today.</p>
                     </td>
                   </tr>
         
