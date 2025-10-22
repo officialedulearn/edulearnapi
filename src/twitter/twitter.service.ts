@@ -10,17 +10,22 @@ import { user, userReward } from '../../lib/db/schema';
 @Injectable()
 export class TwitterService implements OnModuleInit {
     private readonly logger = new Logger(TwitterService.name);
-    private botClient: TwitterApi;
+    private botClient: TwitterApi; 
+    private writeClient: TwitterApi; 
 
     constructor(
         @Inject(forwardRef(() => AuthService))
         private authService: AuthService
     ) {
+        if (process.env.TWITTER_BEARER_TOKEN) {
+            this.botClient = new TwitterApi(process.env.TWITTER_BEARER_TOKEN);
+        }
+        
         if (process.env.TWITTER_API_KEY && 
             process.env.TWITTER_API_SECRET && 
             process.env.TWITTER_ACCESS_TOKEN && 
             process.env.TWITTER_ACCESS_TOKEN_SECRET) {
-            this.botClient = new TwitterApi({
+            this.writeClient = new TwitterApi({
                 appKey: process.env.TWITTER_API_KEY,
                 appSecret: process.env.TWITTER_API_SECRET,
                 accessToken: process.env.TWITTER_ACCESS_TOKEN,
@@ -239,11 +244,88 @@ export class TwitterService implements OnModuleInit {
   }
 
   async onModuleInit() {
-    if (this.botClient) {
-      this.logger.log('🤖 Starting Twitter bot listener...');
-      this.listenToMentions();
+    if (this.botClient && this.writeClient) {
+      this.logger.log('🤖 Starting Twitter bot listener (polling mode)...');
+      this.listenToMentionsPolling();
     } else {
-      this.logger.warn('⚠️ Twitter bot credentials not configured. Bot listener not started.');
+      if (!this.botClient) {
+        this.logger.warn('⚠️ TWITTER_BEARER_TOKEN not configured. Bot listener not started.');
+      }
+      if (!this.writeClient) {
+        this.logger.warn('⚠️ Twitter OAuth 1.0a credentials not configured. Bot cannot post replies.');
+      }
+    }
+  }
+
+  private lastCheckedTweetId: string | null = null;
+  private rateLimitResetTime: number | null = null;
+
+  private async listenToMentionsPolling() {
+    const pollInterval = 16 * 60 * 1000; 
+    
+    this.logger.log('🎧 Now polling for mentions every 16 minutes (Twitter API rate limit)...');
+    this.logger.warn('⚠️  Note: Twitter Basic/Free tier has very limited rate limits.');
+    this.logger.warn('⚠️  For real-time responses, you need Elevated or Enterprise access.');
+      
+    await this.checkForMentions();
+    
+    setInterval(async () => {
+      await this.checkForMentions();
+    }, pollInterval);
+  }
+
+  private async checkForMentions() {
+    try {
+      if (this.rateLimitResetTime && Date.now() < this.rateLimitResetTime) {
+        const waitMinutes = Math.ceil((this.rateLimitResetTime - Date.now()) / 60000);
+        this.logger.log(`⏳ Rate limited. Waiting ${waitMinutes} more minute(s)...`);
+        return;
+      }
+
+      this.logger.log('🔍 Checking for new mentions...');
+
+      const searchQuery = '@edulearnbot score';
+      const tweets = await this.botClient.v2.search(searchQuery, {
+        'tweet.fields': ['author_id', 'conversation_id', 'created_at', 'referenced_tweets'],
+        'user.fields': ['username'],
+        expansions: ['author_id'],
+        max_results: 10,
+        ...(this.lastCheckedTweetId && { since_id: this.lastCheckedTweetId }),
+      });
+
+      const tweetData = tweets?.data?.data || tweets?.data || [];
+      if (!Array.isArray(tweetData) || tweetData.length === 0) {
+        this.logger.log('✅ No new mentions found');
+        return;
+      }
+
+      this.logger.log(`📩 Found ${tweetData.length} new mention(s)`);
+
+      if (tweetData.length > 0) {
+        this.lastCheckedTweetId = tweetData[0].id;
+      }
+
+      for (const tweet of tweetData) {
+        if (tweet.text?.toLowerCase().includes('@edulearnbot score')) {
+          this.logger.log(`Processing tweet: ${tweet.text}`);
+          await this.handleScoreRequest(tweet, tweets.includes);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+    } catch (error: any) {
+      if (error.code === 429) {
+        const resetTime = error.rateLimit?.reset;
+        if (resetTime) {
+          this.rateLimitResetTime = resetTime * 1000; 
+          const resetDate = new Date(this.rateLimitResetTime);
+          const waitMinutes = Math.ceil((this.rateLimitResetTime - Date.now()) / 60000);
+          this.logger.warn(`⏱️  Rate limit reached. Will retry after ${resetDate.toLocaleTimeString()} (in ${waitMinutes} minutes)`);
+        } else {
+          this.logger.warn('⏱️  Rate limit reached. Will retry in 16 minutes');
+        }
+      } else {
+        this.logger.error('❌ Error checking for mentions:', error.message || error);
+      }
     }
   }
 
@@ -334,7 +416,7 @@ export class TwitterService implements OnModuleInit {
         replyText = `@${requesterUsername} User @${parentAuthorUsername} is not registered on EduLearn yet! 🚀`;
       }
 
-      await this.botClient.v2.reply(replyText, tweet.id);
+      await this.writeClient.v2.reply(replyText, tweet.id);
       
       this.logger.log(`✅ Replied with score to @${requesterUsername}`);
     } catch (error) {
