@@ -14,6 +14,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { TwitterModule } from './twitter/twitter.module';
 import { RoadmapModule } from './roadmap/roadmap.module';
 import { SubscriptionModule } from './subscription/subscription.module';
+import { ResendModule } from './resend/resend.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
     TwitterModule,
     RoadmapModule,
     SubscriptionModule,
+    ResendModule,
   ],
   controllers: [AppController],
   providers: [AppService],

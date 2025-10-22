@@ -19,7 +19,7 @@ export class CronTasksService {
         private twitterService: TwitterService
     ) {}
 
-    @Cron(CronExpression.EVERY_MINUTE)
+    @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
     async handleLeaderboardPost() {
       const topUsers = await db.select()
       .from(user)

@@ -9,6 +9,7 @@ import { ActivityService } from 'src/activity/activity.service';
 import { WalletService } from 'src/wallet/wallet.service';
 import { RewardsService } from 'src/rewards/rewards.service';
 import { CronTasksService } from 'src/cron-tasks/cron-tasks.service';
+import { ResendService } from 'src/resend/resend.service';
 import { supabaseAdmin } from '../../lib/supabase';
 
 @Injectable()
@@ -20,6 +21,7 @@ export class AuthService {
     private rewardService: RewardsService,
     @Inject(forwardRef(() => CronTasksService))
     private cronTasksService: CronTasksService,
+    private resendService: ResendService,
   ) {}
   async createUser(data: signUpDetails): Promise<User | Error> {
     try {
@@ -81,6 +83,17 @@ export class AuthService {
         .select()
         .from(user)
         .where(eq(user.email, data.email));
+
+      // Send welcome email asynchronously (don't block user creation)
+      this.resendService.sendWelcomeEmail(
+        createdUser.email,
+        createdUser.name,
+        createdUser.username || '',
+        createdUser.referralCode || ''
+      ).catch((error) => {
+        console.error('Failed to send welcome email:', error);
+        // Don't throw error - email failure shouldn't block user creation
+      });
 
       return createdUser;
     } catch (error) {
