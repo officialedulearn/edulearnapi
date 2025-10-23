@@ -1,0 +1,2 @@
+ALTER TABLE "roadmap" ADD COLUMN "claimableNFT" uuid DEFAULT NULL;--> statement-breakpoint
+ALTER TABLE "roadmap" ADD CONSTRAINT "roadmap_claimableNFT_reward_id_fk" FOREIGN KEY ("claimableNFT") REFERENCES "public"."reward"("id") ON DELETE no action ON UPDATE no action;

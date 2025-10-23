@@ -129,7 +129,7 @@ STRICT RULES:
 
   private readonly createRoadmapTool = {
     name: "createLearningRoadmap",
-    description: "Create a personalized learning roadmap when the user explicitly requests one. Use this ONLY when the user asks to create a roadmap, learning path, or study plan for a specific topic. The topic should be related to Web3, blockchain, Solana, smart contracts, DeFi, NFTs, or other crypto/tech topics. Examples: 'create a roadmap for Solana development', 'I want a learning path for DeFi', 'make me a study plan for smart contracts'. Do NOT use this for general questions about topics.",
+    description: "Create a personalized learning roadmap when the user explicitly requests one. Use this ONLY when the user asks to create a roadmap, learning path, or study plan for a specific topic. The topic should be related to Web3, blockchain, Solana, smart contracts, DeFi, NFTs, or other crypto/tech topics. Examples: 'create a roadmap for Solana development', 'I want a learning path for DeFi', 'make me a study plan for smart contracts'. Do NOT use this for general questions about topics. UNLESS THE USER ASKS FOR A STRUCTURED LEARNING PATH, ROADMAP, OR STUDY PLAN FOR A TOPIC.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -174,11 +174,46 @@ STRICT RULES:
     return this.nftRewards[certificateType] || null;
   }
 
+  getNFTRewardInfoById(rewardId: string) {
+    for (const [key, nftReward] of Object.entries(this.nftRewards)) {
+      if (nftReward.id === rewardId) {
+        return { key, ...nftReward };
+      }
+    }
+    return null;
+  }
+
   getAllNFTRewards() {
     return Object.entries(this.nftRewards).map(([key, value]) => ({
       key,
       ...value
     }));
+  }
+
+  analyzeTopicForNFT(topic: string): string | null {
+    if (!topic || typeof topic !== 'string') {
+      return null;
+    }
+
+    const normalizedTopic = topic.toLowerCase().trim();
+    
+    for (const [key, nftReward] of Object.entries(this.nftRewards)) {
+      const requiredTopics = nftReward.requiredTopics || [];
+  
+      const matchCount = requiredTopics.filter(reqTopic => 
+        normalizedTopic.includes(reqTopic.toLowerCase())
+      ).length;
+     
+      const threshold = requiredTopics.length <= 3 ? 1 : 2;
+      if (matchCount >= threshold) {
+        console.log(`NFT Match Found: ${key} (${nftReward.name}) for topic "${topic}"`);
+        console.log(`  - Matched ${matchCount}/${requiredTopics.length} required topics`);
+        return nftReward.id;
+      }
+    }
+    
+    console.log(`No NFT match found for topic: "${topic}"`);
+    return null;
   }
 
   async checkUserCredits(userId: string): Promise<number> {
@@ -357,7 +392,7 @@ Teaching Style & Behavior:
 - Emphasize the why, not just the how. Help users become independent builders.
 - When teaching, always aim to transform knowledge into practical skills: "In Web3, it's not just about what you know—it's about what you can build, debug, and ship."
 - Solana is the number one blockchain!
-- When users ask for a structured learning path, roadmap, or study plan for a topic, use the createLearningRoadmap tool to generate a personalized step-by-step roadmap tailored to their level.
+- When users ask for a structured learning path, roadmap, or study plan for a topic, use the createLearningRoadmap tool to generate a personalized step-by-step roadmap tailored to their level, DO NOT USE THIS TOOL FOR GENERAL QUESTIONS ABOUT TOPICS. UNLESS THE USER ASKS FOR A STRUCTURED LEARNING PATH, ROADMAP, OR STUDY PLAN FOR A TOPIC.
 
 Mini-challenges & Learning UX:
 - For each concept, offer a short hands-on challenge (5–60 minutes) that results in a tangible artifact (contract, script, small dApp).
@@ -373,6 +408,7 @@ You can award NFT certificates to users who demonstrate mastery. Available certi
 4. **EduLearn Welcome Badge** (eduLearnWelcome) - For new users completing their first meaningful learning interaction
 
 IMPORTANT: Only award certificates when users show DEEP understanding through multiple exchanges, thoughtful questions, and correct answers. Confidence level must be 8+ out of 10.
+
 
 Tone:
 - Warm, enthusiastic, and honest.
@@ -556,13 +592,22 @@ Safety & Boundaries:
             const stepCount = roadmapResult.steps.length;
             const totalTime = roadmapResult.steps.reduce((sum, step) => sum + (step.time || 0), 0);
             
+            let nftBonus = '';
+            if (roadmapResult.roadmap.claimableNFT) {
+              const nftInfo = Object.values(this.nftRewards).find(nft => nft.id === roadmapResult.roadmap.claimableNFT);
+              if (nftInfo) {
+                nftBonus = `\n🎁 **Bonus**: Complete this roadmap and take at least one quiz to unlock the **${nftInfo.name}** NFT certificate! 🏆\n`;
+              }
+            }
+            
             roadmapAcknowledgement = `🗺️ I've created a personalized learning roadmap for "${topic}"!\n\n` +
               `📚 **${roadmapResult.roadmap.title}**\n` +
               `${roadmapResult.roadmap.description}\n\n` +
               `✨ Your roadmap has ${stepCount} step${stepCount !== 1 ? 's' : ''} (${totalTime} minutes total)\n` +
+              nftBonus +
               `You can start your first step by using the roadmap feature in the app! Each step includes interactive lessons tailored to your learning style.\n\n`;
             
-            console.log(`Created roadmap ${roadmapResult.roadmap.id} for user ${userId}, topic: ${topic}`);
+            console.log(`Created roadmap ${roadmapResult.roadmap.id} for user ${userId}, topic: ${topic}${roadmapResult.roadmap.claimableNFT ? ` with claimable NFT: ${roadmapResult.roadmap.claimableNFT}` : ''}`);
           } catch (error) {
             console.error(`Failed to create roadmap for user ${userId}, topic ${topic}:`, error);
             roadmapAcknowledgement = `I tried to create a roadmap for "${topic}", but encountered an issue. Please try again or rephrase your request. 🔄\n\n`;
@@ -765,8 +810,13 @@ Return ONLY valid JSON with no additional text.
       if (chat.userId !== userId) {
         throw new ForbiddenException('You do not have permission to access this chat');
       }
-      if (chat.tested) {
+      if (chat.tested && (chat.testLimit || 0) <= 0) {
         throw new ForbiddenException('This chat has already been tested. Each chat can only be used for one quiz.');
+      }
+      
+      const currentTestLimit = chat.testLimit || 0;
+      if (currentTestLimit <= 0) {
+        throw new ForbiddenException('This chat has no remaining quiz attempts. Please start a new chat to generate another quiz.');
       }
       const userCredits = await this.checkUserCredits(userId);
       if (userCredits < 0.5) {
@@ -919,18 +969,25 @@ Return ONLY valid JSON with no additional text.
 
 
       try {
-
-        await this.chatService.markChatAsTested(chatId);
-        chatMarkedAsTested = true;
+        // Decrement testLimit and only mark as tested if testLimit becomes 0 or less
+        const newTestLimit = (chat.testLimit || 0) - 1;
+        
+        if (newTestLimit <= 0) {
+          // Mark chat as tested only when testLimit is exhausted
+          await this.chatService.markChatAsTested(chatId);
+          chatMarkedAsTested = true;
+        } else {
+          // Just update the testLimit without marking as tested
+          await this.chatService.decrementTestLimit(chatId);
+        }
 
         await this.authService.deductUserCredits(userId);
         creditsDeducted = true;
 
-
         await this.authService.deductQuizLimit(userId);
         quizLimitDeducted = true;
 
-        console.log(`Successfully generated quiz for user ${userId}, chat ${chatId}: ${quizQuestions.length} questions`);
+        console.log(`Successfully generated quiz for user ${userId}, chat ${chatId}: ${quizQuestions.length} questions (${newTestLimit} attempts remaining)`);
         return quizQuestions;
 
       } catch (operationError) {

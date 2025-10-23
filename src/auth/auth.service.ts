@@ -84,7 +84,6 @@ export class AuthService {
         .from(user)
         .where(eq(user.email, data.email));
 
-      // Send welcome email asynchronously (don't block user creation)
       this.resendService.sendWelcomeEmail(
         createdUser.email,
         createdUser.name,
@@ -92,7 +91,6 @@ export class AuthService {
         createdUser.referralCode || ''
       ).catch((error) => {
         console.error('Failed to send welcome email:', error);
-        // Don't throw error - email failure shouldn't block user creation
       });
 
       return createdUser;

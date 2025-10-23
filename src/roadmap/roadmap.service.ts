@@ -1,11 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { AuthService } from 'src/auth/auth.service';
-import { roadmap, roadMapStep } from 'lib/db/schema';
+import { roadmap, roadMapStep, chat } from 'lib/db/schema';
 import db from '../../drizzle';
 import { GoogleGenAI } from '@google/genai';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { ChatService } from 'src/chat/chat.service';
 import { generateUUID } from 'lib/utils';
+import { AiService } from 'src/ai/ai.service';
+import { RewardsService } from 'src/rewards/rewards.service';
 
 @Injectable()
 export class RoadmapService {
@@ -13,14 +15,23 @@ export class RoadmapService {
     constructor(
         private readonly authService: AuthService,
         private readonly chatService: ChatService,
+        @Inject(forwardRef(() => AiService))
+        private readonly aiService: AiService,
+        private readonly rewardsService: RewardsService,
     ) {
         this.genAI = new GoogleGenAI({
             apiKey: process.env.GEMINI_API_KEY,
         });
     }
 
-    async createRoadmap(userId: string, chatId: string, topic: string, title: string, description: string) {
-        const newRoadmap = await db.insert(roadmap).values({ userId, chatId, topic, title, description }).returning();
+    async createRoadmap(userId: string, chatId: string, topic: string, title: string, description: string, claimableNFT?: string | null) {
+        const roadmapData: any = { userId, chatId, topic, title, description };
+        
+        if (claimableNFT) {
+            roadmapData.claimableNFT = claimableNFT;
+        }
+        
+        const newRoadmap = await db.insert(roadmap).values(roadmapData).returning();
         return newRoadmap[0];
     }
 
@@ -144,8 +155,16 @@ CRITICAL JSON RULES:
             if (roadmapData.steps.length === 0) {
                 throw new Error('Roadmap must have at least one step');
             }
-
-            const newRoadmap = await this.createRoadmap(userId, chat.id, topic, roadmapData.title, roadmapData.description);
+            const claimableNFT = this.aiService.analyzeTopicForNFT(topic);
+            
+            const newRoadmap = await this.createRoadmap(
+                userId, 
+                chat.id, 
+                topic, 
+                roadmapData.title, 
+                roadmapData.description,
+                claimableNFT
+            );
 
             const createdSteps = await Promise.all(
                 roadmapData.steps.map(async (step: any) => {
@@ -189,6 +208,65 @@ CRITICAL JSON RULES:
         return await db.select().from(roadMapStep).where(eq(roadMapStep.roadmapId, roadmapId));
     }
 
+    async checkAndAwardRoadmapNFT(roadmapId: string, userId: string): Promise<boolean> {
+        try {
+            const roadmapData = await this.getRoadmapById(roadmapId);
+            if (!roadmapData) {
+                console.log(`Roadmap ${roadmapId} not found`);
+                return false;
+            }
+
+            if (!roadmapData.claimableNFT) {
+                console.log(`No claimable NFT for roadmap ${roadmapId}`);
+                return false;
+            }
+
+            const steps = await this.getRoadmapSteps(roadmapId);
+            if (steps.length === 0) {
+                console.log(`No steps found for roadmap ${roadmapId}`);
+                return false;
+            }
+
+            const allStepsDone = steps.every(step => step.done === true);
+            if (!allStepsDone) {
+                const completedCount = steps.filter(step => step.done === true).length;
+                console.log(`Roadmap ${roadmapId} steps: ${completedCount}/${steps.length} completed`);
+                return false;
+            }
+
+            const chatData = await this.chatService.getChatById(roadmapData.chatId);
+            if (!chatData) {
+                console.log(`Chat ${roadmapData.chatId} not found for roadmap ${roadmapId}`);
+                return false;
+            }
+
+            const hasTestedKnowledge = (chatData.testLimit || 3) < 3;
+            if (!hasTestedKnowledge) {
+                console.log(`Chat ${roadmapData.chatId} has not been tested yet. User must complete at least one quiz to verify their knowledge.`);
+                return false;
+            }
+
+            const userRewards = await this.rewardsService.getUserRewards(userId);
+            const alreadyHasNFT = userRewards.some(reward => reward.id === roadmapData.claimableNFT);
+            
+            if (alreadyHasNFT) {
+                console.log(`User ${userId} already has NFT ${roadmapData.claimableNFT}`);
+                return false;
+            }
+
+            console.log(`🎉 Awarding NFT ${roadmapData.claimableNFT} to user ${userId} for completing roadmap ${roadmapId}`);
+            
+            await this.rewardsService.awardRewardToUser(userId, roadmapData.claimableNFT);
+            
+            console.log(`✅ Successfully awarded NFT ${roadmapData.claimableNFT} to user ${userId}`);
+            return true;
+
+        } catch (error) {
+            console.error(`Error checking/awarding roadmap NFT for roadmap ${roadmapId}:`, error);
+            return false;
+        }
+    }
+
     async startRoadmapStep(stepId: string, userId: string, aiService: any) {
         const steps = await db.select().from(roadMapStep).where(eq(roadMapStep.id, stepId));
         if (!steps.length) {
@@ -216,16 +294,39 @@ CRITICAL JSON RULES:
         };
 
         const messagesWithNewPrompt = [...currentMessages, userMessage];
+
         const aiResponse = await aiService.generateResponse({
             messages: messagesWithNewPrompt,
             chatId: roadmapData.chatId,
             userId,
         });
 
+        await db.update(roadMapStep).set({ done: true }).where(eq(roadMapStep.id, stepId));
+
+        const nftAwarded = await this.checkAndAwardRoadmapNFT(step.roadmapId, userId);
+        if (nftAwarded && roadmapData.claimableNFT) {
+            const nftInfo = this.aiService.getNFTRewardInfoById(roadmapData.claimableNFT);
+
+            if (nftInfo) {
+                const congratsMessage = `\n\n🎉🎉🎉 **CONGRATULATIONS!** 🎉🎉🎉\n\n` +
+                    `You've completed the entire "${roadmapData.title}" roadmap! 🗺️✨\n\n` +
+                    `As a reward for your dedication and hard work, you've earned the **${nftInfo.name}** NFT certificate! 🏆\n\n` +
+                    `${nftInfo.description}\n\n` +
+                    `💎 You can view and claim your NFT in the rewards section. Keep up the amazing learning journey! 🚀`;
+
+                if (aiResponse.content && typeof aiResponse.content === 'object' && 'text' in aiResponse.content) {
+                    aiResponse.content.text = `${aiResponse.content.text}\n\n${congratsMessage}`;
+                }
+
+                await this.chatService.saveMessages({ messages: [aiResponse] });
+            }
+        }
+
         return {
             step,
             userMessage,
             aiResponse,
+            nftAwarded,
         };
     }
 

@@ -292,6 +292,7 @@ export class TwitterService implements OnModuleInit {
   private lastCheckedTweetId: string | null = null;
   private rateLimitResetTime: number | null = null;
   private tweetRateLimitResetTime: number | null = null;
+  private processedTweetIds: Set<string> = new Set();
 
   private async listenToMentionsPolling() {
     const pollInterval = 16 * 60 * 1000; 
@@ -334,17 +335,34 @@ export class TwitterService implements OnModuleInit {
 
       this.logger.log(`📩 Found ${tweetData.length} new mention(s)`);
 
-      if (tweetData.length > 0) {
-        this.lastCheckedTweetId = tweetData[0].id;
-      }
-
+      let processedCount = 0;
       for (const tweet of tweetData) {
+        if (this.processedTweetIds.has(tweet.id)) {
+          this.logger.log(`⏭️ Skipping already processed tweet: ${tweet.id}`);
+          continue;
+        }
+
         if (tweet.text?.toLowerCase().includes('@edulearnbot score')) {
           this.logger.log(`Processing tweet: ${tweet.text}`);
           await this.handleScoreRequest(tweet, tweets.includes);
+          
+          this.processedTweetIds.add(tweet.id);
+          processedCount++;
+          
+          if (!this.lastCheckedTweetId || tweet.id > this.lastCheckedTweetId) {
+            this.lastCheckedTweetId = tweet.id;
+          }
+          
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
+
+      if (this.processedTweetIds.size > 1000) {
+        const idsArray = Array.from(this.processedTweetIds);
+        this.processedTweetIds = new Set(idsArray.slice(-500));
+      }
+
+      this.logger.log(`✅ Processed ${processedCount} new tweet(s)`);
     } catch (error: any) {
       if (error.code === 429) {
         const resetTime = error.rateLimit?.reset;
@@ -429,6 +447,11 @@ export class TwitterService implements OnModuleInit {
       const parentAuthorUsername = parentTweet.includes?.users?.[0]?.username;
       if (!parentAuthorUsername) {
         this.logger.warn('⚠️ Could not get parent tweet author username');
+        return;
+      }
+
+      if (parentAuthorUsername.toLowerCase() === 'edulearnbot') {
+        this.logger.log('⚠️ Ignoring request to score the bot itself');
         return;
       }
 

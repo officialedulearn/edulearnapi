@@ -1,0 +1,1 @@
+ALTER TABLE "roadmap_step" ADD COLUMN "done" boolean DEFAULT false;

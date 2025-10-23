@@ -12,6 +12,7 @@ import {
   integer,
   numeric,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 export const user = pgTable('user', {
   id: uuid('id').primaryKey().unique().notNull(),
@@ -99,6 +100,7 @@ export const chat = pgTable('chat', {
     .notNull()
     .default('private'),
   tested: boolean('tested').default(false),
+  testLimit: integer('testLimit').default(3),
 });
 
 export type Chat = InferSelectModel<typeof chat>;
@@ -165,6 +167,9 @@ export const roadmap = pgTable('roadmap', {
   topic: text('topic').notNull(),
   title: text('title').notNull(),
   description: text('description').notNull(),
+  claimableNFT: uuid('claimableNFT')
+  .references(() => reward.id)
+  .default(sql`NULL`),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 })
 
@@ -180,4 +185,5 @@ export const roadMapStep = pgTable('roadmap_step', {
   description: text('description').notNull(),
   time: integer('time').notNull(),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
+  done: boolean('done').default(false),
 })

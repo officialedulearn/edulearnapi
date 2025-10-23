@@ -42,6 +42,24 @@ export class ChatService {
     return result.length ? result[0] : null;
   }
 
+  async decrementTestLimit(chatId: string): Promise<Chat | null> {
+    // Get current testLimit
+    const currentChat = await this.getChatById(chatId);
+    if (!currentChat) {
+      return null;
+    }
+    
+    const newTestLimit = (currentChat.testLimit || 0) - 1;
+    
+    const result = await db
+      .update(chat)
+      .set({ testLimit: newTestLimit })
+      .where(eq(chat.id, chatId))
+      .returning();
+    
+    return result.length ? result[0] : null;
+  }
+
   async getChatById(chatId: string): Promise<Chat | null> {
     const result = await db.select().from(chat).where(eq(chat.id, chatId));
     return result.length ? result[0] : null;
