@@ -180,9 +180,17 @@ export class TwitterService implements OnModuleInit {
       };
       reply_settings?: 'following' | 'mentionedUsers';
       share_with_followers?: boolean;
-    }
+    },
+    retryCount: number = 0
   ) {
     try {
+      // Check if we're rate limited for tweets
+      if (this.tweetRateLimitResetTime && Date.now() < this.tweetRateLimitResetTime) {
+        const waitMinutes = Math.ceil((this.tweetRateLimitResetTime - Date.now()) / 60000);
+        this.logger.warn(`⏳ Tweet rate limited. Waiting ${waitMinutes} more minute(s)...`);
+        throw new BadRequestException(`Tweet rate limited. Please wait ${waitMinutes} minutes before trying again.`);
+      }
+
       if (!this.apiKey || !this.apiSecret || !this.accessToken || !this.accessTokenSecret) {
         throw new BadRequestException(
           'Twitter OAuth 1.0a credentials missing. Required in .env:\n' +
@@ -190,8 +198,11 @@ export class TwitterService implements OnModuleInit {
         );
       }
 
-      console.log('📤 Posting tweet using twitter-api-v2 library...');
-      console.log('  - Tweet text length:', text.length);
+      this.logger.log('📤 Posting tweet using twitter-api-v2 library...');
+      this.logger.log('  - Tweet text length:', text.length);
+      if (retryCount > 0) {
+        this.logger.log(`  - Retry attempt: ${retryCount}`);
+      }
 
       const client = new TwitterApi({
         appKey: this.apiKey,
@@ -222,16 +233,37 @@ export class TwitterService implements OnModuleInit {
 
       const tweet = await client.v2.tweet(tweetPayload);
 
-      console.log('✅ Tweet posted successfully!')
+      this.logger.log('✅ Tweet posted successfully!')
 
       return tweet.data;
     } catch (error) {
-      console.error('❌ Error posting tweet:', error);
+      this.logger.error('❌ Error posting tweet:', error);
+
+    
+      if (error.code === 429) {
+        const resetTime = error.rateLimit?.reset;
+        if (resetTime) {
+          this.tweetRateLimitResetTime = resetTime * 1000;
+          const resetDate = new Date(this.tweetRateLimitResetTime);
+          const waitMinutes = Math.ceil((this.tweetRateLimitResetTime - Date.now()) / 60000);
+          this.logger.warn(`⏱️ Tweet rate limit reached. Will retry after ${resetDate.toLocaleTimeString()} (in ${waitMinutes} minutes)`);
+        } else {
+          this.tweetRateLimitResetTime = Date.now() + (15 * 60 * 1000);
+          this.logger.warn('⏱️ Tweet rate limit reached. Will retry in 15 minutes');
+        }
+        if (retryCount < 3) {
+          const backoffDelay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+          this.logger.log(`🔄 Retrying tweet post in ${backoffDelay}ms (attempt ${retryCount + 1}/3)`);
+          
+          await new Promise(resolve => setTimeout(resolve, backoffDelay));
+          return this.postTweet(text, options, retryCount + 1);
+        } else {
+          throw new BadRequestException('Tweet rate limit exceeded. Please try again later.');
+        }
+      }
 
       if (error.code === 401 || error.code === 403) {
-        throw new BadRequestException(
-          'Failed to post tweet'
-        );
+        throw new BadRequestException('Authentication failed. Please check your Twitter credentials.');
       }
       
       throw new BadRequestException(
@@ -259,6 +291,7 @@ export class TwitterService implements OnModuleInit {
 
   private lastCheckedTweetId: string | null = null;
   private rateLimitResetTime: number | null = null;
+  private tweetRateLimitResetTime: number | null = null;
 
   private async listenToMentionsPolling() {
     const pollInterval = 16 * 60 * 1000; 
@@ -428,7 +461,11 @@ export class TwitterService implements OnModuleInit {
         replyText = randomResponse;
       }
 
-      await this.writeClient.v2.reply(replyText, tweet.id);
+      await this.postTweet(replyText, {
+        reply: {
+          in_reply_to_tweet_id: tweet.id
+        }
+      });
       
       this.logger.log(`✅ Replied with score to @${requesterUsername}`);
     } catch (error) {
