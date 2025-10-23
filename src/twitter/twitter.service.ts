@@ -413,7 +413,19 @@ export class TwitterService implements OnModuleInit {
                     `🏆 Rewards: ${scoreData.rewards}\n` +
                     `⚡ Total Score: ${scoreData.totalScore}`;
       } else {
-        replyText = `@${requesterUsername} User @${parentAuthorUsername} is not registered on EduLearn yet! 🚀`;
+        const funnyResponses = [
+          `@${requesterUsername} Oops! @${parentAuthorUsername} seems to be living under a rock 🪨 - they're not an EduLearner yet! Time to join the learning revolution! 🚀`,
+          `@${requesterUsername} Plot twist! @${parentAuthorUsername} is still using carrier pigeons 📮 instead of EduLearn. Someone send them an invite! 🎓`,
+          `@${requesterUsername} Breaking news: @${parentAuthorUsername} hasn't discovered the secret sauce of learning yet! 🍝 They're missing out on all the XP! ⚡`,
+          `@${requesterUsername} Alert! @${parentAuthorUsername} is still stuck in the stone age 🦕 - no EduLearn account detected! Time for an upgrade! 🔄`,
+          `@${requesterUsername} Mystery solved! @${parentAuthorUsername} is probably still using a flip phone 📱 and hasn't joined the EduLearn party yet! 🎉`,
+          `@${requesterUsername} Houston, we have a problem! @${parentAuthorUsername} is not in our learning database 🛸 - they're still using ancient scrolls! 📜`,
+          `@${requesterUsername} Warning: @${parentAuthorUsername} detected in the wild without EduLearn powers! 🦸‍♂️ They need to level up ASAP! ⬆️`,
+          `@${requesterUsername} Plot hole alert! @${parentAuthorUsername} is missing from our learning universe 🌌 - they're probably still using Windows 95! 💻`
+        ];
+        
+        const randomResponse = funnyResponses[Math.floor(Math.random() * funnyResponses.length)];
+        replyText = randomResponse;
       }
 
       await this.writeClient.v2.reply(replyText, tweet.id);
