@@ -495,6 +495,27 @@ export class WalletService {
       }).returning();
 
       console.log(`Earnings added successfully for user ${userId}`, result);
+
+      // Send email notification about new earnings
+      if (user.email && user.name) {
+        try {
+          const html = this.getNewEarningsEmailTemplate(
+            user.name,
+            Number(solValue),
+            Number(edlnValue)
+          );
+          await this.resendService.sendEmail(
+            user.email,
+            '💰 New Earnings Available to Claim!',
+            html
+          );
+          console.log(`Earnings notification email sent to ${user.email}`);
+        } catch (emailError) {
+          console.error('Failed to send earnings notification email:', emailError.message);
+          // Don't throw error here - earnings were still added successfully
+        }
+      }
+
       return result;
     } catch (error) {
       console.error('Error adding earnings:', error.message);
@@ -964,6 +985,158 @@ export class WalletService {
             </td>
         </tr>
     </table>
+</body>
+</html>
+    `;
+  }
+
+  private getNewEarningsEmailTemplate(
+    name: string,
+    solAmount: number,
+    edlnAmount: number
+  ): string {
+    const hasUsdc = solAmount > 0;
+    const hasEdln = edlnAmount > 0;
+    
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>New Earnings Available</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body style="margin:0;padding:0;background-color:#0D0D0D;font-family:'Urbanist',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#CCCCCC;">
+
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#0D0D0D;">
+    <tr>
+      <td align="center" style="padding:40px 20px;">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="background-color:#151515;border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;max-width:600px;">
+
+          <!-- Header -->
+          <tr>
+            <td style="background-color:#121212;padding:40px 30px;text-align:center;border-bottom:2px solid #00FF80;">
+              <div style="font-size:64px;margin-bottom:15px;">💰</div>
+              <h1 style="margin:0;color:#FFFFFF;font-size:32px;font-weight:700;letter-spacing:-0.5px;">New Earnings Available!</h1>
+              <p style="margin:10px 0 0;color:#BFBFBF;font-size:16px;">You've received new rewards from your affiliate referrals</p>
+            </td>
+          </tr>
+
+          <!-- Greeting -->
+          <tr>
+            <td style="padding:40px 30px 20px 30px;">
+              <h2 style="margin:0 0 15px 0;color:#FFFFFF;font-size:24px;font-weight:600;">Great news, ${name}! 🎉</h2>
+              <p style="margin:0;color:#CCCCCC;font-size:15px;line-height:1.6;">
+                Your referral just went premium and you've earned affiliate commissions! Your earnings are now ready to claim.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Earnings Summary -->
+          <tr>
+            <td style="padding:20px 30px;">
+              <div style="background:linear-gradient(135deg, rgba(0,255,128,0.08) 0%, rgba(0,255,128,0.04) 100%);border-radius:12px;padding:24px;border:2px solid rgba(0,255,128,0.2);">
+                <h3 style="margin:0 0 20px 0;color:#FFFFFF;font-size:20px;font-weight:600;text-align:center;">
+                  💵 Your New Earnings
+                </h3>
+                
+                ${hasUsdc ? `
+                <div style="background-color:#1A1A1A;border-radius:12px;padding:20px;margin-bottom:${hasEdln ? '15px' : '0'};border:1px solid rgba(255,255,255,0.08);">
+                  <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                      <div style="font-size:14px;color:#BFBFBF;margin-bottom:5px;">USDC Earned</div>
+                      <div style="font-size:28px;font-weight:700;color:#00FF80;">
+                        $${solAmount.toFixed(2)}
+                      </div>
+                    </div>
+                    <div style="font-size:40px;">💵</div>
+                  </div>
+                </div>
+                ` : ''}
+
+                ${hasEdln ? `
+                <div style="background-color:#1A1A1A;border-radius:12px;padding:20px;border:1px solid rgba(255,255,255,0.08);">
+                  <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                      <div style="font-size:14px;color:#BFBFBF;margin-bottom:5px;">EDLN Tokens</div>
+                      <div style="font-size:28px;font-weight:700;color:#00FF80;">
+                        ${edlnAmount.toFixed(2)} $EDLN
+                      </div>
+                    </div>
+                    <div style="font-size:40px;">🪙</div>
+                  </div>
+                </div>
+                ` : ''}
+              </div>
+            </td>
+          </tr>
+
+          <!-- How it works -->
+          <tr>
+            <td style="padding:20px 30px;">
+              <div style="border-left:3px solid #00FF80;padding-left:16px;">
+                <h4 style="margin:0 0 8px 0;color:#FFFFFF;font-size:16px;font-weight:600;">
+                  📖 How Affiliate Earnings Work
+                </h4>
+                <p style="margin:0;color:#BFBFBF;font-size:14px;line-height:1.6;">
+                  Every time someone you referred upgrades to premium, you earn 20% commission on their payment. These earnings accumulate in your account and can be claimed whenever you're ready!
+                </p>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Next Steps -->
+          <tr>
+            <td style="padding:20px 30px;">
+              <div style="border-left:3px solid #00FF80;padding-left:16px;">
+                <h4 style="margin:0 0 8px 0;color:#FFFFFF;font-size:16px;font-weight:600;">
+                  💡 Ready to Claim?
+                </h4>
+                <p style="margin:0;color:#BFBFBF;font-size:14px;line-height:1.6;">
+                  Your earnings are safely stored and ready to be claimed whenever you want. Visit your wallet to transfer these rewards directly to your crypto wallet!
+                </p>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Motivational Quote -->
+          <tr>
+            <td style="padding:20px 30px;">
+              <div style="text-align:center;padding:20px;border-top:1px solid rgba(255,255,255,0.08);border-bottom:1px solid rgba(255,255,255,0.08);">
+                <p style="margin:0;color:#BFBFBF;font-size:16px;line-height:1.6;font-style:italic;">
+                  "The best investment you can make is in yourself and others." 🌟
+                </p>
+                <p style="margin:15px 0 0 0;color:#00FF80;font-size:14px;font-weight:600;">
+                  Keep sharing and earning, EduLearner! 🫡
+                </p>
+              </div>
+            </td>
+          </tr>
+
+          <!-- CTA -->
+          <tr>
+            <td style="padding:30px;text-align:center;">
+              <a href="https://edulearn.fun/dashboard/rewards" target="_blank" style="display:inline-block;background-color:#00FF80;color:#000000;text-decoration:none;padding:16px 48px;border-radius:10px;font-weight:700;font-size:16px;box-shadow:0 4px 16px rgba(0,255,128,0.25);">Claim My Earnings →</a>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#121212;padding:30px;text-align:center;border-top:1px solid rgba(255,255,255,0.08);">
+              <p style="margin:0 0 8px 0;color:#BFBFBF;font-size:14px;">Questions about your earnings?</p>
+              <p style="margin:0 0 10px 0;color:#BFBFBF;font-size:14px;">Contact us at <a href="mailto:dave@edulearn.fun" style="color:#00FF80;text-decoration:none;">dave@edulearn.fun</a></p>
+              <p style="margin:0;color:#9E9E9E;font-size:12px;">© 2025 EduLearn. Made with ❤️ for lifelong learners.</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
 </body>
 </html>
     `;
