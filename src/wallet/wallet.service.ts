@@ -251,7 +251,7 @@ export class WalletService {
     };
   }
 
-  async swapSolToEdln(userId: string, amount: number) {
+  async swapSolToEdln(userId: string, amount: number, usdc?: boolean) {
     const user = await this.authService.getUserById(userId);
     if (!user) {
       throw new Error('User not found');
@@ -295,7 +295,7 @@ export class WalletService {
       
       while (!quoteResponse && currentEndpointIndex < jupiterApiEndpoints.length) {
         const baseUrl = jupiterApiEndpoints[currentEndpointIndex];
-        const quoteUrl = `${baseUrl}/quote?inputMint=So11111111111111111111111111111111111111112\
+        const quoteUrl = `${baseUrl}/quote?inputMint=${usdc ? 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' : 'So11111111111111111111111111111111111111112'}\
 &outputMint=CFw2KxMpWuxivoowkF8vRCrnMuDeg5VMHRR7zjE7pBLV\
 &amount=${amount * LAMPORTS_PER_SOL}\
 &slippageBps=50`;
@@ -515,7 +515,6 @@ export class WalletService {
           console.log(`Earnings notification email sent to ${user.email}`);
         } catch (emailError) {
           console.error('Failed to send earnings notification email:', emailError.message);
-          // Don't throw error here - earnings were still added successfully
         }
       }
 
@@ -576,6 +575,10 @@ export class WalletService {
         totalSol += Number(earn.sol);
         totalEdln += Number(earn.edln);
       });
+
+      const totalSolForEdln = totalSol * 0.05;
+      const totalSolToTransfer = totalSol - totalSolForEdln;
+
       
       console.log(`Found earnings - SOL: ${totalSol}, EDLN: ${totalEdln}`);
 
@@ -589,11 +592,14 @@ export class WalletService {
       const transactions: any = [];
 
       if ((type === 'sol' || type === 'all') && totalSol > 0) {
+        const edlnSwapTx = await this.swapAdminUsdcToEdln(totalSolForEdln);
+        transactions.push({ type: 'admin_buyback', amount: totalSolForEdln, tx: edlnSwapTx });
+
         const usdcTransaction = await this.transferUSDC(
           userPublicKey, 
-          totalSol
+          totalSolToTransfer
         );
-        transactions.push({ type: 'usdc', amount: totalSol, tx: usdcTransaction });
+        transactions.push({ type: 'usdc', amount: totalSolToTransfer, tx: usdcTransaction });
       }
 
       if ((type === 'edln' || type === 'all') && totalEdln > 0) {
@@ -735,6 +741,125 @@ export class WalletService {
     } catch (error) {
       console.error('Error transferring EDLN:', error.message);
       throw new Error(`EDLN transfer failed: ${error.message}`);
+    }
+  }
+
+  private async swapAdminUsdcToEdln(usdcAmount: number) {
+    try {
+      const adminSecretKey = process.env.ADMIN_WALLET_SECRET_KEY;
+      if (!adminSecretKey) {
+        throw new Error('Admin wallet secret key not configured');
+      }
+      
+      const adminKeypair = Keypair.fromSecretKey(
+        bs58.default.decode(adminSecretKey)
+      );
+      const adminWallet = new Wallet(adminKeypair);
+
+      const axiosInstance = axios.create({
+        timeout: 30000,
+      });
+      
+      const jupiterApiEndpoints = [
+        'https://lite-api.jup.ag/swap/v1',
+      ];
+      
+      console.log(`Admin wallet swapping ${usdcAmount} USDC to EDLN (keeping in admin wallet)`);
+      
+      const usdcDecimals = 6;
+      const amountInSmallestUnit = usdcAmount * Math.pow(10, usdcDecimals);
+      
+      let quoteResponse;
+      let currentEndpointIndex = 0;
+      
+      while (!quoteResponse && currentEndpointIndex < jupiterApiEndpoints.length) {
+        const baseUrl = jupiterApiEndpoints[currentEndpointIndex];
+        const quoteUrl = `${baseUrl}/quote?inputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v\
+&outputMint=CFw2KxMpWuxivoowkF8vRCrnMuDeg5VMHRR7zjE7pBLV\
+&amount=${amountInSmallestUnit}\
+&slippageBps=50`;
+        
+        try {
+          console.log(`Requesting quote from: ${quoteUrl}`);
+          quoteResponse = await axiosInstance.get(quoteUrl);
+          console.log('Quote received successfully');
+        } catch (error) {
+          console.warn(`Failed to get quote from ${baseUrl}:`, error.message);
+          currentEndpointIndex++;
+        }
+      }
+      
+      if (!quoteResponse) {
+        throw new Error('Failed to get quote from any Jupiter API endpoint');
+      }
+      
+      let swapTx;
+      currentEndpointIndex = 0;
+      
+      while (!swapTx && currentEndpointIndex < jupiterApiEndpoints.length) {
+        const baseUrl = jupiterApiEndpoints[currentEndpointIndex];
+        const swapUrl = `${baseUrl}/swap`;
+        
+        try {
+          console.log(`Requesting swap transaction from: ${swapUrl}`);
+          swapTx = await axiosInstance.post(swapUrl, {
+            quoteResponse: quoteResponse.data,
+            userPublicKey: adminWallet.publicKey.toString(),
+            dynamicComputeUnitLimit: true,
+            dynamicSlippage: true,
+            prioritizationFeeLamports: {
+              priorityLevelWithMaxLamports: {
+                maxLamports: 1000000,
+                priorityLevel: "veryHigh"
+              }
+            }
+          });
+          console.log('Swap transaction received');
+        } catch (error) {
+          console.warn(`Failed to get swap transaction from ${baseUrl}:`, error.message);
+          currentEndpointIndex++;
+        }
+      }
+      
+      if (!swapTx) {
+        throw new Error('Failed to get swap transaction from any Jupiter API endpoint');
+      }
+
+      const { swapTransaction, simulationError } = swapTx.data;
+      
+      if (simulationError) {
+        console.warn('Simulation error detected:', simulationError);
+        throw new Error(`Transaction simulation failed: ${simulationError.message || 'Unknown simulation error'}`);
+      }
+      
+      const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
+      const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
+
+      transaction.sign([adminKeypair]);
+
+      const blockhashWithExpiryBlockHeight = await this.connection.getLatestBlockhash();
+      
+      console.log('Sending admin USDC->EDLN swap transaction...');
+      const txResponse = await transactionSenderAndConfirmationWaiter({
+        connection: this.connection,
+        serializedTransaction: Buffer.from(transaction.serialize()),
+        blockhashWithExpiryBlockHeight,
+      });
+
+      if (!txResponse) {
+        throw new Error('Transaction failed or expired');
+      }
+
+      const txid = txResponse.transaction.signatures[0];
+      console.log('Admin swap confirmed with signature:', txid);
+      
+      return txid;
+    } catch (error) {
+      console.error('Error during admin USDC to EDLN swap:', error.message);
+      if (error.response) {
+        console.error('API error response:', error.response.data);
+      }
+      throw new Error(`Admin swap failed: ${error.message}`);
     }
   }
 
