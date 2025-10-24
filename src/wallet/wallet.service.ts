@@ -21,7 +21,7 @@ import {
 } from '@solana/spl-token';
 import db from '../../drizzle';
 import { AuthService } from 'src/auth/auth.service';
-import { earning, premiumTransactions, user } from 'lib/db/schema';
+import { earning, premiumTransactions, user as userSchema } from 'lib/db/schema';
 import { eq } from 'drizzle-orm';
 import axios from 'axios';
 import { transactionSenderAndConfirmationWaiter } from '../../lib/transaction/transactionSender';
@@ -494,9 +494,12 @@ export class WalletService {
         createdAt: new Date()
       }).returning();
 
+      await db.update(userSchema).set({
+        totalEarnings: `${Number(user.totalEarnings) + Number(solValue)}`
+      }).where(eq(userSchema.id, userId));
+
       console.log(`Earnings added successfully for user ${userId}`, result);
 
-      // Send email notification about new earnings
       if (user.email && user.name) {
         try {
           const html = this.getNewEarningsEmailTemplate(
@@ -617,7 +620,7 @@ export class WalletService {
 
       const post = `
         @${user.username} claimed ${totalSol} USDC on EduLearn
-
+        Putting their total earnings to ${Number(user.totalEarnings).toFixed(2)} USDC
         Start learning and earning rewards on edulearn.fun
       `
 

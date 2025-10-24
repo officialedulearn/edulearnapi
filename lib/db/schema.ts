@@ -43,6 +43,7 @@ export const user = pgTable('user', {
   verified: boolean('verified').default(false),
   imageUploadLimit: integer('imageUploadLimit').default(3),
   quizLimits: integer('quizLimits').default(5), 
+  totalEarnings: numeric('totalEarnings', { precision: 10, scale: 2 }).default('0.00'),
 });
 
 export type User = InferSelectModel<typeof user>;
