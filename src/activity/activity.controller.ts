@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Param, Query, BadRequestException, NotFoundException, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, BadRequestException, NotFoundException, UseGuards, Request } from '@nestjs/common';
 import { ActivityService } from './activity.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
 
 @Controller('activity')
 @UseGuards(JwtAuthGuard)
@@ -8,7 +9,7 @@ export class ActivityController {
   constructor(private readonly activityService: ActivityService) {}
 
   @Post()
-  async createActivity(@Body() createActivityDto: { 
+  async createActivity(@Request() req, @Body() createActivityDto: { 
     userId: string; 
     type: 'quiz' | 'chat' | 'streak';
     title: string;
@@ -18,6 +19,13 @@ export class ActivityController {
       throw new BadRequestException('User ID, type, and XP earned are required');
     }
     
+    const maxXP = createActivityDto.type === 'streak' ? 1 : 10;
+    if (createActivityDto.xpEarned > maxXP || createActivityDto.xpEarned < 0) {
+      throw new BadRequestException(`XP must be between 0 and ${maxXP} for ${createActivityDto.type} activities`);
+    }
+    
+    await verifyUserAuthorization(req.user, createActivityDto.userId, 'creating activity');
+    
     try {
       return await this.activityService.createActivity(createActivityDto);
     } catch (error) {
@@ -26,10 +34,12 @@ export class ActivityController {
   }
 
   @Get('user/:userId')
-  async getActivitiesByUser(@Param('userId') userId: string) {
+  async getActivitiesByUser(@Request() req, @Param('userId') userId: string) {
     if (!userId) {
       throw new BadRequestException('User ID is required');
     }
+    
+    await verifyUserAuthorization(req.user, userId, 'viewing activities');
     
     try {
       return await this.activityService.getActivitiesByUser(userId);
@@ -39,10 +49,12 @@ export class ActivityController {
   }
 
   @Get('user/:userId/quiz')
-  async getQuizActivitiesByUser(@Param('userId') userId: string) {
+  async getQuizActivitiesByUser(@Request() req, @Param('userId') userId: string) {
     if (!userId) {
       throw new BadRequestException('User ID is required');
     }
+    
+    await verifyUserAuthorization(req.user, userId, 'viewing quiz activities');
     
     try {
       return await this.activityService.getQuizActivitiesByUser(userId);
@@ -52,10 +64,12 @@ export class ActivityController {
   }
 
   @Get('user/:userId/xp/quiz')
-  async getQuizXpTotal(@Param('userId') userId: string) {
+  async getQuizXpTotal(@Request() req, @Param('userId') userId: string) {
     if (!userId) {
       throw new BadRequestException('User ID is required');
     }
+    
+    await verifyUserAuthorization(req.user, userId, 'viewing XP');
     
     try {
       const total = await this.activityService.getTotalXpByActivityType(userId, 'quiz');
@@ -67,6 +81,7 @@ export class ActivityController {
 
   @Get('user/:userId/xp')
   async getXpByType(
+    @Request() req,
     @Param('userId') userId: string,
     @Query('type') type: 'quiz' | 'chat' | 'streak'
   ) {
@@ -78,6 +93,8 @@ export class ActivityController {
       throw new BadRequestException('Valid type is required (quiz, chat, or streak)');
     }
     
+    await verifyUserAuthorization(req.user, userId, 'viewing XP');
+    
     try {
       const total = await this.activityService.getTotalXpByActivityType(userId, type);
       return { userId, type, totalXp: total };
@@ -87,10 +104,12 @@ export class ActivityController {
   }
 
   @Get('user/:userId/details')
-  async getUserWithActivities(@Param('userId') userId: string) {
+  async getUserWithActivities(@Request() req, @Param('userId') userId: string) {
     if (!userId) {
       throw new BadRequestException('User ID is required');
     }
+    
+    await verifyUserAuthorization(req.user, userId, 'viewing user details');
     
     try {
       const result = await this.activityService.getUserWithActivities(userId);

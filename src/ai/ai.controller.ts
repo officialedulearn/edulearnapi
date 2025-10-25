@@ -8,12 +8,14 @@ import {
     BadRequestException,
     InternalServerErrorException,
     HttpException,
-    HttpStatus
+    HttpStatus,
+    Request
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Message } from 'lib/db/schema';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { AiService } from './ai.service';
+import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import type { File } from 'multer';
@@ -42,6 +44,7 @@ export class AiController {
 
   @Post('message')
   async generateMessages(
+    @Request() req,
     @Body()
     messageDto: {
       messages: Array<Message>;
@@ -49,6 +52,8 @@ export class AiController {
       userId: string;
     },
   ) {
+    await verifyUserAuthorization(req.user, messageDto.userId, 'generating AI response');
+    
     try {
       return await this.aiService.generateResponse(messageDto);
     } catch (error) {
@@ -65,7 +70,9 @@ export class AiController {
   }
 
   @Post('quiz')
-  async generateQuiz(@Body() quizDto: { chatId: string; userId: string }) {
+  async generateQuiz(@Request() req, @Body() quizDto: { chatId: string; userId: string }) {
+    await verifyUserAuthorization(req.user, quizDto.userId, 'generating quiz');
+    
     try {
       return await this.aiService.generateQuiz(quizDto);
     } catch (error) {
@@ -82,7 +89,9 @@ export class AiController {
   }
 
   @Post('suggestions')
-  async generateSuggestions(@Body() suggestionsDto: { userId: string }) {
+  async generateSuggestions(@Request() req, @Body() suggestionsDto: { userId: string }) {
+    await verifyUserAuthorization(req.user, suggestionsDto.userId, 'generating suggestions');
+    
     try {
       return await this.aiService.generateSuggestions(suggestionsDto);
     } catch (error) {

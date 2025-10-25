@@ -1,7 +1,8 @@
-import { Controller, Post, Get, Body, Param, UseGuards, NotFoundException } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards, NotFoundException, Request } from '@nestjs/common';
 import { RoadmapService } from './roadmap.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AiService } from 'src/ai/ai.service';
+import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
 
 @Controller('roadmap')
 @UseGuards(JwtAuthGuard)
@@ -13,17 +14,20 @@ export class RoadmapController {
 
     @Post('generate')
     async generateRoadmap(
+        @Request() req,
         @Body() body: { userId: string; topic: string }
     ) {
         const { userId, topic } = body;
         if (!userId || !topic) {
             throw new NotFoundException('User ID and topic are required');
         }
+        await verifyUserAuthorization(req.user, userId, 'generating roadmap');
         return await this.roadmapService.generateRoadmap(userId, topic);
     }
 
     @Get('user/:userId')
-    async getUserRoadmaps(@Param('userId') userId: string) {
+    async getUserRoadmaps(@Request() req, @Param('userId') userId: string) {
+        await verifyUserAuthorization(req.user, userId, 'viewing roadmaps');
         return await this.roadmapService.getRoadmapsByUserId(userId);
     }
 
@@ -44,6 +48,7 @@ export class RoadmapController {
 
     @Post('step/:stepId/start')
     async startRoadmapStep(
+        @Request() req,
         @Param('stepId') stepId: string,
         @Body() body: { userId: string }
     ) {
@@ -51,6 +56,7 @@ export class RoadmapController {
         if (!userId) {
             throw new NotFoundException('User ID is required');
         }
+        await verifyUserAuthorization(req.user, userId, 'starting roadmap step');
         return await this.roadmapService.startRoadmapStep(stepId, userId, this.aiService);
     }
 }

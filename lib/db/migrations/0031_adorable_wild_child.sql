@@ -1,0 +1,1 @@
+ALTER TABLE "user" ADD COLUMN "totalEarnings" numeric(10, 2) DEFAULT '0.00';

@@ -10,11 +10,13 @@ import {
   BadRequestException,
   NotFoundException,
   UseGuards,
+  Request,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { signUpDetails } from 'types/auth';
 import { ApiKeyGuard } from './guards/api-key.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
 
 @Controller('auth')
 export class AuthController {
@@ -40,7 +42,8 @@ export class AuthController {
 
   @Get('id/:id')
   @UseGuards(JwtAuthGuard)
-  async getUserById(@Param('id') id: string) {
+  async getUserById(@Request() req, @Param('id') id: string) {
+    await verifyUserAuthorization(req.user, id, 'viewing user profile');
     const user = await this.authService.getUserById(id);
     if (!user) {
       throw new NotFoundException('User not found');
@@ -98,30 +101,18 @@ export class AuthController {
       throw new BadRequestException('Failed to fetch leaderboard');
     }
   }
-  @Put('xp/:userId')
-  @UseGuards(JwtAuthGuard)
-  async updateXP(
-    @Param('userId') userId: string,
-    @Body() body: { xp: number, title: string, type: "chat" | "quiz" | "streak" }
-  ) {
-    if (!userId) throw new BadRequestException('User ID is required');
-    if (body.xp === undefined) throw new BadRequestException('XP amount is required');
-    
-    try {
-      const result = await this.authService.updateUserXP(userId, body.title, body.xp, body.type);
-      return result;
-    } catch (error) {
-      throw new NotFoundException(error.message);
-    }
-  }
+
   @Put('streak/:userId')
   @UseGuards(JwtAuthGuard)
   async updateStreak(
+    @Request() req,
     @Param('userId') userId: string,
     @Body() body: { streak: number }
   ) {
     if (!userId) throw new BadRequestException('User ID is required');
     if (body.streak === undefined) throw new BadRequestException('Streak value is required');
+    
+    await verifyUserAuthorization(req.user, userId, 'updating streak');
     
     try {
       const newStreak = await this.authService.updateUserStreak(
@@ -137,6 +128,7 @@ export class AuthController {
   @Put('level/:userId')
   @UseGuards(JwtAuthGuard)
   async setLevel(
+    @Request() req,
     @Param('userId') userId: string,
     @Body() body: { level: 'novice' | 'beginner' | 'intermediate' | 'advanced' | 'expert' }
   ) {
@@ -147,6 +139,8 @@ export class AuthController {
     if (!validLevels.includes(body.level)) {
       throw new BadRequestException(`Level must be one of: ${validLevels.join(', ')}`);
     }
+    
+    await verifyUserAuthorization(req.user, userId, 'setting level');
     
     try {
       const newLevel = await this.authService.setUserLevel(userId, body.level);
@@ -159,11 +153,18 @@ export class AuthController {
   @Put('credits/:userId')
   @UseGuards(JwtAuthGuard)
   async updateCredits(
+    @Request() req,
     @Param('userId') userId: string,
     @Body() body: { credits: number }
   ) {
     if (!userId) throw new BadRequestException('User ID is required');
     if (body.credits === undefined) throw new BadRequestException('Credits amount is required');
+    
+    if (body.credits > 3 || body.credits < -3) {
+      throw new BadRequestException('Credits amount must be between -3 and 3');
+    }
+    
+    await verifyUserAuthorization(req.user, userId, 'updating credits');
     
     try {
       const updatedCredits = await this.authService.incrementCredits(userId, body.credits);
@@ -187,10 +188,12 @@ export class AuthController {
 
   @Delete('user/:userId')
   @UseGuards(JwtAuthGuard)
-  async deleteUser(@Param('userId') userId: string, @Query('supabaseUserId') supabaseUserId: string) {
+  async deleteUser(@Request() req, @Param('userId') userId: string, @Query('supabaseUserId') supabaseUserId: string) {
     if (!userId) {
       throw new BadRequestException('User ID is required');
     }
+    
+    await verifyUserAuthorization(req.user, userId, 'deleting account');
     
     try {
       const result = await this.authService.deleteUserDataAsync(userId, supabaseUserId);

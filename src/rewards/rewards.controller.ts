@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, BadRequestException, NotFoundException, Request } from '@nestjs/common';
 import { RewardsService } from './rewards.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
 
 @Controller('rewards')
 @UseGuards(JwtAuthGuard)
@@ -9,11 +10,14 @@ export class RewardsController {
   
   @Post('claim')
   async claimReward(
+    @Request() req,
     @Body() data: { userId: string; rewardId: string }
   ) {
     if (!data.userId || !data.rewardId) {
       throw new BadRequestException('User ID and reward ID are required');
     }
+    
+    await verifyUserAuthorization(req.user, data.userId, 'claiming reward');
     
     try {
       return await this.rewardsService.claimReward(data.userId, data.rewardId);
@@ -121,10 +125,12 @@ export class RewardsController {
   }
 
   @Get('user/:userId')
-  async getUserRewards(@Param('userId') userId: string) {
+  async getUserRewards(@Request() req, @Param('userId') userId: string) {
     if (!userId) {
       throw new BadRequestException('User ID is required');
     }
+    
+    await verifyUserAuthorization(req.user, userId, 'viewing rewards');
     
     try {
       return await this.rewardsService.getUserRewards(userId);
@@ -157,10 +163,12 @@ export class RewardsController {
   }
 
   @Get('user/:userId/certificate-count')
-  async getUserCertificateCount(@Param('userId') userId: string) {
+  async getUserCertificateCount(@Request() req, @Param('userId') userId: string) {
     if (!userId) {
       throw new BadRequestException('User ID is required');
     }
+    
+    await verifyUserAuthorization(req.user, userId, 'viewing certificate count');
     
     try {
       const count = await this.rewardsService.getUserCertificateCount(userId);
