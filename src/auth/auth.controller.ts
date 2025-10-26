@@ -15,7 +15,7 @@ import {
 import { AuthService } from './auth.service';
 import { signUpDetails } from 'types/auth';
 import { ApiKeyGuard } from './guards/api-key.guard';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { FlexibleAuthGuard } from './guards/flexible-auth.guard';
 import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
 
 @Controller('auth')
@@ -31,7 +31,7 @@ export class AuthController {
     return result;
   }
   @Get('email/:email')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(FlexibleAuthGuard)
   async getUserByEmail(@Param('email') email: string) {
     const user = await this.authService.getUserByEmail(email);
     if (!user) {
@@ -41,7 +41,7 @@ export class AuthController {
   }
 
   @Get('id/:id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(FlexibleAuthGuard)
   async getUserById(@Request() req, @Param('id') id: string) {
     await verifyUserAuthorization(req.user, id, 'viewing user profile');
     const user = await this.authService.getUserById(id);
@@ -52,7 +52,7 @@ export class AuthController {
   }
   
   @Put('edit')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(FlexibleAuthGuard)
   async editUser(@Body() body: { name: string; email: string, username: string, learning: string; }) {
     const { name, email, username, learning } = body;
 
@@ -70,7 +70,7 @@ export class AuthController {
   }
 
   @Put('address')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(FlexibleAuthGuard)
   async updateUserAddress(
     @Query('email') email: string,
     @Query('address') address: string,
@@ -83,7 +83,7 @@ export class AuthController {
 
 
   @Post('referral')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(FlexibleAuthGuard)
   async incrementReferral(@Query('code') code: string) {
     if (!code) throw new BadRequestException('Referral code is required');
     const name = await this.authService.incrementReferralCount(code);
@@ -93,6 +93,7 @@ export class AuthController {
 
 
   @Get('leaderboard')
+  @UseGuards(FlexibleAuthGuard)
   async getLeaderboard() {
     try {
       const users = await this.authService.getAllUsersAndXP();
@@ -103,7 +104,7 @@ export class AuthController {
   }
 
   @Put('streak/:userId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(FlexibleAuthGuard)
   async updateStreak(
     @Request() req,
     @Param('userId') userId: string,
@@ -126,7 +127,7 @@ export class AuthController {
   }
 
   @Put('level/:userId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(FlexibleAuthGuard)
   async setLevel(
     @Request() req,
     @Param('userId') userId: string,
@@ -151,7 +152,7 @@ export class AuthController {
   }
  
   @Put('credits/:userId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(FlexibleAuthGuard)
   async updateCredits(
     @Request() req,
     @Param('userId') userId: string,
@@ -175,7 +176,7 @@ export class AuthController {
   }
 
   @Get('search')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(FlexibleAuthGuard)
   async searchUsers(@Query('username') username: string, @Query('limit') limit?: number) {
     if (!username) {
       throw new BadRequestException('Username query parameter is required');
@@ -187,7 +188,7 @@ export class AuthController {
   }
 
   @Delete('user/:userId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(FlexibleAuthGuard)
   async deleteUser(@Request() req, @Param('userId') userId: string, @Query('supabaseUserId') supabaseUserId: string) {
     if (!userId) {
       throw new BadRequestException('User ID is required');

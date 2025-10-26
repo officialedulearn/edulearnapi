@@ -11,21 +11,27 @@ import {
     HttpStatus,
     Request
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiSecurity, ApiResponse, ApiConsumes } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Message } from 'lib/db/schema';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { FlexibleAuthGuard } from 'src/auth/guards/flexible-auth.guard';
 import { AiService } from './ai.service';
 import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import type { File } from 'multer';
 
+@ApiTags('ai')
+@ApiSecurity('marketplace-key')
 @Controller('ai')
-@UseGuards(JwtAuthGuard)
+@UseGuards(FlexibleAuthGuard)
 export class AiController {
   constructor(private readonly aiService: AiService) {}
 
   @Post('title')
+  @ApiOperation({ summary: 'Generate a title from a message' })
+  @ApiResponse({ status: 200, description: 'Returns generated title' })
+  @ApiResponse({ status: 400, description: 'Bad request' })
   async getTitle(@Body() messageDto: Message) {
     try {
       return await this.aiService.generateTitleFromMessage(messageDto);
@@ -43,6 +49,13 @@ export class AiController {
   }
 
   @Post('message')
+  @ApiOperation({ 
+    summary: 'Generate AI response to messages',
+    description: 'Send a conversation and get an AI-generated response. This is the main endpoint for chat interactions.'
+  })
+  @ApiResponse({ status: 200, description: 'Returns AI-generated response' })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async generateMessages(
     @Request() req,
     @Body()
@@ -70,6 +83,10 @@ export class AiController {
   }
 
   @Post('quiz')
+  @ApiOperation({ summary: 'Generate a quiz based on chat conversation' })
+  @ApiResponse({ status: 200, description: 'Returns generated quiz' })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async generateQuiz(@Request() req, @Body() quizDto: { chatId: string; userId: string }) {
     await verifyUserAuthorization(req.user, quizDto.userId, 'generating quiz');
     
@@ -89,6 +106,10 @@ export class AiController {
   }
 
   @Post('suggestions')
+  @ApiOperation({ summary: 'Generate learning topic suggestions' })
+  @ApiResponse({ status: 200, description: 'Returns topic suggestions' })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async generateSuggestions(@Request() req, @Body() suggestionsDto: { userId: string }) {
     await verifyUserAuthorization(req.user, suggestionsDto.userId, 'generating suggestions');
     
@@ -108,6 +129,10 @@ export class AiController {
   }
 
   @Post('transcribe-audio')
+  @ApiOperation({ summary: 'Transcribe audio file to text' })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 200, description: 'Returns transcribed text' })
+  @ApiResponse({ status: 400, description: 'Invalid file or bad request' })
   @UseInterceptors(FileInterceptor('audio', {
     storage: diskStorage({
       destination: './uploads/audio',

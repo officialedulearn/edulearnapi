@@ -12,8 +12,11 @@ export async function verifyUserAuthorization(
     throw new UnauthorizedException('Authentication required');
   }
 
-  // Allow reviewer bypass
   if (authenticatedUser.role === 'reviewer') {
+    return;
+  }
+
+  if (authenticatedUser.role === 'marketplace') {
     return;
   }
 

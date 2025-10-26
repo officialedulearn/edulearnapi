@@ -1,10 +1,10 @@
 import { Controller, Get, Post, Body, Param, Query, BadRequestException, NotFoundException, UseGuards, Request } from '@nestjs/common';
 import { ActivityService } from './activity.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { FlexibleAuthGuard } from '../auth/guards/flexible-auth.guard';
 import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
 
 @Controller('activity')
-@UseGuards(JwtAuthGuard)
+@UseGuards(FlexibleAuthGuard)
 export class ActivityController {
   constructor(private readonly activityService: ActivityService) {}
 
