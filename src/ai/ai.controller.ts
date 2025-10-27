@@ -11,15 +11,20 @@ import {
     HttpStatus,
     Request
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiSecurity, ApiResponse, ApiConsumes } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiSecurity, ApiResponse, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Message } from 'lib/db/schema';
 import { FlexibleAuthGuard } from 'src/auth/guards/flexible-auth.guard';
 import { AiService } from './ai.service';
 import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import type { File } from 'multer';
+import { 
+  GenerateMessagesDto, 
+  GenerateTitleDto, 
+  GenerateQuizDto, 
+  GenerateSuggestionsDto 
+} from './dto/ai.dto';
 
 @ApiTags('ai')
 @ApiSecurity('marketplace-key')
@@ -29,12 +34,36 @@ export class AiController {
   constructor(private readonly aiService: AiService) {}
 
   @Post('title')
-  @ApiOperation({ summary: 'Generate a title from a message' })
+  @ApiOperation({ 
+    summary: 'Generate a title from a message',
+    description: 'Generates a concise title based on the content of a message. Useful for naming chat conversations.'
+  })
+  @ApiBody({ 
+    type: GenerateTitleDto,
+    description: 'Message object to generate title from',
+    examples: {
+      example1: {
+        summary: 'Text message example',
+        value: {
+          id: '550e8400-e29b-41d4-a716-446655440000',
+          chatId: '123e4567-e89b-12d3-a456-426614174000',
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'Can you explain quantum computing?'
+            }
+          ],
+          createdAt: '2024-01-15T10:30:00.000Z'
+        }
+      }
+    }
+  })
   @ApiResponse({ status: 200, description: 'Returns generated title' })
   @ApiResponse({ status: 400, description: 'Bad request' })
-  async getTitle(@Body() messageDto: Message) {
+  async getTitle(@Body() messageDto: GenerateTitleDto) {
     try {
-      return await this.aiService.generateTitleFromMessage(messageDto);
+      return await this.aiService.generateTitleFromMessage(messageDto as any);
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -51,24 +80,97 @@ export class AiController {
   @Post('message')
   @ApiOperation({ 
     summary: 'Generate AI response to messages',
-    description: 'Send a conversation and get an AI-generated response. This is the main endpoint for chat interactions.'
+    description: 'Send a conversation and get an AI-generated response. This is the main endpoint for chat interactions. Supports both text and multimodal content (images).'
+  })
+  @ApiBody({ 
+    type: GenerateMessagesDto,
+    description: 'Conversation data including messages array, chatId, and userId',
+    examples: {
+      textOnly: {
+        summary: 'Text-only conversation',
+        value: {
+          messages: [
+            {
+              id: '550e8400-e29b-41d4-a716-446655440000',
+              chatId: '123e4567-e89b-12d3-a456-426614174000',
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: 'What is machine learning?'
+                }
+              ],
+              createdAt: '2024-01-15T10:30:00.000Z'
+            },
+            {
+              id: '550e8400-e29b-41d4-a716-446655440001',
+              chatId: '123e4567-e89b-12d3-a456-426614174000',
+              role: 'assistant',
+              content: [
+                {
+                  type: 'text',
+                  text: 'Machine learning is a subset of artificial intelligence...'
+                }
+              ],
+              createdAt: '2024-01-15T10:30:15.000Z'
+            },
+            {
+              id: '550e8400-e29b-41d4-a716-446655440002',
+              chatId: '123e4567-e89b-12d3-a456-426614174000',
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: 'Can you give me an example?'
+                }
+              ],
+              createdAt: '2024-01-15T10:31:00.000Z'
+            }
+          ],
+          chatId: '123e4567-e89b-12d3-a456-426614174000',
+          userId: '987fbc97-4bed-5078-9f07-9141ba07c9f3'
+        }
+      },
+      withImage: {
+        summary: 'Multimodal conversation with image',
+        value: {
+          messages: [
+            {
+              id: '550e8400-e29b-41d4-a716-446655440000',
+              chatId: '123e4567-e89b-12d3-a456-426614174000',
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: 'What do you see in this image?'
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: 'https://example.com/image.jpg'
+                  }
+                }
+              ],
+              createdAt: '2024-01-15T10:30:00.000Z'
+            }
+          ],
+          chatId: '123e4567-e89b-12d3-a456-426614174000',
+          userId: '987fbc97-4bed-5078-9f07-9141ba07c9f3'
+        }
+      }
+    }
   })
   @ApiResponse({ status: 200, description: 'Returns AI-generated response' })
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async generateMessages(
     @Request() req,
-    @Body()
-    messageDto: {
-      messages: Array<Message>;
-      chatId: string;
-      userId: string;
-    },
+    @Body() messageDto: GenerateMessagesDto,
   ) {
     await verifyUserAuthorization(req.user, messageDto.userId, 'generating AI response');
     
     try {
-      return await this.aiService.generateResponse(messageDto);
+      return await this.aiService.generateResponse(messageDto as any);
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -83,11 +185,27 @@ export class AiController {
   }
 
   @Post('quiz')
-  @ApiOperation({ summary: 'Generate a quiz based on chat conversation' })
+  @ApiOperation({ 
+    summary: 'Generate a quiz based on chat conversation',
+    description: 'Creates a quiz with multiple-choice questions based on the content of a chat conversation. Useful for testing comprehension and learning.'
+  })
+  @ApiBody({ 
+    type: GenerateQuizDto,
+    description: 'Chat and user information to generate quiz from',
+    examples: {
+      example1: {
+        summary: 'Generate quiz from chat',
+        value: {
+          chatId: '123e4567-e89b-12d3-a456-426614174000',
+          userId: '987fbc97-4bed-5078-9f07-9141ba07c9f3'
+        }
+      }
+    }
+  })
   @ApiResponse({ status: 200, description: 'Returns generated quiz' })
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async generateQuiz(@Request() req, @Body() quizDto: { chatId: string; userId: string }) {
+  async generateQuiz(@Request() req, @Body() quizDto: GenerateQuizDto) {
     await verifyUserAuthorization(req.user, quizDto.userId, 'generating quiz');
     
     try {
@@ -106,11 +224,26 @@ export class AiController {
   }
 
   @Post('suggestions')
-  @ApiOperation({ summary: 'Generate learning topic suggestions' })
+  @ApiOperation({ 
+    summary: 'Generate learning topic suggestions',
+    description: 'Generates personalized learning topic suggestions for a user based on their activity and interests.'
+  })
+  @ApiBody({ 
+    type: GenerateSuggestionsDto,
+    description: 'User information to generate suggestions for',
+    examples: {
+      example1: {
+        summary: 'Get suggestions for user',
+        value: {
+          userId: '987fbc97-4bed-5078-9f07-9141ba07c9f3'
+        }
+      }
+    }
+  })
   @ApiResponse({ status: 200, description: 'Returns topic suggestions' })
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async generateSuggestions(@Request() req, @Body() suggestionsDto: { userId: string }) {
+  async generateSuggestions(@Request() req, @Body() suggestionsDto: GenerateSuggestionsDto) {
     await verifyUserAuthorization(req.user, suggestionsDto.userId, 'generating suggestions');
     
     try {
@@ -129,8 +262,24 @@ export class AiController {
   }
 
   @Post('transcribe-audio')
-  @ApiOperation({ summary: 'Transcribe audio file to text' })
+  @ApiOperation({ 
+    summary: 'Transcribe audio file to text',
+    description: 'Converts an audio file to text using speech-to-text AI. Supports multiple audio formats including MP3, WAV, M4A, AAC, WebM, OGG, and more. Maximum file size: 10MB.'
+  })
   @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Audio file to transcribe',
+    schema: {
+      type: 'object',
+      properties: {
+        audio: {
+          type: 'string',
+          format: 'binary',
+          description: 'Audio file (MP3, WAV, M4A, AAC, WebM, OGG, 3GP, AMR)',
+        },
+      },
+    },
+  })
   @ApiResponse({ status: 200, description: 'Returns transcribed text' })
   @ApiResponse({ status: 400, description: 'Invalid file or bad request' })
   @UseInterceptors(FileInterceptor('audio', {
