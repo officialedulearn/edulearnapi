@@ -149,12 +149,12 @@ export class WalletService {
         userPublicKey
       );
       
-      const accountInfo = await this.heliusConnection.getAccountInfo(userUsdcTokenAccount);
+      const accountInfo = await this.connection.getAccountInfo(userUsdcTokenAccount);
       if (!accountInfo) {
         throw new Error('User does not have a USDC token account. Please ensure you have USDC in your wallet.');
       }
 
-      const tokenAccountInfo = await this.heliusConnection.getParsedTokenAccountsByOwner(userPublicKey, {
+      const tokenAccountInfo = await this.connection.getParsedTokenAccountsByOwner(userPublicKey, {
         mint: this.USDC,
       });
 
@@ -186,7 +186,7 @@ export class WalletService {
     );
 
     await getOrCreateAssociatedTokenAccount(
-      this.heliusConnection,
+      this.connection,
       userKeypair,
       this.USDC,
       adminKeypair.publicKey
@@ -207,14 +207,14 @@ export class WalletService {
     );
 
     const transaction = new Transaction().add(transferInstruction);
-    transaction.recentBlockhash = (await this.heliusConnection.getLatestBlockhash()).blockhash;
+    transaction.recentBlockhash = (await this.connection.getLatestBlockhash()).blockhash;
     transaction.feePayer = userPublicKey;
     transaction.sign(userKeypair);
 
-    const signature = await this.heliusConnection.sendRawTransaction(
+    const signature = await this.connection.sendRawTransaction(
       transaction.serialize(),
     );
-    await this.heliusConnection.confirmTransaction(signature);
+    await this.connection.confirmTransaction(signature);
 
     await db.insert(premiumTransactions).values({
       userId: user.id,
@@ -676,11 +676,11 @@ export class WalletService {
       });
 
       const transaction = new Transaction().add(transferInstruction);
-      transaction.recentBlockhash = (await this.heliusConnection.getLatestBlockhash()).blockhash;
+      transaction.recentBlockhash = (await this.connection.getLatestBlockhash()).blockhash;
       transaction.feePayer = adminKeypair.publicKey;
       transaction.sign(adminKeypair);
 
-      const txid = await sendAndConfirmTransaction(this.heliusConnection, transaction, [adminKeypair]);
+      const txid = await sendAndConfirmTransaction(this.connection, transaction, [adminKeypair]);
       console.log('SOL transfer successful with signature:', txid);
       
       return txid;
@@ -707,7 +707,7 @@ export class WalletService {
       );
       
       const destinationTokenAccount = await getOrCreateAssociatedTokenAccount(
-        this.heliusConnection,
+        this.connection,
         adminKeypair,
         this.EDLN,
         toPubkey
@@ -730,11 +730,11 @@ export class WalletService {
       );
 
       const transaction = new Transaction().add(transferInstruction);
-      transaction.recentBlockhash = (await this.heliusConnection.getLatestBlockhash()).blockhash;
+      transaction.recentBlockhash = (await this.connection.getLatestBlockhash()).blockhash;
       transaction.feePayer = adminKeypair.publicKey;
       transaction.sign(adminKeypair);
 
-      const txid = await sendAndConfirmTransaction(this.heliusConnection, transaction, [adminKeypair]);
+      const txid = await sendAndConfirmTransaction(this.connection, transaction, [adminKeypair]);
       console.log('EDLN transfer successful with signature:', txid);
       
       return txid;
@@ -880,7 +880,7 @@ export class WalletService {
       );
       
       const destinationTokenAccount = await getOrCreateAssociatedTokenAccount(
-        this.heliusConnection,
+        this.connection,
         adminKeypair, // fee payer
         this.USDC,
         toPubkey
@@ -903,11 +903,11 @@ export class WalletService {
       );
 
       const transaction = new Transaction().add(transferInstruction);
-      transaction.recentBlockhash = (await this.heliusConnection.getLatestBlockhash()).blockhash;
+      transaction.recentBlockhash = (await this.connection.getLatestBlockhash()).blockhash;
       transaction.feePayer = adminKeypair.publicKey;
       transaction.sign(adminKeypair);
 
-      const txid = await sendAndConfirmTransaction(this.heliusConnection, transaction, [adminKeypair]);
+      const txid = await sendAndConfirmTransaction(this.connection, transaction, [adminKeypair]);
       console.log('USDC transfer successful with signature:', txid);
       
       return txid;
