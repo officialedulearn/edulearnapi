@@ -8,9 +8,10 @@ import { CronTasksModule } from 'src/cron-tasks/cron-tasks.module';
 import { ResendModule } from 'src/resend/resend.module';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ApiKeyGuard } from './guards/api-key.guard';
+import { RoadmapModule } from 'src/roadmap/roadmap.module';
 
 @Module({
-  imports: [ActivityModule, forwardRef(() => WalletModule), RewardsModule, forwardRef(() => CronTasksModule), ResendModule],
+  imports: [ActivityModule, forwardRef(() => WalletModule), RewardsModule, forwardRef(() => CronTasksModule), ResendModule, forwardRef(() => RoadmapModule)],
   controllers: [AuthController],
   providers: [AuthService, JwtAuthGuard, ApiKeyGuard],
   exports: [AuthService, JwtAuthGuard, ApiKeyGuard],

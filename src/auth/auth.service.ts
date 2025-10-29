@@ -11,6 +11,7 @@ import { RewardsService } from 'src/rewards/rewards.service';
 import { CronTasksService } from 'src/cron-tasks/cron-tasks.service';
 import { ResendService } from 'src/resend/resend.service';
 import { supabaseAdmin } from '../../lib/supabase';
+import { RoadmapService } from 'src/roadmap/roadmap.service';
 
 @Injectable()
 export class AuthService {
@@ -22,6 +23,7 @@ export class AuthService {
     @Inject(forwardRef(() => CronTasksService))
     private cronTasksService: CronTasksService,
     private resendService: ResendService,
+    private roadmapService: RoadmapService,
   ) {}
   async createUser(data: signUpDetails): Promise<User | Error> {
     try {
@@ -52,6 +54,11 @@ export class AuthService {
 
       if (data.referredBy && data.referredBy.trim() !== '') {
         try {
+
+          if (data.referredBy.trim() === "PRDHUNT1") {
+            await db.update(user).set({isPremium: true, premiumUntil: new Date(Date.now() + 1000 * 60 * 60 * 24 * 60)}).where(eq(user.id, data.id));
+          }
+
           const referringUsers = await db
             .select()
             .from(user)
@@ -92,6 +99,10 @@ export class AuthService {
       ).catch((error) => {
         console.error('Failed to send welcome email:', error);
       });
+
+      await this.roadmapService.generateRoadmap(createdUser.id, 'Web3 Basics');
+
+      await this.resendService.sendRoadmapGeneratedEmail(createdUser.email, "Web3 Basics", createdUser.username || '');
 
       return createdUser;
     } catch (error) {
