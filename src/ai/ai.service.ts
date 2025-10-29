@@ -1,12 +1,11 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { Message } from 'lib/db/schema';
 import { getMostRecentUserMessage } from 'lib/utils';
 import { AuthService } from 'src/auth/auth.service';
 import { ChatService } from 'src/chat/chat.service';
 import { generateUUID } from 'lib/utils';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
-import { ActivityService } from 'src/activity/activity.service';
 import { RewardsService } from 'src/rewards/rewards.service';
 import { RoadmapService } from 'src/roadmap/roadmap.service';
 import { SpeechClient } from '@google-cloud/speech';
@@ -148,8 +147,10 @@ STRICT RULES:
 
   constructor(
     private chatService: ChatService,
+    @Inject(forwardRef(() => AuthService))
     private authService: AuthService,
     private rewardsService: RewardsService,
+    @Inject(forwardRef(() => RoadmapService))
     private roadmapService: RoadmapService,
   ) {
     const aiApiKey = process.env.GEMINI_API_KEY;

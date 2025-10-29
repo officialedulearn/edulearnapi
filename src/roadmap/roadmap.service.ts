@@ -13,6 +13,7 @@ import { RewardsService } from 'src/rewards/rewards.service';
 export class RoadmapService {
     private readonly genAI: GoogleGenAI;
     constructor(
+        @Inject(forwardRef(() => AuthService))
         private readonly authService: AuthService,
         private readonly chatService: ChatService,
         @Inject(forwardRef(() => AiService))
