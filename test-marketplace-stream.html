@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marketplace SSE Stream Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    h1 {
+      color: #333;
+    }
+    .controls {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .controls input {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .controls textarea {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      min-height: 100px;
+      font-family: monospace;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .start-btn {
+      background-color: #4CAF50;
+      color: white;
+    }
+    .stop-btn {
+      background-color: #f44336;
+      color: white;
+    }
+    .clear-btn {
+      background-color: #2196F3;
+      color: white;
+    }
+    button:hover {
+      opacity: 0.8;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+    .output-container {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    #output {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      font-family: 'Courier New', monospace;
+      background: #f9f9f9;
+      padding: 15px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      min-height: 200px;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+    .status {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+    .status.connected {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .status.disconnected {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .status.streaming {
+      background-color: #d1ecf1;
+      color: #0c5460;
+    }
+  </style>
+</head>
+<body>
+  <h1>Marketplace SSE Stream Test</h1>
+  
+  <div class="controls">
+    <h3>Configuration</h3>
+    <label for="apiUrl">API URL:</label>
+    <input type="text" id="apiUrl" value="http://localhost:3001" placeholder="http://localhost:3000">
+    
+    <label for="apiKey">Marketplace API Key:</label>
+    <input type="password" id="apiKey" placeholder="Enter your marketplace API key">
+    
+    <label for="chatId">Chat ID:</label>
+    <input type="text" id="chatId" placeholder="Leave empty for auto-generated">
+    
+    <label for="userMessage">User Message:</label>
+    <textarea id="userMessage" placeholder="Enter your message...">Explain Solana PDAs in simple terms</textarea>
+    
+    <div>
+      <button class="start-btn" onclick="startStream()" id="startBtn">Start Stream</button>
+      <button class="stop-btn" onclick="stopStream()" id="stopBtn" disabled>Stop Stream</button>
+      <button class="clear-btn" onclick="clearOutput()">Clear Output</button>
+    </div>
+    
+    <div id="status" class="status disconnected">Status: Disconnected</div>
+  </div>
+
+  <div class="output-container">
+    <h3>Output:</h3>
+    <div id="output"></div>
+  </div>
+
+  <script>
+    let eventSource = null;
+    let isStreaming = false;
+
+    function updateStatus(message, type) {
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = 'Status: ' + message;
+      statusEl.className = 'status ' + type;
+    }
+
+    function appendOutput(text) {
+      const outputEl = document.getElementById('output');
+      outputEl.textContent += text;
+      outputEl.scrollTop = outputEl.scrollHeight;
+    }
+
+    function clearOutput() {
+      document.getElementById('output').textContent = '';
+    }
+
+    function setButtonStates(streaming) {
+      document.getElementById('startBtn').disabled = streaming;
+      document.getElementById('stopBtn').disabled = !streaming;
+    }
+
+    function startStream() {
+      const apiUrl = document.getElementById('apiUrl').value.trim();
+      const apiKey = document.getElementById('apiKey').value.trim();
+      const userMessage = document.getElementById('userMessage').value.trim();
+      let chatId = document.getElementById('chatId').value.trim();
+
+      if (!apiUrl) {
+        alert('Please enter API URL');
+        return;
+      }
+
+      if (!apiKey) {
+        alert('Please enter Marketplace API Key');
+        return;
+      }
+
+      if (!userMessage) {
+        alert('Please enter a message');
+        return;
+      }
+
+      // Generate chat ID if not provided
+      if (!chatId) {
+        chatId = 'test-chat-' + Date.now();
+        document.getElementById('chatId').value = chatId;
+      }
+
+      clearOutput();
+      updateStatus('Connecting...', 'streaming');
+      setButtonStates(true);
+      isStreaming = true;
+      appendOutput('=== Stream Started ===\n\n');
+
+      // Build URL with query parameters
+      const params = new URLSearchParams({
+        message: userMessage,
+        chatId: chatId,
+        apiKey: apiKey
+      });
+
+      const streamUrl = `${apiUrl}/ai/marketplace-stream?${params}`;
+
+      try {
+        // Create EventSource connection
+        eventSource = new EventSource(streamUrl);
+
+        eventSource.onopen = () => {
+          updateStatus('Streaming...', 'connected');
+          console.log('EventSource connection established');
+        };
+
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.token) {
+              appendOutput(data.token);
+            }
+          } catch (e) {
+            console.error('Failed to parse SSE data:', e, event.data);
+            appendOutput(event.data);
+          }
+        };
+
+        eventSource.onerror = (error) => {
+          console.error('EventSource error:', error);
+          if (eventSource.readyState === EventSource.CLOSED) {
+            appendOutput('\n\n=== Stream Complete ===');
+            updateStatus('Stream Complete', 'disconnected');
+            stopStream();
+          } else {
+            appendOutput('\n\n=== ERROR: Connection lost ===');
+            updateStatus('Error: Connection lost', 'disconnected');
+            stopStream();
+          }
+        };
+      } catch (error) {
+        console.error('Stream error:', error);
+        appendOutput('\n\n=== ERROR ===\n' + error.message);
+        updateStatus('Error: ' + error.message, 'disconnected');
+        setButtonStates(false);
+        isStreaming = false;
+      }
+    }
+
+    function stopStream() {
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+        if (isStreaming) {
+          appendOutput('\n\n=== Stream Stopped by User ===');
+          updateStatus('Stopped', 'disconnected');
+        }
+        setButtonStates(false);
+        isStreaming = false;
+      }
+    }
+
+    // Handle page unload
+    window.addEventListener('beforeunload', () => {
+      if (eventSource) {
+        stopStream();
+      }
+    });
+  </script>
+</body>
+</html>
+

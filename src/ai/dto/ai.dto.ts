@@ -68,9 +68,7 @@ export class MessageDto {
       type: 'object',
     },
   })
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => MessageContentDto)
+  @IsNotEmpty()
   content: MessageContentDto[] | string;
 
   @ApiProperty({
@@ -198,5 +196,38 @@ export class GenerateSuggestionsDto {
   @IsUUID()
   @IsNotEmpty()
   userId: string;
+}
+
+export class MarketplaceStreamDto {
+  @ApiProperty({
+    description: 'Array of messages in the conversation',
+    type: [MessageDto],
+    example: [
+      {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        chatId: '123e4567-e89b-12d3-a456-426614174000',
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'Explain Solana PDAs in simple terms',
+          },
+        ],
+        createdAt: '2024-01-15T10:30:00.000Z',
+      },
+    ],
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MessageDto)
+  messages: MessageDto[];
+
+  @ApiProperty({
+    description: 'The ID of the chat conversation',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @IsUUID()
+  @IsNotEmpty()
+  chatId: string;
 }
 

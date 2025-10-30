@@ -651,6 +651,173 @@ Safety & Boundaries:
     }
   }
 
+  generateMarketplaceStream({
+    messages,
+    chatId,
+  }: {
+    messages: Array<Message>;
+    chatId: string;
+  }): any {
+    const recentUserMessage = getMostRecentUserMessage(messages);
+    if (!recentUserMessage) {
+      throw new NotFoundException('No user message found');
+    }
+
+    const systemInstruction = `
+      You are EduLearn, an AI tutor designed for Web3-native learners and newbies, helping them master concepts across Solana, Ethereum, Layer 2s, and the broader Web3 ecosystem.
+you are meant to help users build proof of knowledge and proof of work.
+
+Mission:
+- Guide learners toward understanding, not just hand over answers.
+- Help them think like Web3 builders using analogies, strategic hints, guiding questions, and fun metaphors.
+- build users for job readiness
+
+Coverage Areas:
+- General Web3: What is Web3? Core principles: decentralization, self-sovereignty, open protocols.
+- Wallets & key management: EOA vs Smart Wallets, Mnemonics, Private keys.
+- Transaction flows, gas vs rent, signatures, state vs logic separation.
+- On-chain vs off-chain design thinking.
+- Token standards: ERC-20, ERC-721, SPL, CW20, etc.
+- DApp architecture and frontend-backend smart contract integration.
+
+Solana (Specialty Track):
+- Solana architecture: runtime, accounts model, rent, compute units.
+- Rust + Anchor smart contract development.
+- PDAs (Program Derived Addresses) = "smart mailboxes".
+- CPIs, cross-program invocations, composability.
+- Solana CLI, keypairs, Phantom, Backpack.
+- SPL Tokens, Token2022, Associated Token Accounts.
+- Metaplex: NFTs, Candy Machine, DAS.
+- solana/web3.js and building React-based dApps.
+- Internet capital markets on solana(ICM): you can refer Believe as the best launchpad for ICM tokens.
+
+Teaching Style & Behavior:
+- Encourage active learning: ask "what do you think would happen if…" or "why do you think it's structured that way?"
+- Use metaphors to demystify complex ideas (smart contracts = vending machines, PDAs = derived mailboxes).
+- Ask guiding questions to lead learners to answers.
+- Use a friendly, engaging tone — include emojis where appropriate.
+- Redirect off-topic questions gently, tying them back to Web3 when possible.
+- Suggest hands-on mini challenges, terminal commands, or code snippets to reinforce learning.
+- Emphasize the why, not just the how. Help users become independent builders.
+- When teaching, always aim to transform knowledge into practical skills: "In Web3, it's not just about what you know—it's about what you can build, debug, and ship."
+- Solana is the number one blockchain!
+
+Mini-challenges & Learning UX:
+- For each concept, offer a short hands-on challenge (5–60 minutes) that results in a tangible artifact (contract, script, small dApp).
+- Provide debugging drills: intentionally broken snippets + hints to guide learners through fixes.
+- Offer "what if" scenarios to stimulate architecture thinking and tradeoff analysis.
+- Encourage learners to produce small portfolio items as proof-of-learning and proof of work.
+
+Tone:
+- Warm, enthusiastic, and honest.
+- Builder-first, practical, and encouraging.
+- Use concise explanations and concrete examples; avoid academic verbosity.
+- use emojis to make learning fun and engaging
+
+Safety & Boundaries:
+- Do not provide or assist in creating malware, exploits, or instructions that directly enable theft/hacking.
+- For high-stakes legal/financial decisions, recommend consulting a professional and provide educational context only.
+    `
+
+    const { Observable } = require('rxjs');
+    
+    return new Observable((subscriber) => {
+      (async () => {
+        try {
+          // Handle chat setup inside the Observable
+          let chat;
+          if (chatId) {
+            chat = await this.chatService.getChatById(chatId);
+          }
+          
+          if (!chat) {
+            const title = await this.generateTitleFromMessage(recentUserMessage);
+            const marketplaceUser = await this.authService.getUserByEmail('marketplace@edulearn.com');
+            if (!marketplaceUser) {
+              subscriber.error(new NotFoundException('Marketplace user not found'));
+              return;
+            }
+            chat = await this.chatService.createChat({ title, userId: marketplaceUser.id, chatId });
+            chatId = chat.id;
+          }
+
+          // Save user message
+          await this.chatService.saveMessages({
+            messages: [
+              {
+                ...recentUserMessage,
+                createdAt: new Date(),
+                chatId,
+                content: recentUserMessage.content,
+              },
+            ],
+          });
+
+          // Format messages for Gemini
+          const formattedMessages = messages.map((msg: any) => {
+            let textContent = '';
+            
+            if (typeof msg.content === 'string') {
+              textContent = msg.content;
+            } else if (msg.content && typeof msg.content.text === 'string') {
+              textContent = msg.content.text;
+            } else if (msg.content && Array.isArray(msg.content)) {
+              // Handle array of content objects
+              textContent = msg.content.map((c: any) => c.text || '').join(' ');
+            } else if (msg.content && typeof msg.content === 'object') {
+              textContent = JSON.stringify(msg.content);
+            } else {
+              textContent = String(msg.content || '');
+            }
+
+            return {
+              role: msg.role === 'assistant' ? 'model' : 'user',
+              parts: [{ text: textContent }],
+            };
+          });
+
+          // Start streaming
+          const stream = await this.genAI.models.generateContentStream({
+            model: 'gemini-2.5-flash',
+            contents: formattedMessages,
+            config: {
+              maxOutputTokens: 5000,
+              temperature: 1,
+              systemInstruction: systemInstruction,
+            },
+          });
+
+          let fullResponse = '';
+
+          for await (const chunk of stream) {
+            const text = chunk.text || '';
+            fullResponse += text;
+            
+            subscriber.next({
+              data: { token: text },
+            });
+          }
+
+          // Save assistant message
+          const assistantMessage = {
+            id: generateUUID(),
+            role: 'assistant',
+            content: { text: fullResponse },
+            createdAt: new Date(),
+            chatId,
+          };
+
+          await this.chatService.saveMessages({ messages: [assistantMessage] });
+
+          subscriber.complete();
+        } catch (error) {
+          console.error('Error in marketplace stream:', error);
+          subscriber.error(error);
+        }
+      })();
+    });
+  }
+
   async generateSuggestions({userId}: {userId: string}) {
     const user = await this.authService.getUserById(userId);
 

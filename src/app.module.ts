@@ -7,7 +7,6 @@ import { ChatModule } from './chat/chat.module';
 import { RewardsModule } from './rewards/rewards.module';
 import { ActivityModule } from './activity/activity.module';
 import { ConfigModule } from '@nestjs/config';
-import { WalletController } from './wallet/wallet.controller';
 import { WalletModule } from './wallet/wallet.module';
 import { CronTasksModule } from './cron-tasks/cron-tasks.module';
 import { ScheduleModule } from '@nestjs/schedule';

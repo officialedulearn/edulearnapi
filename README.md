@@ -105,6 +105,221 @@ $ pnpm run test:e2e
 $ pnpm run test:cov
 ```
 
+## Marketplace Streaming API
+
+### Overview
+
+The Marketplace Streaming API provides real-time Server-Sent Events (SSE) streaming for AI chat responses. This endpoint is designed specifically for marketplace integrations and operates independently of the main application's credit system.
+
+### Endpoint
+
+```
+POST /ai/marketplace-stream
+```
+
+### Authentication
+
+**Required Header:**
+```
+x-marketplace-key: YOUR_MARKETPLACE_API_KEY
+```
+
+The marketplace API key should be set in your `.env` file:
+```env
+MARKETPLACE_API_KEY=your_secure_marketplace_key
+```
+
+### Request Format
+
+```json
+{
+  "messages": [
+    {
+      "id": "unique-message-id",
+      "chatId": "unique-chat-id",
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Your question here"
+        }
+      ],
+      "createdAt": "2024-01-15T10:30:00.000Z"
+    }
+  ],
+  "chatId": "unique-chat-id"
+}
+```
+
+### Response Format
+
+The endpoint returns Server-Sent Events (SSE) with the following format:
+
+```
+data: {"token":"Hello"}
+data: {"token":" there"}
+data: {"token":"!"}
+```
+
+Each event contains a `token` field with a chunk of the AI response.
+
+### Features
+
+- ✅ Real-time token streaming
+- ✅ Conversation history support
+- ✅ No credit system (free for marketplace)
+- ✅ Same educational AI tutor as main app
+- ✅ Messages saved to database
+- ✅ Marketplace-only authentication
+
+### Example Usage
+
+#### JavaScript/TypeScript
+
+```javascript
+const response = await fetch('http://your-api-url/ai/marketplace-stream', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-marketplace-key': 'YOUR_MARKETPLACE_KEY'
+  },
+  body: JSON.stringify({
+    messages: [
+      {
+        id: 'msg-1',
+        chatId: 'chat-123',
+        role: 'user',
+        content: [{ type: 'text', text: 'Explain Solana DeFi' }],
+        createdAt: new Date().toISOString()
+      }
+    ],
+    chatId: 'chat-123'
+  })
+});
+
+const reader = response.body.getReader();
+const decoder = new TextDecoder();
+
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  
+  const chunk = decoder.decode(value);
+  const lines = chunk.split('\n');
+  
+  for (const line of lines) {
+    if (line.startsWith('data: ')) {
+      const data = JSON.parse(line.slice(6));
+      console.log(data.token); // Process each token
+    }
+  }
+}
+```
+
+#### Python
+
+```python
+import requests
+import json
+
+headers = {
+    'Content-Type': 'application/json',
+    'x-marketplace-key': 'YOUR_MARKETPLACE_KEY'
+}
+
+payload = {
+    'messages': [
+        {
+            'id': 'msg-1',
+            'chatId': 'chat-123',
+            'role': 'user',
+            'content': [{'type': 'text', 'text': 'Explain Solana DeFi'}],
+            'createdAt': '2024-01-15T10:30:00.000Z'
+        }
+    ],
+    'chatId': 'chat-123'
+}
+
+response = requests.post(
+    'http://your-api-url/ai/marketplace-stream',
+    headers=headers,
+    json=payload,
+    stream=True
+)
+
+for line in response.iter_lines():
+    if line.startswith(b'data: '):
+        data = json.loads(line[6:])
+        print(data['token'], end='', flush=True)
+```
+
+### Testing
+
+A test HTML file is included at `api/test-marketplace-stream.html` for manual testing. To use it:
+
+1. Open the file in a browser
+2. Enter your API URL (e.g., `http://localhost:3000`)
+3. Enter your marketplace API key
+4. Enter a message
+5. Click "Start Stream" to test the connection
+
+### Error Responses
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Success - SSE stream initiated |
+| 400 | Bad request - Invalid message format |
+| 401 | Unauthorized - Invalid or missing marketplace API key |
+| 404 | Not found - Marketplace user not configured |
+| 500 | Internal server error |
+
+### Conversation History
+
+The endpoint supports conversation history by including previous messages in the `messages` array:
+
+```json
+{
+  "messages": [
+    {
+      "id": "1",
+      "chatId": "chat-123",
+      "role": "user",
+      "content": [{"type": "text", "text": "What is Solana?"}],
+      "createdAt": "2024-01-15T10:30:00.000Z"
+    },
+    {
+      "id": "2",
+      "chatId": "chat-123",
+      "role": "assistant",
+      "content": [{"type": "text", "text": "Solana is a high-performance blockchain..."}],
+      "createdAt": "2024-01-15T10:30:15.000Z"
+    },
+    {
+      "id": "3",
+      "chatId": "chat-123",
+      "role": "user",
+      "content": [{"type": "text", "text": "Tell me about PDAs"}],
+      "createdAt": "2024-01-15T10:31:00.000Z"
+    }
+  ],
+  "chatId": "chat-123"
+}
+```
+
+### Setup Requirements
+
+1. **Marketplace API Key**: Set `MARKETPLACE_API_KEY` in your `.env` file
+2. **Marketplace User**: Ensure a user with email `marketplace@edulearn.com` exists in your database
+   - You can create this user using the script in `api/scripts/create-marketplace-user.ts`
+
+### Notes
+
+- This endpoint does NOT consume user credits
+- This endpoint does NOT require JWT authentication
+- This endpoint uses the same AI model and system prompt as the main app (without user personalization)
+- All messages are saved to the database
+- The AI responses are powered by Gemini 2.5 Flash
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.

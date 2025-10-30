@@ -19,10 +19,11 @@ export class MarketplaceApiKeyGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
-    const apiKey = request.headers['x-marketplace-key'];
+    // Check both header and query param (query param needed for EventSource which can't send headers)
+    const apiKey = request.headers['x-marketplace-key'] || request.query['apiKey'];
 
     if (!apiKey) {
-      throw new UnauthorizedException('Marketplace API key is missing');
+      throw new UnauthorizedException('Marketplace API key is missing (provide via x-marketplace-key header or apiKey query parameter)');
     }
     
     if (!this.validKey) {

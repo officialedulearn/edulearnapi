@@ -9,11 +9,16 @@ import {
     InternalServerErrorException,
     HttpException,
     HttpStatus,
-    Request
+    Request,
+    Sse,
+    MessageEvent,
+    Query
 } from '@nestjs/common';
+import { Observable } from 'rxjs';
 import { ApiTags, ApiOperation, ApiSecurity, ApiResponse, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FlexibleAuthGuard } from 'src/auth/guards/flexible-auth.guard';
+import { MarketplaceApiKeyGuard } from 'src/auth/guards/marketplace-api-key.guard';
 import { AiService } from './ai.service';
 import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
 import { diskStorage } from 'multer';
@@ -23,13 +28,15 @@ import {
   GenerateMessagesDto, 
   GenerateTitleDto, 
   GenerateQuizDto, 
-  GenerateSuggestionsDto 
+  GenerateSuggestionsDto,
+  MarketplaceStreamDto 
 } from './dto/ai.dto';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 @ApiTags('ai')
 @ApiSecurity('marketplace-key')
 @Controller('ai')
-@UseGuards(FlexibleAuthGuard)
+@UseGuards(JwtAuthGuard)
 export class AiController {
   constructor(private readonly aiService: AiService) {}
 
@@ -342,5 +349,44 @@ export class AiController {
       
       throw new InternalServerErrorException('An unexpected error occurred while transcribing audio');
     }
+  }
+
+  @Sse('marketplace-stream')
+  @UseGuards(MarketplaceApiKeyGuard)
+  @ApiOperation({ 
+    summary: 'Stream marketplace agent responses (SSE)',
+    description: 'Real-time streaming endpoint for marketplace AI agent. Returns tokens as they are generated via Server-Sent Events. Connect using EventSource. Requires x-marketplace-key header passed via query param. Supports conversation history via chatId.'
+  })
+  @ApiSecurity('marketplace-key')
+  @ApiResponse({ 
+    status: 200, 
+    description: 'SSE stream of AI tokens. Each event contains: { token: string }. Use EventSource to connect.' 
+  })
+  @ApiResponse({ status: 401, description: 'Invalid or missing marketplace API key' })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  marketplaceStream(
+    @Query('message') message: string,
+    @Query('chatId') chatId: string,
+    @Query('apiKey') apiKey: string
+  ): Observable<MessageEvent> {
+    if (!message) {
+      throw new BadRequestException('Message query parameter is required');
+    }
+    
+    if (!chatId) {
+      chatId = 'marketplace-chat-' + Date.now();
+    }
+
+    const messages = [
+      {
+        id: 'msg-' + Date.now(),
+        chatId: chatId,
+        role: 'user' as const,
+        content: [{ type: 'text', text: message }],
+        createdAt: new Date()
+      }
+    ];
+
+    return this.aiService.generateMarketplaceStream({ messages, chatId } as any);
   }
 }
