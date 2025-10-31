@@ -100,10 +100,6 @@ export class AuthService {
         console.error('Failed to send welcome email:', error);
       });
 
-      await this.roadmapService.generateRoadmap(createdUser.id, 'Web3 Basics');
-
-      await this.resendService.sendRoadmapGeneratedEmail(createdUser.email, "Web3 Basics", createdUser.username || '');
-
       return createdUser;
     } catch (error) {
       console.error('Failed to create user in database');
@@ -175,7 +171,23 @@ export class AuthService {
         .where(eq(user.email, email))
         .returning();
 
-      return result[0] ?? null;
+      const updatedUser = result[0] ?? null;
+
+      if (updatedUser && learning && learning.trim() !== '') {
+        this.roadmapService.generateRoadmap(updatedUser.id, learning.trim()).catch((error) => {
+          console.error('Failed to generate roadmap:', error);
+        });
+
+        this.resendService.sendRoadmapGeneratedEmail(
+          updatedUser.email, 
+          learning.trim(), 
+          updatedUser.username || ''
+        ).catch((error) => {
+          console.error('Failed to send roadmap generated email:', error);
+        });
+      }
+
+      return updatedUser;
     } catch (error) {
       console.error('Failed to edit user');
       throw error;

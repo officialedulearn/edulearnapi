@@ -22,11 +22,12 @@ import {
 import { decrypt } from 'lib/crypto.util';
 import { createTransferCheckedInstruction, getAssociatedTokenAddress, getOrCreateAssociatedTokenAccount } from '@solana/spl-token';
 import { ResendService } from '../resend/resend.service';
+import { TwitterService } from '../twitter/twitter.service';
 
 @Injectable()
 export class RewardsService {
   private readonly connection = new Connection(clusterApiUrl('mainnet-beta'));
-  constructor(private readonly resendService: ResendService) {
+  constructor(private readonly resendService: ResendService, private readonly twitterSevice: TwitterService) {
     this.resendService = resendService;
   }
   private readonly tokenMint = new PublicKey("CFw2KxMpWuxivoowkF8vRCrnMuDeg5VMHRR7zjE7pBLV")
@@ -232,6 +233,17 @@ export class RewardsService {
         uri: `${rewardExists[0].ipfs}`,
         owner: publicKey(userExists[0].address as string)
       }).sendAndConfirm(umi);
+
+      const postText = `
+        Congratulations to @${userExists[0].username} for earning the ${rewardExists[0].title} NFT certificate!
+        
+        You can claim the NFT in the rewards tab of web and mobile app
+      `
+
+      
+
+      await this.twitterSevice.postTweet(postText);
+      console.log('Successfully posted to X');
 
       const html = this.getNFTClaimEmailTemplate(
         userExists[0].name,
