@@ -150,6 +150,36 @@ export class TwitterService {
     }
   }
 
+  async uploadMedia(imageUrl: string): Promise<string> {
+    try {
+      if (!this.apiKey || !this.apiSecret || !this.accessToken || !this.accessTokenSecret) {
+        throw new BadRequestException('Twitter OAuth 1.0a credentials missing');
+      }
+
+      this.logger.log('📸 Downloading image from URL...');
+      const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+      const buffer = Buffer.from(response.data);
+
+      this.logger.log('⬆️ Uploading media to Twitter...');
+      const client = new TwitterApi({
+        appKey: this.apiKey,
+        appSecret: this.apiSecret,
+        accessToken: this.accessToken,
+        accessSecret: this.accessTokenSecret,
+      });
+
+      const mediaId = await client.v1.uploadMedia(buffer, { mimeType: response.headers['content-type'] });
+      this.logger.log('✅ Media uploaded successfully! Media ID:', mediaId);
+      
+      return mediaId;
+    } catch (error) {
+      this.logger.error('❌ Error uploading media:', error);
+      throw new BadRequestException(
+        error.message || 'Failed to upload media to Twitter'
+      );
+    }
+  }
+
   async postTweet(
     text: string,
     options?: {

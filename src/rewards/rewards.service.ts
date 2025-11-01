@@ -27,7 +27,7 @@ import { TwitterService } from '../twitter/twitter.service';
 @Injectable()
 export class RewardsService {
   private readonly connection = new Connection(clusterApiUrl('mainnet-beta'));
-  constructor(private readonly resendService: ResendService, private readonly twitterSevice: TwitterService) {
+  constructor(private readonly resendService: ResendService, private readonly twitterService: TwitterService) {
     this.resendService = resendService;
   }
   private readonly tokenMint = new PublicKey("CFw2KxMpWuxivoowkF8vRCrnMuDeg5VMHRR7zjE7pBLV")
@@ -216,7 +216,6 @@ export class RewardsService {
 
       console.log('Transfer Transaction ID:', txId);
 
-      // Now mint the NFT
       const umi = createUmi(this.connection).use(mplCore());
       const umiKeypair = umi.eddsa.createKeypairFromSecretKey(
         bs58.default.decode(secretKey)
@@ -234,16 +233,25 @@ export class RewardsService {
         owner: publicKey(userExists[0].address as string)
       }).sendAndConfirm(umi);
 
-      const postText = `
-        Congratulations to @${userExists[0].username} for earning the ${rewardExists[0].title} NFT certificate!
-        
-        You can claim the NFT in the rewards tab of web and mobile app
-      `
+      const postText = `Congratulations to @${userExists[0].username} for earning the ${rewardExists[0].title} NFT certificate!
 
-      
+You can claim the NFT in the rewards tab of web and mobile app`;
 
-      await this.twitterSevice.postTweet(postText);
-      console.log('Successfully posted to X');
+      try {
+        if (rewardExists[0].imageUrl) {
+          const mediaId = await this.twitterService.uploadMedia(rewardExists[0].imageUrl);
+          await this.twitterService.postTweet(postText, {
+            media: {
+              media_ids: [mediaId]
+            }
+          });
+        } else {
+          await this.twitterService.postTweet(postText);
+        }
+        console.log('Successfully posted to X');
+      } catch (twitterError) {
+        console.error('Failed to post to Twitter:', twitterError);
+      }
 
       const html = this.getNFTClaimEmailTemplate(
         userExists[0].name,
