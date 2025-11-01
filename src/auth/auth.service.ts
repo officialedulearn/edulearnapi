@@ -40,43 +40,55 @@ export class AuthService {
       const userWallet = await this.walletService.genereteWallet();
 
       const referralCode = generateReferralCode();
+   
+      const referredByCode = data.referredBy || data.referralCode;
 
       await db.insert(user).values({
         id: data.id as UUID,
         name: data.name,
         email: data.email,
         referralCode: referralCode,
-        referredBy: data.referredBy,
+        referredBy: referredByCode,
         username: data.username,
         address: userWallet.publicKey,
         encryptedPrivateKey: userWallet.encryptedSecret,
       });
 
-      if (data.referredBy && data.referredBy.trim() !== '') {
+      if (referredByCode && referredByCode.trim() !== '') {
         try {
+          console.log(`Processing referral with code: ${referredByCode}`);
 
-          if (data.referredBy.trim() === "PRDHUNT1") {
+          if (referredByCode.trim() === "PRDHUNT1") {
+            console.log('PRDHUNT1 referral code detected - granting premium');
             await db.update(user).set({isPremium: true, premiumUntil: new Date(Date.now() + 1000 * 60 * 60 * 24 * 60)}).where(eq(user.id, data.id));
           }
 
           const referringUsers = await db
             .select()
             .from(user)
-            .where(eq(user.referralCode, data.referredBy!));
+            .where(eq(user.referralCode, referredByCode));
+
+          console.log(`Found ${referringUsers.length} user(s) with referral code: ${referredByCode}`);
 
           if (referringUsers.length > 0) {
             const referringUser = referringUsers[0];
             const currentReferralCount = referringUser.referralCount || 0;
 
+            console.log(`Incrementing referral count for user ${referringUser.email} from ${currentReferralCount} to ${currentReferralCount + 1}`);
+
             await db
               .update(user)
               .set({ referralCount: currentReferralCount + 1 })
-              .where(eq(user.referralCode, data.referredBy));
+              .where(eq(user.referralCode, referredByCode));
 
             await db
               .update(user)
               .set({xp: referringUser.xp + 5})
-              .where(eq(user.referralCode, data.referredBy));
+              .where(eq(user.referralCode, referredByCode));
+              
+            console.log(`Successfully updated referral count and XP for referring user ${referringUser.email}`);
+          } else {
+            console.log(`No user found with referral code: ${referredByCode}`);
           }
         } catch (error) {
           console.error(
