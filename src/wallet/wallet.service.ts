@@ -627,6 +627,8 @@ export class WalletService {
       const post = `
         @${user.username} claimed ${totalSol} USDC on EduLearn
         Putting their total earnings to ${Number(user.totalEarnings).toFixed(2)} USDC
+
+        Solscan link: https://solscan.io/tx/${transactions[0].tx}
         Start learning and earning rewards on edulearn.fun
       `
 
