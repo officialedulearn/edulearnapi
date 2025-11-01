@@ -140,6 +140,27 @@ export class RewardsService {
           earnedAt: new Date(),
         })
         .returning();
+
+        const postText = `Congratulations to @${userExists[0].username} for earning the ${rewardExists[0].title} NFT certificate!
+
+        You can claim the NFT in the rewards tab of web and mobile app`;
+        
+              try {
+                if (rewardExists[0].imageUrl) {
+                  const mediaId = await this.twitterService.uploadMedia(rewardExists[0].imageUrl);
+                  await this.twitterService.postTweet(postText, {
+                    media: {
+                      media_ids: [mediaId]
+                    }
+                  });
+                } else {
+                  await this.twitterService.postTweet(postText);
+                }
+                console.log('Successfully posted to X');
+              } catch (twitterError) {
+                console.error('Failed to post to Twitter:', twitterError);
+              }
+        
         
       await this.resendService.sendNFTAwardEmail(
         userExists[0].email,
@@ -233,26 +254,7 @@ export class RewardsService {
         owner: publicKey(userExists[0].address as string)
       }).sendAndConfirm(umi);
 
-      const postText = `Congratulations to @${userExists[0].username} for earning the ${rewardExists[0].title} NFT certificate!
-
-You can claim the NFT in the rewards tab of web and mobile app`;
-
-      try {
-        if (rewardExists[0].imageUrl) {
-          const mediaId = await this.twitterService.uploadMedia(rewardExists[0].imageUrl);
-          await this.twitterService.postTweet(postText, {
-            media: {
-              media_ids: [mediaId]
-            }
-          });
-        } else {
-          await this.twitterService.postTweet(postText);
-        }
-        console.log('Successfully posted to X');
-      } catch (twitterError) {
-        console.error('Failed to post to Twitter:', twitterError);
-      }
-
+     
       const html = this.getNFTClaimEmailTemplate(
         userExists[0].name,
         rewardExists[0].title,

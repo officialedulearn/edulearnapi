@@ -8,8 +8,7 @@ import { desc, and, eq, lt } from 'drizzle-orm';
 import {  user } from '../../lib/db/schema';
 
 @Injectable()
-export class CronTasksService {
-
+export class CronTasksService { 
   
     private readonly logger = new Logger(CronTasksService.name);
     constructor(
@@ -17,7 +16,9 @@ export class CronTasksService {
         private authService: AuthService,
         private walletService: WalletService,
         private twitterService: TwitterService
-    ) {}
+    ) {
+      this.scheduleOneTimeTask();
+    }
 
     @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
     async handleLeaderboardPost() {
@@ -107,6 +108,7 @@ Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
       }
     }
 
+
     @Cron('0 0 * * *') 
     async handlePremiumExpiration() {
       this.logger.log('Checking for expired premium subscriptions');
@@ -138,5 +140,26 @@ Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
       }
     }
 
+    scheduleOneTimeTask() {
+      setTimeout(async () => {
+        this.logger.log('Running one-time task scheduled for 1 hour ago');
+        try {
+          const qualifiedUsers = await db.select().from(user).where(eq(user.referredBy, "LAUNCH"))
+
+          const earningPerUser = 150/qualifiedUsers.length;
+
+          for (const user of qualifiedUsers) {
+            await this.walletService.addEarnings(user.id, {
+              sol: earningPerUser,
+              edln: 0
+            });
+          }
+
+          this.logger.log('One-time task completed');
+        } catch (error) {
+          this.logger.error('Failed to execute one-time task', error);
+        }
+      }, 60 * 60 * 1000); 
+    }
     
 }
