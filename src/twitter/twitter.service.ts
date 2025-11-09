@@ -120,6 +120,9 @@ export class TwitterService {
     try {
       const res = await axios.get("https://api.twitter.com/2/users/me", {
         headers: { Authorization: `Bearer ${accessToken}` },
+        params: {
+          'user.fields': 'profile_image_url,name,username'
+        }
       });
       
       if (!res.data || !res.data.data) {
@@ -139,10 +142,11 @@ export class TwitterService {
           username: res.data.data.username,
           learning: user.learning || ''
         });
-        await this.authService.verifyUser(userCaller);
       }
       
       await this.authService.verifyUser(userCaller);
+      console.log('Updating user profile picture:', res.data.data.profile_image_url);
+      await this.authService.updateUserProfilePicture(userCaller, res.data.data.profile_image_url);
       return res.data.data; 
     } catch (error) {
       console.error('Error getting Twitter user profile:', error.response?.data || error.message);

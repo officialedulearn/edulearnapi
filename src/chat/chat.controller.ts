@@ -13,7 +13,7 @@ import { ApiTags, ApiOperation, ApiSecurity, ApiResponse, ApiBody } from '@nestj
 import { ChatService } from './chat.service';
 import { Message } from '../../lib/db/schema';
 import { FlexibleAuthGuard } from '../auth/guards/flexible-auth.guard';
-import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
+import { verifyUserAuthorization, verifyChatAccess } from '../common/helpers/authorization.helper';
 import { CreateChatDto } from './dto/create-chat.dto';
 
 @ApiTags('chat')
@@ -46,11 +46,15 @@ export class ChatController {
     @ApiOperation({ summary: 'Get a specific chat by ID' })
     @ApiResponse({ status: 200, description: 'Returns the chat' })
     @ApiResponse({ status: 404, description: 'Chat not found' })
-    async getChatById(@Param('chatId') chatId: string) {
+    @ApiResponse({ status: 403, description: 'Forbidden - private chat' })
+    async getChatById(@Request() req, @Param('chatId') chatId: string) {
         const chat = await this.chatService.getChatById(chatId);
         if (!chat) {
             throw new NotFoundException(`Chat with id ${chatId} not found`);
         }
+        
+        await verifyChatAccess(req.user, chat, 'view this chat');
+        
         return chat;
     }
 
@@ -72,21 +76,56 @@ export class ChatController {
     @Post('messages')
     @ApiOperation({ summary: 'Save messages to a chat' })
     @ApiResponse({ status: 201, description: 'Messages saved successfully' })
-    async saveMessages(@Body() saveMessagesDto: { messages: Array<Message> }) {
+    @ApiResponse({ status: 403, description: 'Forbidden - private chat' })
+    @ApiResponse({ status: 404, description: 'Chat not found' })
+    async saveMessages(@Request() req, @Body() saveMessagesDto: { messages: Array<Message> }) {
+        if (!saveMessagesDto.messages || !saveMessagesDto.messages.length) {
+            throw new NotFoundException('No messages provided');
+        }
+        
+        const chatId = saveMessagesDto.messages[0].chatId;
+        const chat = await this.chatService.getChatById(chatId);
+        
+        if (!chat) {
+            throw new NotFoundException(`Chat with id ${chatId} not found`);
+        }
+        
+        await verifyChatAccess(req.user, chat, 'save messages to this chat');
+        
         return await this.chatService.saveMessages(saveMessagesDto);
     }
 
     @Get(':chatId/messages')
     @ApiOperation({ summary: 'Get all messages in a chat' })
     @ApiResponse({ status: 200, description: 'Returns all messages in the chat' })
-    async getMessagesInChat(@Param('chatId') chatId: string) {
+    @ApiResponse({ status: 403, description: 'Forbidden - private chat' })
+    @ApiResponse({ status: 404, description: 'Chat not found' })
+    async getMessagesInChat(@Request() req, @Param('chatId') chatId: string) {
+        const chat = await this.chatService.getChatById(chatId);
+        
+        if (!chat) {
+            throw new NotFoundException(`Chat with id ${chatId} not found`);
+        }
+        
+        await verifyChatAccess(req.user, chat, 'view messages in this chat');
+        
         return await this.chatService.getMessagesInChat(chatId);
     }
 
     @Delete(':chatId/messages')
     @ApiOperation({ summary: 'Delete all messages in a chat' })
     @ApiResponse({ status: 200, description: 'Messages deleted successfully' })
-    async deleteMessagesInChat(@Param('chatId') chatId: string) {
+    @ApiResponse({ status: 403, description: 'Forbidden - private chat' })
+    @ApiResponse({ status: 404, description: 'Chat not found' })
+    async deleteMessagesInChat(@Request() req, @Param('chatId') chatId: string) {
+        const chat = await this.chatService.getChatById(chatId);
+        
+        if (!chat) {
+            throw new NotFoundException(`Chat with id ${chatId} not found`);
+        }
+        
+        await verifyChatAccess(req.user, chat, 'delete messages in this chat');
+        
         return await this.chatService.deleteMessagesInChat(chatId);
     }
 }

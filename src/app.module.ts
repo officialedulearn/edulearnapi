@@ -14,9 +14,11 @@ import { TwitterModule } from './twitter/twitter.module';
 import { RoadmapModule } from './roadmap/roadmap.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { ResendModule } from './resend/resend.module';
+import { CommonModule } from './common/common.module';
 
 @Module({
   imports: [
+    CommonModule,
     AuthModule,
     AiModule,
     ChatModule,

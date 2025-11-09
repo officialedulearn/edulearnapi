@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Param, Query, BadRequestException, NotFoun
 import { ActivityService } from './activity.service';
 import { FlexibleAuthGuard } from '../auth/guards/flexible-auth.guard';
 import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
+import { SubmitQuizDto } from './dto/submit-quiz.dto';
 
 @Controller('activity')
 @UseGuards(FlexibleAuthGuard)
@@ -30,6 +31,25 @@ export class ActivityController {
       return await this.activityService.createActivity(createActivityDto);
     } catch (error) {
       throw new BadRequestException('Failed to create activity: ' + error.message);
+    }
+  }
+
+  @Post('submit-quiz')
+  async submitQuiz(@Request() req, @Body() submitQuizDto: SubmitQuizDto) {
+    if (!submitQuizDto.userId || !submitQuizDto.answers || !Array.isArray(submitQuizDto.answers)) {
+      throw new BadRequestException('User ID and answers array are required');
+    }
+
+    if (submitQuizDto.answers.length === 0) {
+      throw new BadRequestException('At least one answer is required');
+    }
+
+    await verifyUserAuthorization(req.user, submitQuizDto.userId, 'submitting quiz');
+
+    try {
+      return await this.activityService.submitQuiz(submitQuizDto);
+    } catch (error) {
+      throw new BadRequestException('Failed to submit quiz: ' + error.message);
     }
   }
 

@@ -1,12 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import db from '../../drizzle';
 import { eq, and, sql } from 'drizzle-orm';
-import { xpActivity, user, type User } from '../../lib/db/schema';
+import { xpActivity, user, type User, roadmap, userReward } from '../../lib/db/schema';
 import { RewardsService } from '../rewards/rewards.service';
+import { SubmitQuizDto } from './dto/submit-quiz.dto';
+import { RoadmapService } from '../roadmap/roadmap.service';
 
 @Injectable()
 export class ActivityService {
-  constructor(private rewardService: RewardsService) {}
+  constructor(private rewardService: RewardsService, private roadmapService: RoadmapService) {}
   
   async createActivity(data: { 
     userId: string; 
@@ -69,6 +71,70 @@ export class ActivityService {
       return newActivity;
     } catch (error) {
       console.error('Failed to create activity record', error);
+      throw error;
+    }
+  }
+
+  async submitQuiz(submitQuizDto: SubmitQuizDto) {
+    try {
+      let correctCount = 0;
+      const validatedAnswers: { question: string; selectedAnswer: string; correctAnswer: string; isCorrect: boolean }[] = [];
+
+      for (const answer of submitQuizDto.answers) {
+        const isCorrect = answer.selectedAnswer.trim() === answer.correctAnswer.trim();
+        if (isCorrect) {
+          correctCount++;
+        }
+        validatedAnswers.push({
+          question: answer.question,
+          selectedAnswer: answer.selectedAnswer,
+          correctAnswer: answer.correctAnswer,
+          isCorrect,
+        });
+      }
+
+      const totalQuestions = submitQuizDto.answers.length;
+      const xpEarned = correctCount;
+
+      if (submitQuizDto.chatId) {
+        console.log(`Quiz submitted for chatId: ${submitQuizDto.chatId}`);
+        
+        const roadmapData = await db.select().from(roadmap).where(eq(roadmap.chatId, submitQuizDto.chatId));
+
+        if (roadmapData.length > 0 && roadmapData[0].claimableNFT) {
+          const existingReward = await db.select()
+            .from(userReward)
+            .where(and(
+              eq(userReward.userId, submitQuizDto.userId),
+              eq(userReward.rewardId, roadmapData[0].claimableNFT)
+            ));
+          
+          if (existingReward.length === 0) {
+            console.log(`Checking if user ${submitQuizDto.userId} should receive NFT for roadmap ${roadmapData[0].id}`);
+            await this.roadmapService.checkAndAwardRoadmapNFT(roadmapData[0].id, submitQuizDto.userId);
+          } else {
+            console.log(`User ${submitQuizDto.userId} already has NFT ${roadmapData[0].claimableNFT}, skipping check`);
+          }
+        }
+      }
+
+      const activity = await this.createActivity({
+        userId: submitQuizDto.userId,
+        title: submitQuizDto.title || 'Quiz',
+        type: 'quiz',
+        xpEarned,
+      });
+
+      return {
+        activity,
+        score: correctCount,
+        totalQuestions,
+        xpEarned,
+        validatedAnswers,
+        chatId: submitQuizDto.chatId,
+      };
+    } catch (error) {
+      console.error('Failed to submit quiz', error);
       throw error;
     }
   }

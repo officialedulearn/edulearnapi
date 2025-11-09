@@ -43,7 +43,6 @@ export class ChatService {
   }
 
   async decrementTestLimit(chatId: string): Promise<Chat | null> {
-    // Get current testLimit
     const currentChat = await this.getChatById(chatId);
     if (!currentChat) {
       return null;
@@ -82,6 +81,8 @@ export class ChatService {
 
   
   async getMessagesInChat(chatId: string) {
+
+    
     return await db
       .select()
       .from(message)

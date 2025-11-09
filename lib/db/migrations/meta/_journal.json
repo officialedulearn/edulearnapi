@@ -225,6 +225,20 @@
       "when": 1761320864031,
       "tag": "0031_adorable_wild_child",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1762430322840,
+      "tag": "0032_needy_excalibur",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1762431297257,
+      "tag": "0033_real_blazing_skull",
+      "breakpoints": true
     }
   ]
 }

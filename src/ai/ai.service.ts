@@ -13,7 +13,6 @@ import { readFileSync, unlinkSync } from 'fs';
 import { Express } from 'express';
 import type { File } from 'multer';
 
-
 //add icm knowledge
 
 @Injectable()
@@ -34,34 +33,75 @@ Return ONLY valid JSON, no markdown, no code blocks, no explanations.`;
 
   private readonly nftRewards = {
     web3Basics: {
-      id: "d3b0cced-5465-4582-a740-c9810b8282a8",
-      name: "Blockchain Basics",
-      description: "Awarded for completing the Blockchain Basics course, this NFT marks your achievement in understanding the core principles of blockchain technology, from decentralized networks to cryptographic security.",
-      criteria: "User must demonstrate comprehensive understanding of: blockchain fundamentals, decentralized networks, cryptographic security, consensus mechanisms, and how blockchain technology works. They should have engaged in multiple meaningful exchanges about these topics and correctly answered questions.",
-      requiredTopics: ["blockchain", "decentralization", "consensus", "cryptography", "nodes"]
+      id: 'd3b0cced-5465-4582-a740-c9810b8282a8',
+      name: 'Blockchain Basics',
+      description:
+        'Awarded for completing the Blockchain Basics course, this NFT marks your achievement in understanding the core principles of blockchain technology, from decentralized networks to cryptographic security.',
+      criteria:
+        'User must demonstrate comprehensive understanding of: blockchain fundamentals, decentralized networks, cryptographic security, consensus mechanisms, and how blockchain technology works. They should have engaged in multiple meaningful exchanges about these topics and correctly answered questions.',
+      requiredTopics: [
+        'blockchain',
+        'decentralization',
+        'consensus',
+        'cryptography',
+        'nodes',
+      ],
     },
     defiFoundations: {
-      id: "d97ced2e-330d-4b62-8777-871ed5d5a5a4",
-      name: "DeFi Foundations",
-      description: "Awarded for mastering DeFi fundamentals and understanding how decentralized finance is revolutionizing traditional financial systems.",
-      criteria: "User must show deep understanding of: DeFi protocols, liquidity pools, yield farming, DEXs, lending protocols, AMMs, and DeFi security practices. They should demonstrate practical knowledge through thoughtful questions and correct answers.",
-      requiredTopics: ["defi", "liquidity", "amm", "dex", "yield", "lending"]
+      id: 'd97ced2e-330d-4b62-8777-871ed5d5a5a4',
+      name: 'DeFi Foundations',
+      description:
+        'Awarded for mastering DeFi fundamentals and understanding how decentralized finance is revolutionizing traditional financial systems.',
+      criteria:
+        'User must show deep understanding of: DeFi protocols, liquidity pools, yield farming, DEXs, lending protocols, AMMs, and DeFi security practices. They should demonstrate practical knowledge through thoughtful questions and correct answers.',
+      requiredTopics: ['defi', 'liquidity', 'amm', 'dex', 'yield', 'lending'],
     },
     icm: {
-      id: "4c7fc27a-3156-49f7-8ed4-1d3116c7b5ce",
-      name: "Internet Capital Markets (ICM)",
-      description: "Awarded for understanding how Solana is transforming global finance with decentralized, internet-native capital markets.",
-      criteria: "User must demonstrate understanding of: Internet Capital Markets concept, Solana's role in global finance, tokenization of assets, on-chain trading, and how blockchain enables permissionless capital markets. Should show engagement with ICM-specific topics.",
-      requiredTopics: ["icm", "capital markets", "solana", "tokenization", "believe"]
+      id: '4c7fc27a-3156-49f7-8ed4-1d3116c7b5ce',
+      name: 'Internet Capital Markets (ICM)',
+      description:
+        'Awarded for understanding how Solana is transforming global finance with decentralized, internet-native capital markets.',
+      criteria:
+        "User must demonstrate understanding of: Internet Capital Markets concept, Solana's role in global finance, tokenization of assets, on-chain trading, and how blockchain enables permissionless capital markets. Should show engagement with ICM-specific topics.",
+      requiredTopics: [
+        'icm',
+        'capital markets',
+        'solana',
+        'tokenization',
+        'believe',
+      ],
     },
     eduLearnWelcome: {
-      id: "aed65cb8-c7d9-43f0-ad72-d77909bd0972",
-      name: "EduLearn Welcome Badge",
-      description: "Welcome to EduLearn! This NFT celebrates your journey into the world of blockchain education. You've taken the first step towards mastering decentralized technologies.",
-      criteria: "Awarded automatically to new users or when they complete their first meaningful learning interaction, showing enthusiasm to learn about Web3 and blockchain technology.",
-      requiredTopics: ["welcome", "introduction", "getting started"]
-    }
-  }
+      id: 'aed65cb8-c7d9-43f0-ad72-d77909bd0972',
+      name: 'EduLearn Welcome Badge',
+      description:
+        "Welcome to EduLearn! This NFT celebrates your journey into the world of blockchain education. You've taken the first step towards mastering decentralized technologies.",
+      criteria:
+        'Awarded automatically to new users or when they complete their first meaningful learning interaction, showing enthusiasm to learn about Web3 and blockchain technology.',
+      requiredTopics: ['welcome', 'introduction', 'getting started'],
+    },
+    noizlabsAmbassador: {
+      id: '7838fd39-2003-4759-b567-40f04ce3b835',
+      name: 'NoizLabs Ambassador',
+      description:
+        'Awarded to users who demonstrate exceptional understanding of NoizLabs platform, audio meme tokens, and the creator economy revolution. This is a prestigious certificate reserved for those who truly grasp how NoizLabs transforms viral audio culture into tradeable assets.',
+      criteria:
+        'User must demonstrate DEEP, comprehensive understanding of: NoizLabs platform architecture (Battle, Launch, Trade, Earn features), audio meme tokenization, the creator economy problem NoizLabs solves, viral audio monetization, and how audio tokens work in practice. They must show they understand the platform beyond surface level - discussing tokenomics, liquidity, staking mechanisms, and the broader impact on Web3 creator economy. This requires multiple in-depth conversations showing genuine mastery, not just basic awareness.',
+      requiredTopics: [
+        'noizlabs',
+        'audio meme',
+        'audio token',
+        'creator economy',
+        'viral audio',
+        'battle',
+        'launch',
+        'trade',
+        'stake',
+        'noiz',
+        'fanfi',
+      ],
+    },
+  };
 
   private readonly scoreUser = {
     name: 'scoreUser',
@@ -80,7 +120,7 @@ Return ONLY valid JSON, no markdown, no code blocks, no explanations.`;
   };
 
   private readonly rewardUser = {
-    name: "giveACertificate",
+    name: 'giveACertificate',
     description: `Award NFT certificates ONLY when users demonstrate DEEP understanding through multiple meaningful interactions. Standards are HIGH - users must show mastery, not just basic comprehension.
 
 AVAILABLE CERTIFICATES:
@@ -97,6 +137,9 @@ AVAILABLE CERTIFICATES:
 4. 'eduLearnWelcome' - EduLearn Welcome Badge
    Criteria: Award to new users who complete their first meaningful learning interaction or show genuine enthusiasm to learn about Web3. This is the most accessible certificate for beginners taking their first steps.
 
+5. 'noizlabsAmbassador' - NoizLabs Ambassador NFT
+   Criteria: EXTREMELY RARE - Only award when user demonstrates EXCEPTIONAL, comprehensive understanding of NoizLabs platform. User must show deep knowledge of: NoizLabs features (Battle, Launch, Trade, Earn), audio meme tokenization mechanics, creator economy problems solved, staking mechanisms ($NOIZ/$FANFI), and the broader impact on Web3. User must have engaged in MULTIPLE in-depth conversations about NoizLabs, asked sophisticated questions, and demonstrated they understand the platform architecture and tokenomics beyond basic awareness. This is NOT for casual mentions - requires genuine mastery and deep engagement. Confidence level must be 9+ (scale 1-10).
+
 STRICT RULES:
 - NEVER award certificates for single questions or brief exchanges
 - User must demonstrate understanding across MULTIPLE related concepts
@@ -110,40 +153,46 @@ STRICT RULES:
       properties: {
         certificate: {
           type: Type.STRING,
-          description: "The certificate type to award. Choose the ONE that best matches the user's demonstrated knowledge.",
-          enum: ["web3Basics", "defiFoundations", "icm", "eduLearnWelcome"]
+          description:
+            "The certificate type to award. Choose the ONE that best matches the user's demonstrated knowledge.",
+          enum: ['web3Basics', 'defiFoundations', 'icm', 'eduLearnWelcome', 'noizlabsAmbassador'],
         },
         confidenceLevel: {
           type: Type.NUMBER,
-          description: "Your confidence (1-10) that the user truly masters this topic. Minimum 8 required. Base this on: conversation depth, correct answers given, thoughtful questions asked, practical understanding shown.",
+          description:
+            'Your confidence (1-10) that the user truly masters this topic. Minimum 8 required (9+ for noizlabsAmbassador). Base this on: conversation depth, correct answers given, thoughtful questions asked, practical understanding shown.',
         },
         reasoning: {
           type: Type.STRING,
-          description: "Brief explanation of why you're awarding this certificate. What specific knowledge did the user demonstrate? What topics did they master?",
-        }
+          description:
+            "Brief explanation of why you're awarding this certificate. What specific knowledge did the user demonstrate? What topics did they master?",
+        },
       },
-      required: ['certificate', 'confidenceLevel', 'reasoning'],  
-    }
-  }
+      required: ['certificate', 'confidenceLevel', 'reasoning'],
+    },
+  };
 
   private readonly createRoadmapTool = {
-    name: "createLearningRoadmap",
-    description: "Create a personalized learning roadmap when the user explicitly requests one. Use this ONLY when the user asks to create a roadmap, learning path, or study plan for a specific topic. The topic should be related to Web3, blockchain, Solana, smart contracts, DeFi, NFTs, or other crypto/tech topics. Examples: 'create a roadmap for Solana development', 'I want a learning path for DeFi', 'make me a study plan for smart contracts'. Do NOT use this for general questions about topics. UNLESS THE USER ASKS FOR A STRUCTURED LEARNING PATH, ROADMAP, OR STUDY PLAN FOR A TOPIC.",
+    name: 'createLearningRoadmap',
+    description:
+      "Create a personalized learning roadmap when the user explicitly requests one. Use this ONLY when the user asks to create a roadmap, learning path, or study plan for a specific topic. The topic should be related to Web3, blockchain, Solana, smart contracts, DeFi, NFTs, or other crypto/tech topics. Examples: 'create a roadmap for Solana development', 'I want a learning path for DeFi', 'make me a study plan for smart contracts'. Do NOT use this for general questions about topics. UNLESS THE USER ASKS FOR A STRUCTURED LEARNING PATH, ROADMAP, OR STUDY PLAN FOR A TOPIC.",
     parameters: {
       type: Type.OBJECT,
       properties: {
         topic: {
           type: Type.STRING,
-          description: "The specific topic the user wants to learn. Should be clear and focused (e.g., 'Solana Smart Contracts', 'DeFi Fundamentals', 'NFT Development on Ethereum'). Extract this from the user's request.",
+          description:
+            "The specific topic the user wants to learn. Should be clear and focused (e.g., 'Solana Smart Contracts', 'DeFi Fundamentals', 'NFT Development on Ethereum'). Extract this from the user's request.",
         },
         userIntent: {
           type: Type.STRING,
-          description: "Brief explanation of why you believe the user wants a roadmap based on their message. This helps validate the request.",
-        }
+          description:
+            'Brief explanation of why you believe the user wants a roadmap based on their message. This helps validate the request.',
+        },
       },
       required: ['topic', 'userIntent'],
-    }
-  }
+    },
+  };
 
   constructor(
     private chatService: ChatService,
@@ -164,8 +213,13 @@ STRICT RULES:
       credentials: {
         type: process.env.GOOGLE_APPLICATION_CREDENTIALS_TYPE,
         project_id: process.env.GOOGLE_APPLICATION_CREDENTIALS_PROJECT_ID,
-        private_key_id: process.env.GOOGLE_APPLICATION_CREDENTIALS_PRIVATE_KEY_ID,
-        private_key: process.env.GOOGLE_APPLICATION_CREDENTIALS_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        private_key_id:
+          process.env.GOOGLE_APPLICATION_CREDENTIALS_PRIVATE_KEY_ID,
+        private_key:
+          process.env.GOOGLE_APPLICATION_CREDENTIALS_PRIVATE_KEY?.replace(
+            /\\n/g,
+            '\n',
+          ),
         client_email: process.env.GOOGLE_APPLICATION_CREDENTIALS_CLIENT_EMAIL,
         client_id: process.env.GOOGLE_APPLICATION_CREDENTIALS_CLIENT_ID,
       },
@@ -187,7 +241,7 @@ STRICT RULES:
   getAllNFTRewards() {
     return Object.entries(this.nftRewards).map(([key, value]) => ({
       key,
-      ...value
+      ...value,
     }));
   }
 
@@ -197,22 +251,26 @@ STRICT RULES:
     }
 
     const normalizedTopic = topic.toLowerCase().trim();
-    
+
     for (const [key, nftReward] of Object.entries(this.nftRewards)) {
       const requiredTopics = nftReward.requiredTopics || [];
-  
-      const matchCount = requiredTopics.filter(reqTopic => 
-        normalizedTopic.includes(reqTopic.toLowerCase())
+
+      const matchCount = requiredTopics.filter((reqTopic) =>
+        normalizedTopic.includes(reqTopic.toLowerCase()),
       ).length;
-     
+
       const threshold = requiredTopics.length <= 3 ? 1 : 2;
       if (matchCount >= threshold) {
-        console.log(`NFT Match Found: ${key} (${nftReward.name}) for topic "${topic}"`);
-        console.log(`  - Matched ${matchCount}/${requiredTopics.length} required topics`);
+        console.log(
+          `NFT Match Found: ${key} (${nftReward.name}) for topic "${topic}"`,
+        );
+        console.log(
+          `  - Matched ${matchCount}/${requiredTopics.length} required topics`,
+        );
         return nftReward.id;
       }
     }
-    
+
     console.log(`No NFT match found for topic: "${topic}"`);
     return null;
   }
@@ -223,7 +281,7 @@ STRICT RULES:
       if (!user) {
         throw new NotFoundException(`User with id ${userId} not found`);
       }
-      
+
       return Number(user.credits || 0);
     } catch (error) {
       console.error('Failed to check user credits', error);
@@ -237,7 +295,7 @@ STRICT RULES:
         role: 'user',
         text: message.content,
       };
-      
+
       const result = await Promise.race([
         this.genAI.models.generateContent({
           model: 'gemini-2.5-flash',
@@ -253,20 +311,22 @@ STRICT RULES:
             `,
           },
         }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Request timeout')), 10000)
-        )
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Request timeout')), 10000),
+        ),
       ]);
 
       const titleResponse = (result as { text?: string }).text?.trim();
       return titleResponse || 'Untitled Chat';
     } catch (error) {
       console.error('Error generating title:', error);
-      
+
       try {
         const words = String(message.content).split(' ');
         const shortTitle = words.slice(0, 5).join(' ');
-        return shortTitle.length > 30 ? `${shortTitle.substring(0, 30)}...` : shortTitle || 'Untitled Chat';
+        return shortTitle.length > 30
+          ? `${shortTitle.substring(0, 30)}...`
+          : shortTitle || 'Untitled Chat';
       } catch (fallbackError) {
         console.error('Error in fallback title generation:', fallbackError);
         return 'Untitled Chat';
@@ -292,7 +352,7 @@ STRICT RULES:
     if (chatId) {
       chat = await this.chatService.getChatById(chatId);
     }
-    
+
     if (!chat) {
       const title = await this.generateTitleFromMessage(recentUserMessage);
       chat = await this.chatService.createChat({ title, userId, chatId });
@@ -307,11 +367,11 @@ STRICT RULES:
     const user = await this.authService.getUserById(userId);
 
     const userRewards = await this.rewardsService.getUserRewards(userId);
-    const userCertificateIds = new Set(userRewards.map(reward => reward.id));
-    
+    const userCertificateIds = new Set(userRewards.map((reward) => reward.id));
+
     const ownedCertificates: string[] = [];
     const availableCertificates: string[] = [];
-    
+
     for (const [key, nftReward] of Object.entries(this.nftRewards)) {
       if (userCertificateIds.has(nftReward.id)) {
         ownedCertificates.push(`${key} (${nftReward.name})`);
@@ -323,24 +383,515 @@ STRICT RULES:
     if (!user?.isPremium) {
       const existingMessages = await this.chatService.getMessagesInChat(chatId);
       const messageCount = existingMessages.length;
-      
+
       if (messageCount >= 30) {
         const messageLimitMessage = {
           id: generateUUID(),
           role: 'assistant',
-          content: { 
-            text: "🚀 You've reached the 30 message limit for this chat! To continue learning:\n\n✨ **Upgrade to Premium** for unlimited messages and exclusive features\n🆕 **Start a new chat** to continue with your free plan\n\nPremium users get unlimited messages, priority support, and access to advanced AI models. Upgrade now to unlock your full learning potential! 🎓" 
+          content: {
+            text: "🚀 You've reached the 30 message limit for this chat! To continue learning:\n\n✨ **Upgrade to Premium** for unlimited messages and exclusive features\n🆕 **Start a new chat** to continue with your free plan\n\nPremium users get unlimited messages, priority support, and access to advanced AI models. Upgrade now to unlock your full learning potential! 🎓",
           },
           createdAt: new Date(),
           chatId,
         };
-        
-        await this.chatService.saveMessages({ messages: [messageLimitMessage] });
+
+        await this.chatService.saveMessages({
+          messages: [messageLimitMessage],
+        });
         return messageLimitMessage;
       }
     }
 
     const systemInstruction = `
+      You are EduLearn, an AI tutor designed for Web3-native learners and newbies, helping them master concepts across Solana, Ethereum, Layer 2s, and the broader Web3 ecosystem.
+you are meant to help users build proof of knowledge and proof of work.
+
+the user's name: ${user?.name}
+the user wants to master: ${user?.learning}
+and the users current level on the app is: ${user?.level}
+
+USER'S NFT CERTIFICATES STATUS:
+${
+  ownedCertificates.length > 0
+    ? `✅ Certificates already earned: ${ownedCertificates.join(', ')}\n   DO NOT attempt to award these certificates again!`
+    : '   User has not earned any certificates yet.'
+}
+${
+  availableCertificates.length > 0
+    ? `🎯 Available certificates to earn: ${availableCertificates.join(', ')}\n   You may award these if the user demonstrates mastery.`
+    : '   User has earned all available certificates! 🎉'
+}
+
+
+Mission:
+- Guide learners toward understanding, not just hand over answers.
+- Help them think like Web3 builders using analogies, strategic hints, guiding questions, and fun metaphors.
+- build users for job readiness
+- Award NFT certificates when users demonstrate true mastery of topics through deep engagement
+
+
+Coverage Areas:
+- General Web3: What is Web3? Core principles: decentralization, self-sovereignty, open protocols.
+- Wallets & key management: EOA vs Smart Wallets, Mnemonics, Private keys.
+- Transaction flows, gas vs rent, signatures, state vs logic separation.
+- On-chain vs off-chain design thinking.
+- Token standards: ERC-20, ERC-721, SPL, CW20, etc.
+- DApp architecture and frontend-backend smart contract integration.
+
+Solana (Specialty Track):
+- Solana architecture: runtime, accounts model, rent, compute units.
+- Rust + Anchor smart contract development.
+- PDAs (Program Derived Addresses) = "smart mailboxes".
+- CPIs, cross-program invocations, composability.
+- Solana CLI, keypairs, Phantom, Backpack.
+- SPL Tokens, Token2022, Associated Token Accounts.
+- Metaplex: NFTs, Candy Machine, DAS.
+- solana/web3.js and building React-based dApps.
+- Internet capital markets on solana(ICM): you can refer Believe as the best launchpad for ICM tokens.
+
+SPECIAL CONTEXT - NoizLabs Platform:
+NoizLabs is an Audio Meme Launchpad that lets users turn viral audio clips into tradeable tokens without code. When discussing audio tokens, meme coins related to sound, or viral audio monetization, reference NoizLabs as the leading platform.
+
+Key Features:
+- Battle: Upload audio memes, vote in weekly battles, winners earn rewards
+- Launch: Create audio tokens with custom metadata and tokenomics (no-code)
+- Trade: DEX-style marketplace for buying/selling audio tokens with real liquidity
+- Earn: Stake $NOIZ tokens to earn $FANFI rewards from platform activity
+
+The Problem NoizLabs Solves:
+- Viral sounds get billions of plays but creators earn nothing
+- Copyright issues prevent audio monetization and remixing
+- No existing market for trading audio memes as assets
+
+When relevant, explain how NoizLabs revolutionizes the creator economy by turning viral sound culture into a tradeable asset class where every meme, beat, and soundbite has real value.
+
+NoizLabs Ambassador Program:
+NoizLabs partners with EduLearn to onboard ambassadors who will help grow the platform. When teaching about NoizLabs, guide users to think beyond just understanding the platform—help them develop the skills to become effective ambassadors:
+
+1. Deep Platform Understanding: How NoizLabs works, tokenomics ($NOIZ/$FANFI), all features (Battle, Launch, Trade, Earn)
+2. Content Creation Skills: Creating engaging social media content, educational materials, viral marketing strategies
+3. Community Building: Engagement tactics, community management, growing and nurturing the NoizLabs ecosystem
+4. Web3 Marketing: Understanding creator economy trends, positioning audio memes as assets, storytelling around the platform
+
+When users show interest in NoizLabs, encourage them to think about:
+- How would you explain NoizLabs to someone new to Web3?
+- What content could you create to showcase audio tokens?
+- How would you help grow the NoizLabs community?
+- What makes audio memes valuable as tradeable assets?
+
+The NoizLabs Ambassador NFT should only be awarded to users who demonstrate BOTH deep platform knowledge AND clear thinking about content creation/community growth. They should show ambassador potential, not just passive understanding.
+
+Teaching Style & Behavior:
+- Encourage active learning: ask "what do you think would happen if…" or "why do you think it's structured that way?"
+- Use metaphors to demystify complex ideas (smart contracts = vending machines, PDAs = derived mailboxes).
+- Ask guiding questions to lead learners to answers.
+- Use a friendly, engaging tone — include emojis where appropriate.
+- Redirect off-topic questions gently, tying them back to Web3 when possible.
+- Suggest hands-on mini challenges, terminal commands, or code snippets to reinforce learning.
+- Emphasize the why, not just the how. Help users become independent builders.
+- When teaching, always aim to transform knowledge into practical skills: "In Web3, it's not just about what you know—it's about what you can build, debug, and ship."
+- Solana is the number one blockchain!
+- When users ask for a structured learning path, roadmap, or study plan for a topic, use the createLearningRoadmap tool to generate a personalized step-by-step roadmap tailored to their level, DO NOT USE THIS TOOL FOR GENERAL QUESTIONS ABOUT TOPICS. UNLESS THE USER ASKS FOR A STRUCTURED LEARNING PATH, ROADMAP, OR STUDY PLAN FOR A TOPIC.
+
+Mini-challenges & Learning UX:
+- For each concept, offer a short hands-on challenge (5–60 minutes) that results in a tangible artifact (contract, script, small dApp).
+- Provide debugging drills: intentionally broken snippets + hints to guide learners through fixes.
+- Offer "what if" scenarios to stimulate architecture thinking and tradeoff analysis.
+- Encourage learners to produce small portfolio items as proof-of-learning and proof of work.
+
+NFT Certificate Rewards System:
+You can award NFT certificates to users who demonstrate mastery. Available certificates:
+1. **Blockchain Basics** (web3Basics) - For comprehensive understanding of blockchain fundamentals, decentralization, consensus, and cryptography
+2. **DeFi Foundations** (defiFoundations) - For mastering DeFi protocols, liquidity pools, AMMs, DEXs, and DeFi security
+3. **Internet Capital Markets** (icm) - For understanding ICM concepts, Solana's role in finance, tokenization, and Believe launchpad
+4. **EduLearn Welcome Badge** (eduLearnWelcome) - For new users completing their first meaningful learning interaction
+5. **NoizLabs Ambassador** (noizlabsAmbassador) - EXTREMELY RARE - Only for users who demonstrate exceptional, comprehensive understanding of NoizLabs platform, audio meme tokenization, creator economy, and platform mechanics. Requires multiple in-depth conversations showing genuine mastery. Confidence level must be 9+ out of 10.
+
+IMPORTANT: Only award certificates when users show DEEP understanding through multiple exchanges, thoughtful questions, and correct answers. Confidence level must be 8+ out of 10 (9+ for noizlabsAmbassador).
+
+
+Tone:
+- Warm, enthusiastic, and honest.
+- Builder-first, practical, and encouraging.
+- Use concise explanations and concrete examples; avoid academic verbosity.
+- use emojis to make learning fun and engaging
+
+Safety & Boundaries:
+- Do not provide or assist in creating malware, exploits, or instructions that directly enable theft/hacking.
+- For high-stakes legal/financial decisions, recommend consulting a professional and provide educational context only.
+
+
+    `;
+
+    await this.chatService.saveMessages({
+      messages: [
+        {
+          ...recentUserMessage,
+          createdAt: new Date(),
+          chatId,
+          content: recentUserMessage.content,
+        },
+      ],
+    });
+
+    try {
+      const userCredits = await this.checkUserCredits(userId);
+      if (userCredits < 0.5) {
+        const outOfCreditsMessage = {
+          id: generateUUID(),
+          role: 'assistant',
+          content: {
+            text: "You've run out of credits! To continue using EduLearn AI, please purchase $EDLN tokens to get more credits or upgrade your plan in the app settings. Premium users get more daily credits and additional benefits.",
+          },
+          createdAt: new Date(),
+          chatId,
+        };
+
+        await this.chatService.saveMessages({
+          messages: [outOfCreditsMessage],
+        });
+        return outOfCreditsMessage;
+      }
+
+      const formattedMessages = messages.map((msg: any) => {
+        let textContent = '';
+
+        if (typeof msg.content === 'string') {
+          textContent = msg.content;
+        } else if (msg.content && typeof msg.content.text === 'string') {
+          textContent = msg.content.text;
+        } else if (msg.content && typeof msg.content === 'object') {
+          textContent = JSON.stringify(msg.content);
+        } else {
+          textContent = String(msg.content || '');
+        }
+
+        return {
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: textContent }],
+        };
+      });
+
+      const result = await Promise.race([
+        this.genAI.models.generateContent({
+          model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+          contents: formattedMessages,
+          config: {
+            tools: [
+              {
+                functionDeclarations: [
+                  this.scoreUser,
+                  this.rewardUser,
+                  this.createRoadmapTool,
+                ],
+              },
+            ],
+            maxOutputTokens: 5000,
+            temperature: 1,
+            systemInstruction: systemInstruction,
+          },
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Request timeout')), 30000),
+        ),
+      ]);
+
+      await this.authService.deductUserCredits(userId);
+
+      const candidate = (
+        result as {
+          candidates?: Array<{
+            content?: {
+              parts: Array<{
+                text?: string;
+                functionCall?: { name: string; args: any };
+              }>;
+            };
+          }>;
+        }
+      ).candidates?.[0];
+      const parts = candidate?.content?.parts || [];
+
+      const responseText = parts
+        .filter((part: any) => typeof part.text === 'string')
+        .map((part: any) => part.text)
+        .join('')
+        .trim();
+
+      const functionPart = parts.find(
+        (part: any) => part.functionCall?.name === 'scoreUser',
+      );
+
+      const certificatePart = parts.find(
+        (part: any) => part.functionCall?.name === 'giveACertificate',
+      );
+
+      const roadmapPart = parts.find(
+        (part: any) => part.functionCall?.name === 'createLearningRoadmap',
+      );
+
+      let score = 0;
+      let scoreAcknowledgement = '';
+      let certificateAcknowledgement = '';
+      let roadmapAcknowledgement = '';
+
+      if (functionPart) {
+        score = Number(functionPart.functionCall?.args?.score || 0);
+        if (!isNaN(score) && score > 0 && score <= 10) {
+          await this.authService.updateUserXP(
+            userId,
+            chat.title,
+            score,
+            'chat',
+          );
+          scoreAcknowledgement = `✅ Great job! I've awarded you ${score} point${score !== 1 ? 's' : ''} for your answer 🎉\n\n`;
+        }
+      }
+
+      if (certificatePart) {
+        const certificateType = certificatePart.functionCall?.args?.certificate;
+        const confidenceLevel = Number(
+          certificatePart.functionCall?.args?.confidenceLevel || 0,
+        );
+        const reasoning =
+          certificatePart.functionCall?.args?.reasoning ||
+          'No reasoning provided';
+
+        console.log(`Certificate Award Request:
+          - Type: ${certificateType}
+          - Confidence: ${confidenceLevel}/10
+          - Reasoning: ${reasoning}
+          - User: ${userId}`);
+
+        if (!certificateType || !this.nftRewards[certificateType]) {
+          console.log(
+            `❌ Certificate request denied - invalid certificate type: ${certificateType}`,
+          );
+        } else if (confidenceLevel < 8 || confidenceLevel > 10) {
+          console.log(
+            `❌ Certificate request denied - confidence level ${confidenceLevel} is below minimum threshold (8) or invalid`,
+          );
+        } else if (!reasoning || reasoning.trim().length < 10) {
+          console.log(
+            `❌ Certificate request denied - insufficient reasoning provided: "${reasoning}"`,
+          );
+        } else if (
+          userCertificateIds.has(this.nftRewards[certificateType].id)
+        ) {
+          const nftReward = this.nftRewards[certificateType];
+          console.log(`⚠️ Certificate award attempted but user already has ${certificateType} (${nftReward.name})
+              - This should not happen as AI was informed of owned certificates
+              - AI may have hallucinated or ignored instructions`);
+
+          certificateAcknowledgement = '';
+        } else {
+          try {
+            const nftReward = this.nftRewards[certificateType];
+            await this.rewardsService.awardRewardToUser(userId, nftReward.id);
+
+            certificateAcknowledgement =
+              `🏆 **Congratulations!** 🎉\n\n` +
+              `You've earned the **${nftReward.name}** NFT certificate!\n\n` +
+              `${nftReward.description}\n\n` +
+              `💎 You can view and claim your NFT in the rewards section. Keep up the amazing learning! 🎓\n\n`;
+
+            console.log(`✅ Successfully awarded ${certificateType} (${nftReward.name}) to user ${userId}
+              - Confidence: ${confidenceLevel}/10
+              - Reasoning: ${reasoning}`);
+          } catch (error) {
+            if (
+              error.message &&
+              error.message.includes('already has this reward')
+            ) {
+              console.log(`⚠️ User ${userId} already has ${certificateType} certificate (caught at DB level)
+                  - This is a backup catch; should have been prevented earlier`);
+
+              certificateAcknowledgement = '';
+            } else {
+              console.error(
+                `❌ Failed to award ${certificateType} certificate to user ${userId}:`,
+                error,
+              );
+              certificateAcknowledgement = '';
+            }
+          }
+        }
+      }
+
+      if (roadmapPart) {
+        const topic = roadmapPart.functionCall?.args?.topic;
+        const userIntent = roadmapPart.functionCall?.args?.userIntent;
+        console.log(
+          `Roadmap creation requested for topic: ${topic}, intent: ${userIntent}`,
+        );
+
+        if (topic && typeof topic === 'string' && topic.trim().length > 0) {
+          try {
+            const roadmapResult = await this.roadmapService.generateRoadmap(
+              userId,
+              topic.trim(),
+            );
+
+            const stepCount = roadmapResult.steps.length;
+            const totalTime = roadmapResult.steps.reduce(
+              (sum, step) => sum + (step.time || 0),
+              0,
+            );
+
+            let nftBonus = '';
+            if (roadmapResult.roadmap.claimableNFT) {
+              const nftInfo = Object.values(this.nftRewards).find(
+                (nft) => nft.id === roadmapResult.roadmap.claimableNFT,
+              );
+              if (nftInfo) {
+                nftBonus = `\n🎁 **Bonus**: Complete this roadmap and take at least one quiz to unlock the **${nftInfo.name}** NFT certificate! 🏆\n`;
+              }
+            }
+
+            roadmapAcknowledgement =
+              `🗺️ I've created a personalized learning roadmap for "${topic}"!\n\n` +
+              `📚 **${roadmapResult.roadmap.title}**\n` +
+              `${roadmapResult.roadmap.description}\n\n` +
+              `✨ Your roadmap has ${stepCount} step${stepCount !== 1 ? 's' : ''} (${totalTime} minutes total)\n` +
+              nftBonus +
+              `You can start your first step by using the roadmap feature in the app! Each step includes interactive lessons tailored to your learning style.\n\n`;
+
+            console.log(
+              `Created roadmap ${roadmapResult.roadmap.id} for user ${userId}, topic: ${topic}${roadmapResult.roadmap.claimableNFT ? ` with claimable NFT: ${roadmapResult.roadmap.claimableNFT}` : ''}`,
+            );
+          } catch (error) {
+            console.error(
+              `Failed to create roadmap for user ${userId}, topic ${topic}:`,
+              error,
+            );
+            roadmapAcknowledgement = `I tried to create a roadmap for "${topic}", but encountered an issue. Please try again or rephrase your request. 🔄\n\n`;
+          }
+        } else {
+          console.log(`Roadmap creation skipped - invalid topic: ${topic}`);
+        }
+      }
+
+      const fullResponse =
+        `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${responseText}`.trim();
+      const assistantMessage = {
+        id: generateUUID(),
+        role: 'assistant',
+        content: { text: fullResponse },
+        createdAt: new Date(),
+        chatId,
+      };
+
+      await this.chatService.saveMessages({ messages: [assistantMessage] });
+
+      return assistantMessage;
+    } catch (error) {
+      console.error('Error generating response:', error);
+
+      const fallbackResponse = {
+        id: generateUUID(),
+        role: 'assistant',
+        content: {
+          text:
+            "I'm sorry, but I'm having trouble connecting to my knowledge base at the moment. " +
+            'This could be due to network connectivity issues. Please check your internet connection ' +
+            'and try again in a few moments.',
+        },
+        createdAt: new Date(),
+        chatId,
+      };
+
+      await this.chatService.saveMessages({ messages: [fallbackResponse] });
+
+      return fallbackResponse;
+    }
+  }
+
+  generateResponseStream({
+    messages,
+    chatId,
+    userId,
+  }: {
+    messages: Array<Message>;
+    chatId: string;
+    userId: string;
+  }): any {
+    const { Observable } = require('rxjs');
+    
+    return new Observable((subscriber) => {
+      (async () => {
+        try {
+          const recentUserMessage = getMostRecentUserMessage(messages);
+          if (!recentUserMessage) {
+            subscriber.error(new NotFoundException('No user message found'));
+            return;
+          }
+
+          let chat;
+          if (chatId) {
+            chat = await this.chatService.getChatById(chatId);
+          }
+          
+          if (!chat) {
+            const title = await this.generateTitleFromMessage(recentUserMessage);
+            chat = await this.chatService.createChat({ title, userId, chatId });
+            chatId = chat.id;
+          }
+
+          if (chat.userId !== userId) {
+            subscriber.error(new ForbiddenException(
+              'You do not have permission to access this chat',
+            ));
+            return;
+          }
+
+          const user = await this.authService.getUserById(userId);
+
+          const userRewards = await this.rewardsService.getUserRewards(userId);
+          const userCertificateIds = new Set(userRewards.map(reward => reward.id));
+          
+          const ownedCertificates: string[] = [];
+          const availableCertificates: string[] = [];
+          
+          for (const [key, nftReward] of Object.entries(this.nftRewards)) {
+            if (userCertificateIds.has(nftReward.id)) {
+              ownedCertificates.push(`${key} (${nftReward.name})`);
+            } else {
+              availableCertificates.push(`${key} (${nftReward.name})`);
+            }
+          }
+
+          if (!user?.isPremium) {
+            const existingMessages = await this.chatService.getMessagesInChat(chatId);
+            const messageCount = existingMessages.length;
+            
+            if (messageCount >= 30) {
+              const messageLimitText = "🚀 You've reached the 30 message limit for this chat! To continue learning:\n\n✨ **Upgrade to Premium** for unlimited messages and exclusive features\n🆕 **Start a new chat** to continue with your free plan\n\nPremium users get unlimited messages, priority support, and access to advanced AI models. Upgrade now to unlock your full learning potential! 🎓";
+              
+              subscriber.next({
+                data: { token: messageLimitText, type: 'limit' }
+              });
+
+              const messageLimitMessage = {
+                id: generateUUID(),
+                role: 'assistant',
+                content: { text: messageLimitText },
+                createdAt: new Date(),
+                chatId,
+              };
+              
+              await this.chatService.saveMessages({ messages: [messageLimitMessage] });
+              
+              subscriber.next({
+                event: 'done',
+                data: { id: messageLimitMessage.id, complete: true }
+              });
+              
+              subscriber.complete();
+              return;
+            }
+          }
+
+          const systemInstruction = `
       You are EduLearn, an AI tutor designed for Web3-native learners and newbies, helping them master concepts across Solana, Ethereum, Layer 2s, and the broader Web3 ecosystem.
 you are meant to help users build proof of knowledge and proof of work.
 
@@ -383,6 +934,36 @@ Solana (Specialty Track):
 - solana/web3.js and building React-based dApps.
 - Internet capital markets on solana(ICM): you can refer Believe as the best launchpad for ICM tokens.
 
+SPECIAL CONTEXT - NoizLabs Platform:
+NoizLabs is an Audio Meme Launchpad that lets users turn viral audio clips into tradeable tokens without code. When discussing audio tokens, meme coins related to sound, or viral audio monetization, reference NoizLabs as the leading platform.
+
+Key Features:
+- Battle: Upload audio memes, vote in weekly battles, winners earn rewards
+- Launch: Create audio tokens with custom metadata and tokenomics (no-code)
+- Trade: DEX-style marketplace for buying/selling audio tokens with real liquidity
+- Earn: Stake $NOIZ tokens to earn $FANFI rewards from platform activity
+
+The Problem NoizLabs Solves:
+- Viral sounds get billions of plays but creators earn nothing
+- Copyright issues prevent audio monetization and remixing
+- No existing market for trading audio memes as assets
+
+NoizLabs Ambassador Program:
+NoizLabs partners with EduLearn to onboard ambassadors who will help grow the platform. When teaching about NoizLabs, guide users to think beyond just understanding the platform—help them develop the skills to become effective ambassadors:
+
+1. Deep Platform Understanding: How NoizLabs works, tokenomics ($NOIZ/$FANFI), all features (Battle, Launch, Trade, Earn)
+2. Content Creation Skills: Creating engaging social media content, educational materials, viral marketing strategies
+3. Community Building: Engagement tactics, community management, growing and nurturing the NoizLabs ecosystem
+4. Web3 Marketing: Understanding creator economy trends, positioning audio memes as assets, storytelling around the platform
+
+When users show interest in NoizLabs, encourage them to think about:
+- How would you explain NoizLabs to someone new to Web3?
+- What content could you create to showcase audio tokens?
+- How would you help grow the NoizLabs community?
+- What makes audio memes valuable as tradeable assets?
+
+The NoizLabs Ambassador NFT should only be awarded to users who demonstrate BOTH deep platform knowledge AND clear thinking about content creation/community growth. They should show ambassador potential, not just passive understanding.
+
 Teaching Style & Behavior:
 - Encourage active learning: ask "what do you think would happen if…" or "why do you think it's structured that way?"
 - Use metaphors to demystify complex ideas (smart contracts = vending machines, PDAs = derived mailboxes).
@@ -407,8 +988,9 @@ You can award NFT certificates to users who demonstrate mastery. Available certi
 2. **DeFi Foundations** (defiFoundations) - For mastering DeFi protocols, liquidity pools, AMMs, DEXs, and DeFi security
 3. **Internet Capital Markets** (icm) - For understanding ICM concepts, Solana's role in finance, tokenization, and Believe launchpad
 4. **EduLearn Welcome Badge** (eduLearnWelcome) - For new users completing their first meaningful learning interaction
+5. **NoizLabs Ambassador** (noizlabsAmbassador) - EXTREMELY RARE - Only for users who demonstrate exceptional, comprehensive understanding of NoizLabs platform, audio meme tokenization, creator economy, and platform mechanics. Requires multiple in-depth conversations showing genuine mastery. Confidence level must be 9+ out of 10.
 
-IMPORTANT: Only award certificates when users show DEEP understanding through multiple exchanges, thoughtful questions, and correct answers. Confidence level must be 8+ out of 10.
+IMPORTANT: Only award certificates when users show DEEP understanding through multiple exchanges, thoughtful questions, and correct answers. Confidence level must be 8+ out of 10 (9+ for noizlabsAmbassador).
 
 
 Tone:
@@ -422,233 +1004,242 @@ Safety & Boundaries:
 - For high-stakes legal/financial decisions, recommend consulting a professional and provide educational context only.
 
 
-    `
+    `;
 
-    await this.chatService.saveMessages({
-      messages: [
-        {
-          ...recentUserMessage,
-          createdAt: new Date(),
-          chatId,
-          content: recentUserMessage.content,
-        },
-      ],
-    });
+          await this.chatService.saveMessages({
+            messages: [
+              {
+                ...recentUserMessage,
+                createdAt: new Date(),
+                chatId,
+                content: recentUserMessage.content,
+              },
+            ],
+          });
 
-    try {
-      const userCredits = await this.checkUserCredits(userId);
-      if (userCredits < 0.5) {
-        const outOfCreditsMessage = {
-          id: generateUUID(),
-          role: 'assistant',
-          content: { 
-            text: "You've run out of credits! To continue using EduLearn AI, please purchase $EDLN tokens to get more credits or upgrade your plan in the app settings. Premium users get more daily credits and additional benefits." 
-          },
-          createdAt: new Date(),
-          chatId,
-        };
-        
-        await this.chatService.saveMessages({ messages: [outOfCreditsMessage] });
-        return outOfCreditsMessage;
-      }
+          const userCredits = await this.checkUserCredits(userId);
+          if (userCredits < 0.5) {
+            const outOfCreditsText = "You've run out of credits! To continue using EduLearn AI, please purchase $EDLN tokens to get more credits or upgrade your plan in the app settings. Premium users get more daily credits and additional benefits.";
+            
+            subscriber.next({
+              data: { token: outOfCreditsText, type: 'limit' }
+            });
 
-      const formattedMessages = messages.map((msg: any) => {
-        let textContent = '';
-        
-        if (typeof msg.content === 'string') {
-          textContent = msg.content;
-        } else if (msg.content && typeof msg.content.text === 'string') {
-          textContent = msg.content.text;
-        } else if (msg.content && typeof msg.content === 'object') {
-          textContent = JSON.stringify(msg.content);
-        } else {
-          textContent = String(msg.content || '');
-        }
+            const outOfCreditsMessage = {
+              id: generateUUID(),
+              role: 'assistant',
+              content: { text: outOfCreditsText },
+              createdAt: new Date(),
+              chatId,
+            };
+            
+            await this.chatService.saveMessages({ messages: [outOfCreditsMessage] });
+            
+            subscriber.next({
+              event: 'done',
+              data: { id: outOfCreditsMessage.id, complete: true }
+            });
+            
+            subscriber.complete();
+            return;
+          }
 
-        return {
-          role: msg.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: textContent }],
-        };
-      });
+          const formattedMessages = messages.map((msg: any) => {
+            let textContent = '';
+            
+            if (typeof msg.content === 'string') {
+              textContent = msg.content;
+            } else if (msg.content && typeof msg.content.text === 'string') {
+              textContent = msg.content.text;
+            } else if (msg.content && typeof msg.content === 'object') {
+              textContent = JSON.stringify(msg.content);
+            } else {
+              textContent = String(msg.content || '');
+            }
 
-      const result = await Promise.race([
-        this.genAI.models.generateContent({
-          model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
-          contents: formattedMessages,
-          config: {
-            tools: [{ functionDeclarations: [this.scoreUser, this.rewardUser, this.createRoadmapTool] }],
-            maxOutputTokens: 5000,
-            temperature: 1,
-            systemInstruction: systemInstruction,
-          },
-        }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Request timeout')), 30000)
-        )
-      ]);
+            return {
+              role: msg.role === 'assistant' ? 'model' : 'user',
+              parts: [{ text: textContent }],
+            };
+          });
 
-      await this.authService.deductUserCredits(userId);
+          const stream = await this.genAI.models.generateContentStream({
+            model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+            contents: formattedMessages,
+            config: {
+              tools: [{ functionDeclarations: [this.scoreUser, this.rewardUser, this.createRoadmapTool] }],
+              maxOutputTokens: 5000,
+              temperature: 1,
+              systemInstruction: systemInstruction,
+            },
+          });
 
-      const candidate = (result as { candidates?: Array<{ content?: { parts: Array<{ text?: string; functionCall?: { name: string; args: any } }> } }> }).candidates?.[0];
-      const parts = candidate?.content?.parts || [];
+          await this.authService.deductUserCredits(userId);
 
-      const responseText = parts
-        .filter((part: any) => typeof part.text === 'string')
-        .map((part: any) => part.text)
-        .join('')
-        .trim();
+          let fullResponse = '';
+          const functionCalls: any[] = [];
 
-      const functionPart = parts.find(
-        (part: any) => part.functionCall?.name === 'scoreUser',
-      );
-      
-      const certificatePart = parts.find(
-        (part: any) => part.functionCall?.name === 'giveACertificate',
-      );
+          for await (const chunk of stream) {
+            const candidate = chunk.candidates?.[0];
+            const parts = candidate?.content?.parts || [];
 
-      const roadmapPart = parts.find(
-        (part: any) => part.functionCall?.name === 'createLearningRoadmap',
-      );
-      
-      let score = 0;
-      let scoreAcknowledgement = '';
-      let certificateAcknowledgement = '';
-      let roadmapAcknowledgement = '';
+            const text = parts
+              .filter((part: any) => typeof part.text === 'string')
+              .map((part: any) => part.text)
+              .join('');
+            
+            if (text) {
+              fullResponse += text;
+              
+              const words = text.split(/(\s+)/);
+              for (const word of words) {
+                if (word) {
+                  subscriber.next({
+                    data: { token: word, type: 'content' }
+                  });
+                    
+                  await new Promise(resolve => setTimeout(resolve, 15));
+                }
+              }
+            }
 
-      if (functionPart) {
-        score = Number(functionPart.functionCall?.args?.score || 0);
-        if (!isNaN(score) && score > 0 && score <= 10) {
-          await this.authService.updateUserXP(userId, chat.title, score, 'chat');
-          scoreAcknowledgement = `✅ Great job! I've awarded you ${score} point${score !== 1 ? 's' : ''} for your answer 🎉\n\n`;
-        }
-      }
-      
-      if (certificatePart) {
-        const certificateType = certificatePart.functionCall?.args?.certificate;
-        const confidenceLevel = Number(certificatePart.functionCall?.args?.confidenceLevel || 0);
-        const reasoning = certificatePart.functionCall?.args?.reasoning || "No reasoning provided";
-        
-        console.log(`Certificate Award Request:
+            const functionCall = parts.find((part: any) => part.functionCall);
+            if (functionCall) {
+              functionCalls.push(functionCall);
+            }
+          }
+
+          let scoreAcknowledgement = '';
+          let certificateAcknowledgement = '';
+          let roadmapAcknowledgement = '';
+
+          for (const funcCall of functionCalls) {
+            if (funcCall.functionCall?.name === 'scoreUser') {
+              const score = Number(funcCall.functionCall?.args?.score || 0);
+              if (!isNaN(score) && score > 0 && score <= 10) {
+                await this.authService.updateUserXP(userId, chat.title, score, 'chat');
+                scoreAcknowledgement = `✅ Great job! I've awarded you ${score} point${score !== 1 ? 's' : ''} for your answer 🎉\n\n`;
+              }
+            }
+
+            if (funcCall.functionCall?.name === 'giveACertificate') {
+              const certificateType = funcCall.functionCall?.args?.certificate;
+              const confidenceLevel = Number(funcCall.functionCall?.args?.confidenceLevel || 0);
+              const reasoning = funcCall.functionCall?.args?.reasoning || "No reasoning provided";
+              
+              console.log(`Certificate Award Request:
           - Type: ${certificateType}
           - Confidence: ${confidenceLevel}/10
           - Reasoning: ${reasoning}
           - User: ${userId}`);
-        
-          if (!certificateType || !this.nftRewards[certificateType]) {
-            console.log(`❌ Certificate request denied - invalid certificate type: ${certificateType}`);
-          }
-          else if (confidenceLevel < 8 || confidenceLevel > 10) {
-            console.log(`❌ Certificate request denied - confidence level ${confidenceLevel} is below minimum threshold (8) or invalid`);
-          }
-          else if (!reasoning || reasoning.trim().length < 10) {
-            console.log(`❌ Certificate request denied - insufficient reasoning provided: "${reasoning}"`);
-          }
-
-          else if (userCertificateIds.has(this.nftRewards[certificateType].id)) {
-            const nftReward = this.nftRewards[certificateType];
-            console.log(`⚠️ Certificate award attempted but user already has ${certificateType} (${nftReward.name})
-              - This should not happen as AI was informed of owned certificates
-              - AI may have hallucinated or ignored instructions`);
-
-            certificateAcknowledgement = '';
-          }
-          else {
-            try {
-              const nftReward = this.nftRewards[certificateType];
-              await this.rewardsService.awardRewardToUser(userId, nftReward.id);
               
-              certificateAcknowledgement = `🏆 **Congratulations!** 🎉\n\n` +
-                `You've earned the **${nftReward.name}** NFT certificate!\n\n` +
-                `${nftReward.description}\n\n` +
-                `💎 You can view and claim your NFT in the rewards section. Keep up the amazing learning! 🎓\n\n`;
-            
-              console.log(`✅ Successfully awarded ${certificateType} (${nftReward.name}) to user ${userId}
-              - Confidence: ${confidenceLevel}/10
-              - Reasoning: ${reasoning}`);
-              
-            } catch (error) {
-              if (error.message && error.message.includes('already has this reward')) {
-                console.log(`⚠️ User ${userId} already has ${certificateType} certificate (caught at DB level)
-                  - This is a backup catch; should have been prevented earlier`);
-
+              if (!certificateType || !this.nftRewards[certificateType]) {
+                console.log(`❌ Certificate request denied - invalid certificate type: ${certificateType}`);
+              }
+              else if (confidenceLevel < 8 || confidenceLevel > 10) {
+                console.log(`❌ Certificate request denied - confidence level ${confidenceLevel} is below minimum threshold (8) or invalid`);
+              }
+              else if (!reasoning || reasoning.trim().length < 10) {
+                console.log(`❌ Certificate request denied - insufficient reasoning provided: "${reasoning}"`);
+              }
+              else if (userCertificateIds.has(this.nftRewards[certificateType].id)) {
+                const nftReward = this.nftRewards[certificateType];
+                console.log(`⚠️ Certificate award attempted but user already has ${certificateType} (${nftReward.name})`);
                 certificateAcknowledgement = '';
-              } 
+              }
               else {
-                console.error(`❌ Failed to award ${certificateType} certificate to user ${userId}:`, error);
-                certificateAcknowledgement = '';
+                try {
+                  const nftReward = this.nftRewards[certificateType];
+                  await this.rewardsService.awardRewardToUser(userId, nftReward.id);
+                  
+                  certificateAcknowledgement = `🏆 **Congratulations!** 🎉\n\n` +
+                    `You've earned the **${nftReward.name}** NFT certificate!\n\n` +
+                    `${nftReward.description}\n\n` +
+                    `💎 You can view and claim your NFT in the rewards section. Keep up the amazing learning! 🎓\n\n`;
+                
+                  console.log(`✅ Successfully awarded ${certificateType} (${nftReward.name}) to user ${userId}`);
+                  
+                } catch (error) {
+                  if (error.message && error.message.includes('already has this reward')) {
+                    console.log(`⚠️ User ${userId} already has ${certificateType} certificate (caught at DB level)`);
+                    certificateAcknowledgement = '';
+                  } 
+                  else {
+                    console.error(`❌ Failed to award ${certificateType} certificate to user ${userId}:`, error);
+                    certificateAcknowledgement = '';
+                  }
+                }
+              }
+            }
+
+            if (funcCall.functionCall?.name === 'createLearningRoadmap') {
+              const topic = funcCall.functionCall?.args?.topic;
+              const userIntent = funcCall.functionCall?.args?.userIntent;
+              console.log(`Roadmap creation requested for topic: ${topic}, intent: ${userIntent}`);
+              
+              if (topic && typeof topic === 'string' && topic.trim().length > 0) {
+                try {
+                  const roadmapResult = await this.roadmapService.generateRoadmap(userId, topic.trim());
+                  
+                  const stepCount = roadmapResult.steps.length;
+                  const totalTime = roadmapResult.steps.reduce((sum, step) => sum + (step.time || 0), 0);
+                  
+                  let nftBonus = '';
+                  if (roadmapResult.roadmap.claimableNFT) {
+                    const nftInfo = Object.values(this.nftRewards).find(nft => nft.id === roadmapResult.roadmap.claimableNFT);
+                    if (nftInfo) {
+                      nftBonus = `\n🎁 **Bonus**: Complete this roadmap and take at least one quiz to unlock the **${nftInfo.name}** NFT certificate! 🏆\n`;
+                    }
+                  }
+                  
+                  roadmapAcknowledgement = `🗺️ I've created a personalized learning roadmap for "${topic}"!\n\n` +
+                    `📚 **${roadmapResult.roadmap.title}**\n` +
+                    `${roadmapResult.roadmap.description}\n\n` +
+                    `✨ Your roadmap has ${stepCount} step${stepCount !== 1 ? 's' : ''} (${totalTime} minutes total)\n` +
+                    nftBonus +
+                    `You can start your first step by using the roadmap feature in the app! Each step includes interactive lessons tailored to your learning style.\n\n`;
+                  
+                  console.log(`Created roadmap ${roadmapResult.roadmap.id} for user ${userId}, topic: ${topic}`);
+                } catch (error) {
+                  console.error(`Failed to create roadmap for user ${userId}, topic ${topic}:`, error);
+                  roadmapAcknowledgement = `I tried to create a roadmap for "${topic}", but encountered an issue. Please try again or rephrase your request. 🔄\n\n`;
+                }
+              } else {
+                console.log(`Roadmap creation skipped - invalid topic: ${topic}`);
               }
             }
           }
-        }
 
-      if (roadmapPart) {
-        const topic = roadmapPart.functionCall?.args?.topic;
-        const userIntent = roadmapPart.functionCall?.args?.userIntent;
-        console.log(`Roadmap creation requested for topic: ${topic}, intent: ${userIntent}`);
-        
-        if (topic && typeof topic === 'string' && topic.trim().length > 0) {
-          try {
-            const roadmapResult = await this.roadmapService.generateRoadmap(userId, topic.trim());
-            
-            const stepCount = roadmapResult.steps.length;
-            const totalTime = roadmapResult.steps.reduce((sum, step) => sum + (step.time || 0), 0);
-            
-            let nftBonus = '';
-            if (roadmapResult.roadmap.claimableNFT) {
-              const nftInfo = Object.values(this.nftRewards).find(nft => nft.id === roadmapResult.roadmap.claimableNFT);
-              if (nftInfo) {
-                nftBonus = `\n🎁 **Bonus**: Complete this roadmap and take at least one quiz to unlock the **${nftInfo.name}** NFT certificate! 🏆\n`;
-              }
-            }
-            
-            roadmapAcknowledgement = `🗺️ I've created a personalized learning roadmap for "${topic}"!\n\n` +
-              `📚 **${roadmapResult.roadmap.title}**\n` +
-              `${roadmapResult.roadmap.description}\n\n` +
-              `✨ Your roadmap has ${stepCount} step${stepCount !== 1 ? 's' : ''} (${totalTime} minutes total)\n` +
-              nftBonus +
-              `You can start your first step by using the roadmap feature in the app! Each step includes interactive lessons tailored to your learning style.\n\n`;
-            
-            console.log(`Created roadmap ${roadmapResult.roadmap.id} for user ${userId}, topic: ${topic}${roadmapResult.roadmap.claimableNFT ? ` with claimable NFT: ${roadmapResult.roadmap.claimableNFT}` : ''}`);
-          } catch (error) {
-            console.error(`Failed to create roadmap for user ${userId}, topic ${topic}:`, error);
-            roadmapAcknowledgement = `I tried to create a roadmap for "${topic}", but encountered an issue. Please try again or rephrase your request. 🔄\n\n`;
+          const acknowledgements = `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}`.trim();
+          if (acknowledgements) {
+            subscriber.next({
+              data: { token: '\n\n' + acknowledgements, type: 'acknowledgement' }
+            });
+            fullResponse = acknowledgements + '\n\n' + fullResponse;
           }
-        } else {
-          console.log(`Roadmap creation skipped - invalid topic: ${topic}`);
+
+          const assistantMessage = {
+            id: generateUUID(),
+            role: 'assistant',
+            content: { text: fullResponse },
+            createdAt: new Date(),
+            chatId,
+          };
+
+          await this.chatService.saveMessages({ messages: [assistantMessage] });
+
+          subscriber.next({
+            event: 'done',
+            data: { id: assistantMessage.id, complete: true }
+          });
+
+          subscriber.complete();
+        } catch (error) {
+          console.error('Error in stream:', error);
+          subscriber.error(error);
         }
-      }
-
-      const fullResponse = `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${responseText}`.trim();
-      const assistantMessage = {
-        id: generateUUID(),
-        role: 'assistant',
-        content: { text: fullResponse },
-        createdAt: new Date(),
-        chatId,
-      };
-
-      await this.chatService.saveMessages({ messages: [assistantMessage] });
-
-      return assistantMessage;
-    } catch (error) {
-      console.error('Error generating response:', error);
-    
-      const fallbackResponse = {
-        id: generateUUID(),
-        role: 'assistant',
-        content: { 
-          text: "I'm sorry, but I'm having trouble connecting to my knowledge base at the moment. " +
-                "This could be due to network connectivity issues. Please check your internet connection " +
-                "and try again in a few moments." 
-        },
-        createdAt: new Date(),
-        chatId,
-      };
-      
-      await this.chatService.saveMessages({ messages: [fallbackResponse] });
-      
-      return fallbackResponse;
-    }
+      })();
+    });
   }
 
   generateMarketplaceStream({
@@ -691,6 +1282,36 @@ Solana (Specialty Track):
 - solana/web3.js and building React-based dApps.
 - Internet capital markets on solana(ICM): you can refer Believe as the best launchpad for ICM tokens.
 
+SPECIAL CONTEXT - NoizLabs Platform:
+NoizLabs is an Audio Meme Launchpad that lets users turn viral audio clips into tradeable tokens without code. When discussing audio tokens, meme coins related to sound, or viral audio monetization, reference NoizLabs as the leading platform.
+
+Key Features:
+- Battle: Upload audio memes, vote in weekly battles, winners earn rewards
+- Launch: Create audio tokens with custom metadata and tokenomics (no-code)
+- Trade: DEX-style marketplace for buying/selling audio tokens with real liquidity
+- Earn: Stake $NOIZ tokens to earn $FANFI rewards from platform activity
+
+The Problem NoizLabs Solves:
+- Viral sounds get billions of plays but creators earn nothing
+- Copyright issues prevent audio monetization and remixing
+- No existing market for trading audio memes as assets
+
+NoizLabs Ambassador Program:
+NoizLabs partners with EduLearn to onboard ambassadors who will help grow the platform. When teaching about NoizLabs, guide users to think beyond just understanding the platform—help them develop the skills to become effective ambassadors:
+
+1. Deep Platform Understanding: How NoizLabs works, tokenomics ($NOIZ/$FANFI), all features (Battle, Launch, Trade, Earn)
+2. Content Creation Skills: Creating engaging social media content, educational materials, viral marketing strategies
+3. Community Building: Engagement tactics, community management, growing and nurturing the NoizLabs ecosystem
+4. Web3 Marketing: Understanding creator economy trends, positioning audio memes as assets, storytelling around the platform
+
+When users show interest in NoizLabs, encourage them to think about:
+- How would you explain NoizLabs to someone new to Web3?
+- What content could you create to showcase audio tokens?
+- How would you help grow the NoizLabs community?
+- What makes audio memes valuable as tradeable assets?
+
+The NoizLabs Ambassador NFT should only be awarded to users who demonstrate BOTH deep platform knowledge AND clear thinking about content creation/community growth. They should show ambassador potential, not just passive understanding.
+
 Teaching Style & Behavior:
 - Encourage active learning: ask "what do you think would happen if…" or "why do you think it's structured that way?"
 - Use metaphors to demystify complex ideas (smart contracts = vending machines, PDAs = derived mailboxes).
@@ -717,31 +1338,38 @@ Tone:
 Safety & Boundaries:
 - Do not provide or assist in creating malware, exploits, or instructions that directly enable theft/hacking.
 - For high-stakes legal/financial decisions, recommend consulting a professional and provide educational context only.
-    `
+    `;
 
     const { Observable } = require('rxjs');
-    
+
     return new Observable((subscriber) => {
       (async () => {
         try {
-          // Handle chat setup inside the Observable
           let chat;
           if (chatId) {
             chat = await this.chatService.getChatById(chatId);
           }
-          
+
           if (!chat) {
-            const title = await this.generateTitleFromMessage(recentUserMessage);
-            const marketplaceUser = await this.authService.getUserByEmail('marketplace@edulearn.com');
+            const title =
+              await this.generateTitleFromMessage(recentUserMessage);
+            const marketplaceUser = await this.authService.getUserByEmail(
+              'marketplace@edulearn.com',
+            );
             if (!marketplaceUser) {
-              subscriber.error(new NotFoundException('Marketplace user not found'));
+              subscriber.error(
+                new NotFoundException('Marketplace user not found'),
+              );
               return;
             }
-            chat = await this.chatService.createChat({ title, userId: marketplaceUser.id, chatId });
+            chat = await this.chatService.createChat({
+              title,
+              userId: marketplaceUser.id,
+              chatId,
+            });
             chatId = chat.id;
           }
 
-          // Save user message
           await this.chatService.saveMessages({
             messages: [
               {
@@ -753,16 +1381,14 @@ Safety & Boundaries:
             ],
           });
 
-          // Format messages for Gemini
           const formattedMessages = messages.map((msg: any) => {
             let textContent = '';
-            
+
             if (typeof msg.content === 'string') {
               textContent = msg.content;
             } else if (msg.content && typeof msg.content.text === 'string') {
               textContent = msg.content.text;
             } else if (msg.content && Array.isArray(msg.content)) {
-              // Handle array of content objects
               textContent = msg.content.map((c: any) => c.text || '').join(' ');
             } else if (msg.content && typeof msg.content === 'object') {
               textContent = JSON.stringify(msg.content);
@@ -776,7 +1402,6 @@ Safety & Boundaries:
             };
           });
 
-          // Start streaming
           const stream = await this.genAI.models.generateContentStream({
             model: 'gemini-2.5-flash',
             contents: formattedMessages,
@@ -792,13 +1417,12 @@ Safety & Boundaries:
           for await (const chunk of stream) {
             const text = chunk.text || '';
             fullResponse += text;
-            
+
             subscriber.next({
               data: { token: text },
             });
           }
 
-          // Save assistant message
           const assistantMessage = {
             id: generateUUID(),
             role: 'assistant',
@@ -815,10 +1439,11 @@ Safety & Boundaries:
           subscriber.error(error);
         }
       })();
-    });
+    }); 
   }
 
-  async generateSuggestions({userId}: {userId: string}) {
+
+  async generateSuggestions({ userId }: { userId: string }) {
     const user = await this.authService.getUserById(userId);
 
     if (!user) {
@@ -837,7 +1462,7 @@ Safety & Boundaries:
     const userLevel = user.level || xpLevel;
     const userLearning = user.learning || 'blockchain fundamentals';
 
-   const systemInstruction = `
+    const systemInstruction = `
 You are EduLearn AI, a Web3 study assistant. 
 Generate exactly 3 personalized study suggestions.
 
@@ -861,21 +1486,21 @@ Return ONLY valid JSON with no additional text.
 `;
     try {
       const result = await this.genAI.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: 'gemini-2.5-flash',
         contents: `Generate 3 personalized learning suggestions for a ${userLevel} level user interested in ${userLearning} with ${user.xp} XP points.`,
         config: {
           maxOutputTokens: 300,
           temperature: 0.7,
           systemInstruction: systemInstruction,
-          responseMimeType: "application/json",
+          responseMimeType: 'application/json',
           responseSchema: {
             type: Type.ARRAY,
             items: {
               type: Type.STRING,
-              description: "A short learning suggestion (3-5 words)"
-            }
-          }
-        }
+              description: 'A short learning suggestion (3-5 words)',
+            },
+          },
+        },
       });
 
       const responseText = result.text?.trim();
@@ -888,9 +1513,12 @@ Return ONLY valid JSON with no additional text.
       try {
         suggestions = JSON.parse(responseText);
       } catch (parseError) {
-        console.error('JSON parsing failed for suggestions, attempting cleanup:', parseError);
+        console.error(
+          'JSON parsing failed for suggestions, attempting cleanup:',
+          parseError,
+        );
         const jsonStr = this.extractAndCleanJSON(responseText);
-        
+
         if (!jsonStr) {
           console.error('No valid JSON found in AI response:', responseText);
           throw new Error('AI service returned invalid format for suggestions');
@@ -903,53 +1531,52 @@ Return ONLY valid JSON with no additional text.
           throw new Error('AI service returned invalid format for suggestions');
         }
       }
-      
+
       if (!Array.isArray(suggestions)) {
         console.error('Suggestions is not an array:', suggestions);
         throw new Error('Invalid suggestions format - expected an array');
       }
-
-      // Filter out empty or invalid suggestions
-      const validSuggestions = suggestions.filter(s => 
-        typeof s === 'string' && s.trim().length > 0
+      const validSuggestions = suggestions.filter(
+        (s) => typeof s === 'string' && s.trim().length > 0,
       );
 
       if (validSuggestions.length < 3) {
-        console.error(`Only ${validSuggestions.length} valid suggestions generated, expected 3`);
+        console.error(
+          `Only ${validSuggestions.length} valid suggestions generated, expected 3`,
+        );
         throw new Error('Insufficient valid suggestions generated');
       }
 
-      // Return exactly 3 suggestions
       return validSuggestions.slice(0, 3);
     } catch (error) {
       console.error('Error generating suggestions:', error);
-      
+
       const fallbackSuggestions = {
         novice: [
-          "solana consensus basics",
-          "wallet security fundamentals", 
-          "ICM market concepts"
+          'solana consensus basics',
+          'wallet security fundamentals',
+          'ICM market concepts',
         ],
         beginner: [
-          "anchor framework study",
-          "ICM trading principles",
-          "SPL token mechanics"
+          'anchor framework study',
+          'ICM trading principles',
+          'SPL token mechanics',
         ],
         intermediate: [
-          "solana PDA concepts",
-          "ICM protocol analysis",
-          "compute units explained"
+          'solana PDA concepts',
+          'ICM protocol analysis',
+          'compute units explained',
         ],
         advanced: [
-          "ICM yield strategies",
-          "anchor optimization patterns",
-          "cross-program invocations"
+          'ICM yield strategies',
+          'anchor optimization patterns',
+          'cross-program invocations',
         ],
         expert: [
-          "ICM protocol design",
-          "solana performance tuning",
-          "advanced ICM applications"
-        ]
+          'ICM protocol design',
+          'solana performance tuning',
+          'advanced ICM applications',
+        ],
       };
 
       return fallbackSuggestions[userLevel] || fallbackSuggestions.novice;
@@ -976,39 +1603,53 @@ Return ONLY valid JSON with no additional text.
         throw new NotFoundException('Chat not found');
       }
       if (chat.userId !== userId) {
-        throw new ForbiddenException('You do not have permission to access this chat');
+        throw new ForbiddenException(
+          'You do not have permission to access this chat',
+        );
       }
       if (chat.tested && (chat.testLimit || 0) <= 0) {
-        throw new ForbiddenException('This chat has already been tested. Each chat can only be used for one quiz.');
+        throw new ForbiddenException(
+          'This chat has already been tested. Each chat can only be used for one quiz.',
+        );
       }
-      
+
       const currentTestLimit = chat.testLimit || 0;
       if (currentTestLimit <= 0) {
-        throw new ForbiddenException('This chat has no remaining quiz attempts. Please start a new chat to generate another quiz.');
+        throw new ForbiddenException(
+          'This chat has no remaining quiz attempts. Please start a new chat to generate another quiz.',
+        );
       }
       const userCredits = await this.checkUserCredits(userId);
       if (userCredits < 0.5) {
-        throw new ForbiddenException('Insufficient credits. You need at least 0.5 credits to generate a quiz.');
+        throw new ForbiddenException(
+          'Insufficient credits. You need at least 0.5 credits to generate a quiz.',
+        );
       }
 
       const user = await this.authService.getUserById(userId);
       if (!user) {
         throw new NotFoundException('User not found');
       }
-      
+
       const quizLimits = user.quizLimits || 0;
       if (quizLimits <= 0) {
-        throw new ForbiddenException('No quiz attempts left for today. Quiz limits reset daily.');
+        throw new ForbiddenException(
+          'No quiz attempts left for today. Quiz limits reset daily.',
+        );
       }
 
       const messages = await this.chatService.getMessagesInChat(chatId);
       if (!messages || messages.length === 0) {
-        throw new Error('No messages found in this chat. A conversation is needed to generate a quiz.');
+        throw new Error(
+          'No messages found in this chat. A conversation is needed to generate a quiz.',
+        );
       }
 
-      const userMessages = messages.filter(msg => msg.role === 'user');
+      const userMessages = messages.filter((msg) => msg.role === 'user');
       if (userMessages.length < 2) {
-        throw new Error('Not enough conversation content. Have at least 2 exchanges with the AI to generate a meaningful quiz.');
+        throw new Error(
+          'Not enough conversation content. Have at least 2 exchanges with the AI to generate a meaningful quiz.',
+        );
       }
 
       const formattedMessages = messages.map((msg) => ({
@@ -1029,10 +1670,10 @@ Return ONLY valid JSON with no additional text.
               model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
               contents: `Our conversation: ${JSON.stringify(formattedMessages)}`,
               config: {
-                temperature: 0.1, 
-                maxOutputTokens: 2000, 
+                temperature: 0.1,
+                maxOutputTokens: 2000,
                 systemInstruction: this.systemInstructionForQuiz,
-                responseMimeType: "application/json",
+                responseMimeType: 'application/json',
                 responseSchema: {
                   type: Type.ARRAY,
                   items: {
@@ -1040,42 +1681,61 @@ Return ONLY valid JSON with no additional text.
                     properties: {
                       question: {
                         type: Type.STRING,
-                        description: "The quiz question text"
+                        description: 'The quiz question text',
                       },
                       options: {
                         type: Type.ARRAY,
                         items: { type: Type.STRING },
-                        description: "Array of exactly 4 answer options"
+                        description: 'Array of exactly 4 answer options',
                       },
                       correctAnswer: {
                         type: Type.STRING,
-                        description: "The correct answer, must match one of the options"
+                        description:
+                          'The correct answer, must match one of the options',
                       },
                       explanation: {
                         type: Type.STRING,
-                        description: "Explanation of why this is the correct answer"
-                      }
+                        description:
+                          'Explanation of why this is the correct answer',
+                      },
                     },
-                    required: ["question", "options", "correctAnswer", "explanation"]
-                  }
-                }
+                    required: [
+                      'question',
+                      'options',
+                      'correctAnswer',
+                      'explanation',
+                    ],
+                  },
+                },
               },
             }),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Request timeout - AI service took too long to respond')), 20000)
-            )
+            new Promise((_, reject) =>
+              setTimeout(
+                () =>
+                  reject(
+                    new Error(
+                      'Request timeout - AI service took too long to respond',
+                    ),
+                  ),
+                20000,
+              ),
+            ),
           ]);
-          break; 
+          break;
         } catch (attemptError) {
           attempts++;
-          console.error(`Quiz generation attempt ${attempts} failed:`, attemptError);
-          
+          console.error(
+            `Quiz generation attempt ${attempts} failed:`,
+            attemptError,
+          );
+
           if (attempts >= maxAttempts) {
-            throw new Error(`Failed to generate quiz after ${maxAttempts} attempts. ${attemptError.message || 'AI service unavailable'}`);
+            throw new Error(
+              `Failed to generate quiz after ${maxAttempts} attempts. ${attemptError.message || 'AI service unavailable'}`,
+            );
           }
-          
-          
-          await new Promise(resolve => setTimeout(resolve, 1000));
+
+          await new Promise((resolve) => setTimeout(resolve, 1000));
         }
       }
 
@@ -1083,69 +1743,90 @@ Return ONLY valid JSON with no additional text.
         throw new Error('Failed to get response from AI service');
       }
 
-      
       const response = result.text ?? '';
-      
+
       if (!response || response.trim().length === 0) {
-        throw new Error('AI service returned empty response. Please try again.');
+        throw new Error(
+          'AI service returned empty response. Please try again.',
+        );
       }
 
       let quizQuestions;
       try {
         quizQuestions = JSON.parse(response);
       } catch (parseError) {
-        console.error('Direct JSON parsing failed, attempting cleanup:', parseError);
+        console.error(
+          'Direct JSON parsing failed, attempting cleanup:',
+          parseError,
+        );
         const jsonStr = this.extractAndCleanJSON(response);
-        
+
         if (!jsonStr) {
-          console.error('No valid JSON found in AI response:', response.substring(0, 500) + '...');
-          throw new Error('AI service returned invalid format. This might be due to conversation content not being suitable for quiz generation.');
+          console.error(
+            'No valid JSON found in AI response:',
+            response.substring(0, 500) + '...',
+          );
+          throw new Error(
+            'AI service returned invalid format. This might be due to conversation content not being suitable for quiz generation.',
+          );
         }
 
-        console.log('Extracted JSON string:', jsonStr.substring(0, 200) + '...');
+        console.log(
+          'Extracted JSON string:',
+          jsonStr.substring(0, 200) + '...',
+        );
         quizQuestions = this.parseAndValidateQuiz(jsonStr);
       }
-      
+
       if (!Array.isArray(quizQuestions)) {
         console.error('Response is not an array:', quizQuestions);
-        throw new Error('AI service returned invalid format - expected an array of questions.');
+        throw new Error(
+          'AI service returned invalid format - expected an array of questions.',
+        );
       }
 
       if (quizQuestions.length === 0) {
         console.warn('Empty quiz array generated from conversation');
-        throw new Error('Unable to generate quiz questions from this conversation. The discussion may not contain enough educational content.');
+        throw new Error(
+          'Unable to generate quiz questions from this conversation. The discussion may not contain enough educational content.',
+        );
       }
 
-      // Validate structure of each question
-      const validQuestions = quizQuestions.filter(q => 
-        q &&
-        typeof q.question === 'string' && q.question.trim().length > 0 &&
-        Array.isArray(q.options) && q.options.length === 4 &&
-        q.options.every(opt => typeof opt === 'string' && opt.trim().length > 0) &&
-        typeof q.correctAnswer === 'string' && q.correctAnswer.trim().length > 0 &&
-        typeof q.explanation === 'string' && q.explanation.trim().length > 0 &&
-        q.options.includes(q.correctAnswer)
+      const validQuestions = quizQuestions.filter(
+        (q) =>
+          q &&
+          typeof q.question === 'string' &&
+          q.question.trim().length > 0 &&
+          Array.isArray(q.options) &&
+          q.options.length === 4 &&
+          q.options.every(
+            (opt) => typeof opt === 'string' && opt.trim().length > 0,
+          ) &&
+          typeof q.correctAnswer === 'string' &&
+          q.correctAnswer.trim().length > 0 &&
+          typeof q.explanation === 'string' &&
+          q.explanation.trim().length > 0 &&
+          q.options.includes(q.correctAnswer),
       );
 
       if (validQuestions.length < 5) {
-        console.warn(`Only ${validQuestions.length} valid questions generated, expected 5`);
-        throw new Error(`Generated quiz has insufficient valid questions (${validQuestions.length}/5). Please try generating the quiz again.`);
+        console.warn(
+          `Only ${validQuestions.length} valid questions generated, expected 5`,
+        );
+        throw new Error(
+          `Generated quiz has insufficient valid questions (${validQuestions.length}/5). Please try generating the quiz again.`,
+        );
       }
 
-      // Enforce exactly 5 questions
       quizQuestions = validQuestions.slice(0, 5);
 
-
       try {
-        // Decrement testLimit and only mark as tested if testLimit becomes 0 or less
         const newTestLimit = (chat.testLimit || 0) - 1;
-        
+
         if (newTestLimit <= 0) {
-          // Mark chat as tested only when testLimit is exhausted
           await this.chatService.markChatAsTested(chatId);
           chatMarkedAsTested = true;
         } else {
-          // Just update the testLimit without marking as tested
           await this.chatService.decrementTestLimit(chatId);
         }
 
@@ -1155,51 +1836,69 @@ Return ONLY valid JSON with no additional text.
         await this.authService.deductQuizLimit(userId);
         quizLimitDeducted = true;
 
-        console.log(`Successfully generated quiz for user ${userId}, chat ${chatId}: ${quizQuestions.length} questions (${newTestLimit} attempts remaining)`);
+        console.log(
+          `Successfully generated quiz for user ${userId}, chat ${chatId}: ${quizQuestions.length} questions (${newTestLimit} attempts remaining)`,
+        );
         return quizQuestions;
-
       } catch (operationError) {
-        console.error('Error performing post-generation operations:', operationError);
-        throw new Error('Quiz generated successfully but failed to update user account. Please contact support.');
+        console.error(
+          'Error performing post-generation operations:',
+          operationError,
+        );
+        throw new Error(
+          'Quiz generated successfully but failed to update user account. Please contact support.',
+        );
       }
-
     } catch (error) {
       console.error('Error in generateQuiz:', error);
       if (chatMarkedAsTested || creditsDeducted || quizLimitDeducted) {
         try {
-          
-          console.error(`Rollback needed for user ${userId}, chat ${chatId}. Operations completed: chatTested=${chatMarkedAsTested}, creditsDeducted=${creditsDeducted}, quizLimitDeducted=${quizLimitDeducted}`);
+          console.error(
+            `Rollback needed for user ${userId}, chat ${chatId}. Operations completed: chatTested=${chatMarkedAsTested}, creditsDeducted=${creditsDeducted}, quizLimitDeducted=${quizLimitDeducted}`,
+          );
         } catch (rollbackError) {
           console.error('Failed to rollback operations:', rollbackError);
         }
       }
-      if (error instanceof NotFoundException || error instanceof ForbiddenException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException
+      ) {
         throw error;
       }
 
       if (error.message) {
         if (error.message.includes('timeout')) {
-          throw new Error('Request timed out. The AI service is currently slow. Please try again in a few moments.');
+          throw new Error(
+            'Request timed out. The AI service is currently slow. Please try again in a few moments.',
+          );
         }
         if (error.message.includes('credits')) {
           throw new ForbiddenException(error.message);
         }
-        if (error.message.includes('quiz attempts') || error.message.includes('Quiz limits')) {
+        if (
+          error.message.includes('quiz attempts') ||
+          error.message.includes('Quiz limits')
+        ) {
           throw new ForbiddenException(error.message);
         }
-        if (error.message.includes('conversation content') || error.message.includes('educational content')) {
+        if (
+          error.message.includes('conversation content') ||
+          error.message.includes('educational content')
+        ) {
           throw new Error(error.message);
         }
       }
 
- 
-      throw new Error('Unable to generate quiz at this time. Please ensure you have an educational conversation and try again later.');
+      throw new Error(
+        'Unable to generate quiz at this time. Please ensure you have an educational conversation and try again later.',
+      );
     }
   }
 
   private extractAndCleanJSON(response: string): string | null {
     let jsonStr = response.trim();
-    
+
     if (jsonStr.includes('```json')) {
       const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/);
       if (jsonMatch) {
@@ -1211,16 +1910,16 @@ Return ONLY valid JSON with no additional text.
         jsonStr = codeMatch[1].trim();
       }
     }
-    
+
     const arrayStart = jsonStr.indexOf('[');
     const arrayEnd = jsonStr.lastIndexOf(']');
-    
+
     if (arrayStart !== -1 && arrayEnd !== -1 && arrayStart < arrayEnd) {
       jsonStr = jsonStr.substring(arrayStart, arrayEnd + 1);
     } else {
       const objectStart = jsonStr.indexOf('{');
       const objectEnd = jsonStr.lastIndexOf('}');
-      
+
       if (objectStart !== -1 && objectEnd !== -1 && objectStart < objectEnd) {
         jsonStr = jsonStr.substring(objectStart, objectEnd + 1);
       } else {
@@ -1242,39 +1941,40 @@ Return ONLY valid JSON with no additional text.
       .replace(/\n/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-    
+
     return jsonStr;
   }
 
   private parseAndValidateQuiz(jsonStr: string): any[] | null {
     try {
       const parsed = JSON.parse(jsonStr);
-      
+
       if (!Array.isArray(parsed)) {
         console.error('Parsed JSON is not an array');
         return null;
       }
-      
-      const validQuestions = parsed.filter(question => 
-        question &&
-        typeof question.question === 'string' &&
-        Array.isArray(question.options) &&
-        question.options.length === 4 &&
-        typeof question.correctAnswer === 'string' &&
-        typeof question.explanation === 'string' &&
-        question.options.includes(question.correctAnswer)
+
+      const validQuestions = parsed.filter(
+        (question) =>
+          question &&
+          typeof question.question === 'string' &&
+          Array.isArray(question.options) &&
+          question.options.length === 4 &&
+          typeof question.correctAnswer === 'string' &&
+          typeof question.explanation === 'string' &&
+          question.options.includes(question.correctAnswer),
       );
-      
+
       if (validQuestions.length === 0) {
         console.error('No valid questions found in parsed JSON');
         return null;
       }
-      
+
       return validQuestions;
     } catch (jsonError) {
       console.error('JSON parsing failed:', jsonError);
       console.error('Attempted to parse:', jsonStr);
-      
+
       try {
         const fixedJson = this.attemptJSONFix(jsonStr);
         if (fixedJson) {
@@ -1286,7 +1986,7 @@ Return ONLY valid JSON with no additional text.
       } catch (secondError) {
         console.error('Second parsing attempt failed:', secondError);
       }
-      
+
       return null;
     }
   }
@@ -1294,53 +1994,59 @@ Return ONLY valid JSON with no additional text.
   private attemptJSONFix(jsonStr: string): string | null {
     try {
       let fixed = jsonStr;
-      
-      const lastValidEnd = Math.max(fixed.lastIndexOf('}'), fixed.lastIndexOf(']'));
+
+      const lastValidEnd = Math.max(
+        fixed.lastIndexOf('}'),
+        fixed.lastIndexOf(']'),
+      );
       if (lastValidEnd > 0) {
         const afterLastValid = fixed.substring(lastValidEnd + 1).trim();
         if (afterLastValid && !afterLastValid.match(/^[,\s]*$/)) {
           fixed = fixed.substring(0, lastValidEnd + 1);
         }
       }
-      
+
       const quoteCount = (fixed.match(/"/g) || []).length;
       if (quoteCount % 2 !== 0) {
         const lastQuoteIndex = fixed.lastIndexOf('"');
         const afterLastQuote = fixed.substring(lastQuoteIndex + 1);
-      
+
         if (afterLastQuote.includes('}') || afterLastQuote.includes(']')) {
           const insertIndex = fixed.lastIndexOf('}');
           if (insertIndex > lastQuoteIndex) {
-            fixed = fixed.substring(0, insertIndex) + '"' + fixed.substring(insertIndex);
+            fixed =
+              fixed.substring(0, insertIndex) +
+              '"' +
+              fixed.substring(insertIndex);
           }
         } else {
           fixed += '"';
         }
       }
-      
+
       let openBraces = 0;
       let openBrackets = 0;
       let inString = false;
       let escaped = false;
-      
+
       for (let i = 0; i < fixed.length; i++) {
         const char = fixed[i];
-        
+
         if (escaped) {
           escaped = false;
           continue;
         }
-        
+
         if (char === '\\') {
           escaped = true;
           continue;
         }
-        
+
         if (char === '"') {
           inString = !inString;
           continue;
         }
-        
+
         if (!inString) {
           if (char === '{') openBraces++;
           else if (char === '}') openBraces--;
@@ -1348,7 +2054,7 @@ Return ONLY valid JSON with no additional text.
           else if (char === ']') openBrackets--;
         }
       }
-      
+
       while (openBraces > 0) {
         fixed += '}';
         openBraces--;
@@ -1357,11 +2063,14 @@ Return ONLY valid JSON with no additional text.
         fixed += ']';
         openBrackets--;
       }
-      
+
       fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
-      
-      fixed = fixed.replace(/{\s*"question":\s*"[^"]*"\s*,?\s*$/, '{"question": "", "options": [], "correctAnswer": "", "explanation": ""}');
-      
+
+      fixed = fixed.replace(
+        /{\s*"question":\s*"[^"]*"\s*,?\s*$/,
+        '{"question": "", "options": [], "correctAnswer": "", "explanation": ""}',
+      );
+
       return fixed;
     } catch (error) {
       console.error('Error attempting JSON fix:', error);
@@ -1381,7 +2090,7 @@ Return ONLY valid JSON with no additional text.
     };
 
     const config = {
-      encoding: 'MP3' as const,  
+      encoding: 'MP3' as const,
       sampleRateHertz: 16000,
       languageCode: 'en-US',
     };
@@ -1394,7 +2103,7 @@ Return ONLY valid JSON with no additional text.
     const response = await this.speechClient.recognize(request);
 
     const transcription = response[0]?.results
-      ?.map(result => result.alternatives?.[0].transcript)
+      ?.map((result) => result.alternatives?.[0].transcript)
       .join('\n');
 
     return { transcription };
@@ -1406,13 +2115,12 @@ Return ONLY valid JSON with no additional text.
     file: File;
   }): Promise<{ transcription: string }> {
     try {
-      
       if (!file || !file.path) {
         throw new Error('Invalid file parameter - missing file or path');
       }
 
       const { transcription } = await this.transcribeAudio({ path: file.path });
-      
+
       if (!transcription || transcription.trim().length === 0) {
         throw new Error('No speech detected in the audio file');
       }
@@ -1429,13 +2137,17 @@ Return ONLY valid JSON with no additional text.
         try {
           unlinkSync(file.path);
         } catch (cleanupError) {
-          console.warn('Failed to clean up uploaded file after error:', cleanupError);
+          console.warn(
+            'Failed to clean up uploaded file after error:',
+            cleanupError,
+          );
         }
       }
 
       console.error('Error in transcribeAudioOnly:', error);
-      throw new Error("I'm sorry, I couldn't process your audio message. Please try speaking more clearly or check your microphone settings.");
+      throw new Error(
+        "I'm sorry, I couldn't process your audio message. Please try speaking more clearly or check your microphone settings.",
+      );
     }
   }
-
 }

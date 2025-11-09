@@ -12,6 +12,7 @@ import { CronTasksService } from 'src/cron-tasks/cron-tasks.service';
 import { ResendService } from 'src/resend/resend.service';
 import { supabaseAdmin } from '../../lib/supabase';
 import { RoadmapService } from 'src/roadmap/roadmap.service';
+import { update } from '@metaplex-foundation/mpl-core';
 
 @Injectable()
 export class AuthService {
@@ -114,7 +115,13 @@ export class AuthService {
 
       return createdUser;
     } catch (error) {
-      console.error('Failed to create user in database');
+      console.error('Failed to create user in database:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        detail: error.detail,
+        constraint: error.constraint
+      });
       throw error;
     }
   }
@@ -139,6 +146,7 @@ export class AuthService {
         streak: result[0]?.streak,
         referralCode: result[0]?.referralCode,
         lastLoggedIn: result[0]?.lastLoggedIn,
+        profilePictureURL: result[0]?.profilePictureURL,
       }
       return userObject as User || null;
     } catch (error) {
@@ -206,6 +214,18 @@ export class AuthService {
     }
   }
 
+  async updateUserProfilePicture(email: string, profilePictureURL: string) {
+    try {
+      return await db
+        .update(user)
+        .set({ profilePictureURL })
+        .where(eq(user.email, email));
+    } catch (error) {
+      console.error('Failed to update user profile picture');
+      throw error;
+    }
+  }
+
   async updateUserAddress(email: string, address: string) {
     try {
       return await db
@@ -268,12 +288,35 @@ export class AuthService {
     try {
       const users = await db.select().from(user).orderBy(desc(user.xp));
       return users.map((u) => ({
+        id: u.id,
         name: u.name,
         xp: u.xp,
         email: u.email,
+        level: u.level,
+        profilePictureURL: u.profilePictureURL,
       }));
     } catch (error) {
       console.error('Failed to get all users from database');
+      throw error;
+    }
+  }
+
+  async updateUserExpoPushToken(userId: string, expoPushToken: string) {
+    try {
+      const updatedUser = await db
+        .update(user)
+        .set({ expoPushToken })
+        .where(eq(user.id, userId))
+        .returning();
+      
+      if (!updatedUser || updatedUser.length === 0) {
+        throw new Error(`User not found with id: ${userId}`);
+      }
+
+      console.log(`✅ User expo push token updated successfully for user ${userId}: ${updatedUser[0]?.expoPushToken}`);
+      return updatedUser[0];
+    } catch (error) {
+      console.error('❌ Failed to update user expo push token:', error);
       throw error;
     }
   }
@@ -508,7 +551,9 @@ export class AuthService {
           level: user.level,
           xp: user.xp,
           address: user.address,
-          learning: user.learning
+          learning: user.learning,
+          profilePictureURL: user.profilePictureURL,
+          streak: user.streak
         })
         .from(user)
         .where(ilike(user.username, `%${usernameQuery}%`))

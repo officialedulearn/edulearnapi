@@ -6,6 +6,7 @@ import { TwitterService } from 'src/twitter/twitter.service';
 import db from '../../drizzle';
 import { desc, and, eq, lt } from 'drizzle-orm';
 import {  user } from '../../lib/db/schema';
+import { ExpoPushService } from 'src/common/services/expo-push.service';
 
 @Injectable()
 export class CronTasksService { 
@@ -15,9 +16,9 @@ export class CronTasksService {
         @Inject(forwardRef(() => AuthService))
         private authService: AuthService,
         private walletService: WalletService,
-        private twitterService: TwitterService
+        private twitterService: TwitterService,
+        private expoPushService: ExpoPushService
     ) {
-      this.scheduleOneTimeTask();
     }
 
     @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
@@ -26,6 +27,14 @@ export class CronTasksService {
       .from(user)
       .orderBy(desc(user.xp))
       .limit(3);
+
+      for (const user of topUsers) {
+        if(user.expoPushToken) {
+          await this.expoPushService.sendPushNotification(user.expoPushToken as string, "EduLearn Top Users 🏆", "You are in the top 3 users today, let's keep it up!", {
+            screen: "leaderboard"
+          });
+        }
+      }
 
       const postFormat = `EduLearn Top Users 🏆
 
@@ -79,9 +88,9 @@ Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
         
         
         const rewards = [
-          { sol: 0.05, edln: 50 },   
-          { sol: 0.03, edln: 30 },   
-          { sol: 0.02, edln: 20 }    
+          { sol: 50, edln: 0 },   
+          { sol: 30, edln: 0 },   
+          { sol: 20, edln: 0 }    
         ];
         
         for (let i = 0; i < topUsers.length; i++) {
@@ -95,7 +104,10 @@ Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
               sol: reward.sol,
               edln: reward.edln
             });
-            
+
+            if(currentUser.expoPushToken) {
+              await this.expoPushService.sendPushNotification(currentUser.expoPushToken as string, "Monthly Top User Rewards", "You have been awarded rewards for being in the top 3 users this month. Check the rewards tab on the web app to see your rewards.");
+            }
             this.logger.log(`Successfully awarded rewards to user ${currentUser.id}`);
           } catch (error) {
             this.logger.error(`Failed to award rewards to user ${currentUser.id}`, error);
@@ -140,26 +152,5 @@ Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
       }
     }
 
-    scheduleOneTimeTask() {
-      setTimeout(async () => {
-        this.logger.log('Running one-time task scheduled for 1 hour ago');
-        try {
-          const qualifiedUsers = await db.select().from(user).where(eq(user.referredBy, "LAUNCH"))
-
-          const earningPerUser = 150/qualifiedUsers.length;
-
-          for (const user of qualifiedUsers) {
-            await this.walletService.addEarnings(user.id, {
-              sol: earningPerUser,
-              edln: 0
-            });
-          }
-
-          this.logger.log('One-time task completed');
-        } catch (error) {
-          this.logger.error('Failed to execute one-time task', error);
-        }
-      }, 60 * 60 * 1000); 
-    }
     
 }

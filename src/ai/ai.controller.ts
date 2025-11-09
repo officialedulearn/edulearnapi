@@ -12,7 +12,10 @@ import {
     Request,
     Sse,
     MessageEvent,
-    Query
+    Query,
+    Param,
+    NotFoundException,
+    ForbiddenException
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { ApiTags, ApiOperation, ApiSecurity, ApiResponse, ApiConsumes, ApiBody } from '@nestjs/swagger';
@@ -388,5 +391,84 @@ export class AiController {
     ];
 
     return this.aiService.generateMarketplaceStream({ messages, chatId } as any);
+  }
+
+  @Post('message-stream/init')
+  @ApiOperation({ 
+    summary: 'Initialize streaming session',
+    description: 'Creates a streaming session and returns a stream ID that can be used to connect to the SSE endpoint. This two-step approach handles large message arrays better than direct SSE connections.'
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Returns stream ID',
+    schema: {
+      type: 'object',
+      properties: {
+        streamId: { type: 'string', description: 'Unique stream session ID' }
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async initializeStream(
+    @Request() req,
+    @Body() messageDto: GenerateMessagesDto,
+  ): Promise<{ streamId: string }> {
+    await verifyUserAuthorization(req.user, messageDto.userId, 'streaming AI response');
+    
+    const streamId = `stream-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    
+    if (!global['streamRequests']) {
+      global['streamRequests'] = {};
+    }
+    
+    global['streamRequests'][streamId] = {
+      ...messageDto,
+      createdAt: Date.now(),
+    };
+    
+    setTimeout(() => {
+      if (global['streamRequests'] && global['streamRequests'][streamId]) {
+        delete global['streamRequests'][streamId];
+      }
+    }, 5 * 60 * 1000);
+    
+    return { streamId };
+  }
+
+  @Sse('message-stream/:streamId')
+  @ApiOperation({ 
+    summary: 'Connect to streaming session (SSE)',
+    description: 'Server-Sent Events endpoint for real-time AI response streaming. Use the streamId from the initialization endpoint. Returns tokens as they are generated. Each event contains: { token: string, type: string }'
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'SSE stream of AI tokens. Events: "message" for tokens, "done" when complete.' 
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Stream session not found or expired' })
+  messageStream(
+    @Request() req,
+    @Param('streamId') streamId: string,
+  ): Observable<MessageEvent> {
+    const streamRequest = global['streamRequests']?.[streamId];
+    
+    if (!streamRequest) {
+      throw new NotFoundException('Stream session not found or expired. Please initialize a new stream.');
+    }
+    
+    if (!streamRequest.userId) {
+      throw new ForbiddenException('Invalid stream session');
+    }
+    
+    if (global['streamRequests']) {
+      delete global['streamRequests'][streamId];
+    }
+    
+    return this.aiService.generateResponseStream({
+      messages: streamRequest.messages,
+      chatId: streamRequest.chatId,
+      userId: streamRequest.userId,
+    });
   }
 }

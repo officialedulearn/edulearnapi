@@ -16,7 +16,8 @@ import { AuthService } from './auth.service';
 import { signUpDetails } from 'types/auth';
 import { ApiKeyGuard } from './guards/api-key.guard';
 import { FlexibleAuthGuard } from './guards/flexible-auth.guard';
-import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
+import { getAuthenticatedUserId, verifyUserAuthorization } from '../common/helpers/authorization.helper';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -43,7 +44,6 @@ export class AuthController {
   @Get('id/:id')
   @UseGuards(FlexibleAuthGuard)
   async getUserById(@Request() req, @Param('id') id: string) {
-    await verifyUserAuthorization(req.user, id, 'viewing user profile');
     const user = await this.authService.getUserById(id);
     if (!user) {
       throw new NotFoundException('User not found');
@@ -103,6 +103,17 @@ export class AuthController {
     }
   }
 
+  @Put('expo-push-token')
+  @UseGuards(JwtAuthGuard)
+  async updateExpoPushToken(
+    @Request() req,
+    @Body() body: { expoPushToken: string, userId: string }
+  ) {
+
+    await verifyUserAuthorization(req.user, body.userId, 'updating expo push token');
+    if (!body.expoPushToken) throw new BadRequestException('Expo push token is required');
+    return await this.authService.updateUserExpoPushToken(body.userId, body.expoPushToken);
+  }
   @Put('streak/:userId')
   @UseGuards(FlexibleAuthGuard)
   async updateStreak(
