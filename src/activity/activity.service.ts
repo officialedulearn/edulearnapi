@@ -110,8 +110,12 @@ export class ActivityService {
             ));
           
           if (existingReward.length === 0) {
-            console.log(`Checking if user ${submitQuizDto.userId} should receive NFT for roadmap ${roadmapData[0].id}`);
-            await this.roadmapService.checkAndAwardRoadmapNFT(roadmapData[0].id, submitQuizDto.userId);
+            if (correctCount > 8) {
+              console.log(`User ${submitQuizDto.userId} scored ${correctCount}/${totalQuestions}, checking if they should receive NFT for roadmap ${roadmapData[0].id}`);
+              await this.roadmapService.checkAndAwardRoadmapNFT(roadmapData[0].id, submitQuizDto.userId);
+            } else {
+              console.log(`User ${submitQuizDto.userId} scored ${correctCount}/${totalQuestions}, score must be > 8 to earn NFT`);
+            }
           } else {
             console.log(`User ${submitQuizDto.userId} already has NFT ${roadmapData[0].claimableNFT}, skipping check`);
           }

@@ -19,17 +19,36 @@ import type { File } from 'multer';
 export class AiService {
   private readonly genAI: GoogleGenAI;
   private readonly speechClient: SpeechClient;
-  private readonly systemInstructionForQuiz = `Based on the context of our conversation so far, generate EXACTLY 5 quiz questions to test understanding — but only if the discussion included web3 learning-based content. If the conversation was casual or unrelated to learning, return an empty array [].
+  private readonly systemInstructionForQuiz = `Based on the context of our conversation so far, generate EXACTLY 10 quiz questions to test understanding — but only if the discussion included web3 learning-based content. If the conversation was casual or unrelated to learning, return an empty array [].
 
 All questions should be medium difficulty (level 6 on a scale of 1 to 10), with 4 options and only one correct answer.
 
 CRITICAL REQUIREMENTS:
-- YOU MUST GENERATE EXACTLY 5 QUESTIONS - NOT 4, NOT 6, EXACTLY 5
-- Each question MUST have exactly 4 options
-- The correctAnswer MUST be one of the 4 options (exact match)
-- All fields are required and must be strings (except options which is an array)
+- YOU MUST GENERATE EXACTLY 10 QUESTIONS - NOT 5, NOT 9, EXACTLY 10
+- Each question MUST have exactly 4 options (no more, no less)
+- The correctAnswer MUST be one of the 4 options (exact match, character-for-character)
+- All fields are required and must be strings (except options which is an array of strings)
+- Questions must be diverse and cover different aspects of the conversation topic
+- Avoid duplicate or very similar questions
+- Each option should be distinct and plausible
 
-Return ONLY valid JSON, no markdown, no code blocks, no explanations.`;
+JSON FORMATTING RULES (CRITICAL):
+- Return ONLY a valid JSON array - no markdown, no code blocks, no extra text
+- Do NOT include newlines or line breaks within string values
+- Do NOT use unescaped quotes within strings
+- Keep all text on single lines within each string field
+- Use proper JSON escaping for special characters
+- Do NOT add trailing commas after the last element
+
+VALIDATION CHECKLIST (must pass all):
+✓ Array contains exactly 10 question objects
+✓ Each question has: question (string), options (array of 4 strings), correctAnswer (string), explanation (string)
+✓ correctAnswer exactly matches one of the 4 options
+✓ No empty strings or null values
+✓ Options are sufficiently different from each other
+✓ JSON is properly formatted and parseable
+
+Return ONLY valid JSON matching the schema.`;
 
   private readonly nftRewards = {
     web3Basics: {
@@ -1509,45 +1528,13 @@ Return ONLY valid JSON with no additional text.
         throw new Error('Empty response from AI');
       }
 
-      let suggestions;
-      try {
-        suggestions = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error(
-          'JSON parsing failed for suggestions, attempting cleanup:',
-          parseError,
-        );
-        const jsonStr = this.extractAndCleanJSON(responseText);
+      const suggestions = JSON.parse(responseText);
 
-        if (!jsonStr) {
-          console.error('No valid JSON found in AI response:', responseText);
-          throw new Error('AI service returned invalid format for suggestions');
-        }
-
-        try {
-          suggestions = JSON.parse(jsonStr);
-        } catch (secondError) {
-          console.error('Second parsing attempt failed:', secondError);
-          throw new Error('AI service returned invalid format for suggestions');
-        }
+      if (!Array.isArray(suggestions) || suggestions.length < 3) {
+        throw new Error('Invalid suggestions format - expected array with 3 suggestions');
       }
 
-      if (!Array.isArray(suggestions)) {
-        console.error('Suggestions is not an array:', suggestions);
-        throw new Error('Invalid suggestions format - expected an array');
-      }
-      const validSuggestions = suggestions.filter(
-        (s) => typeof s === 'string' && s.trim().length > 0,
-      );
-
-      if (validSuggestions.length < 3) {
-        console.error(
-          `Only ${validSuggestions.length} valid suggestions generated, expected 3`,
-        );
-        throw new Error('Insufficient valid suggestions generated');
-      }
-
-      return validSuggestions.slice(0, 3);
+      return suggestions.slice(0, 3);
     } catch (error) {
       console.error('Error generating suggestions:', error);
 
@@ -1671,7 +1658,7 @@ Return ONLY valid JSON with no additional text.
               contents: `Our conversation: ${JSON.stringify(formattedMessages)}`,
               config: {
                 temperature: 0.1,
-                maxOutputTokens: 2000,
+                maxOutputTokens: 5000,
                 systemInstruction: this.systemInstructionForQuiz,
                 responseMimeType: 'application/json',
                 responseSchema: {
@@ -1751,83 +1738,75 @@ Return ONLY valid JSON with no additional text.
         );
       }
 
+      let cleanedResponse = this.cleanQuizJSON(response);
+      
+      console.log('Raw quiz response length:', response.length);
+      console.log('Raw quiz response (first 500 chars):', response.substring(0, 500));
+      console.log('Cleaned quiz JSON (first 500 chars):', cleanedResponse.substring(0, 500));
+      console.log('Cleaned quiz JSON (last 100 chars):', cleanedResponse.substring(cleanedResponse.length - 100));
+
+   
+      if (!cleanedResponse.endsWith(']')) {
+        console.warn('Quiz JSON appears to be truncated - does not end with ]');
+        throw new Error(
+          'Quiz generation was truncated. Retrying with adjusted parameters...',
+        );
+      }
+
       let quizQuestions;
       try {
-        quizQuestions = JSON.parse(response);
+        quizQuestions = JSON.parse(cleanedResponse);
       } catch (parseError) {
-        console.error(
-          'Direct JSON parsing failed, attempting cleanup:',
-          parseError,
-        );
-        const jsonStr = this.extractAndCleanJSON(response);
-
-        if (!jsonStr) {
-          console.error(
-            'No valid JSON found in AI response:',
-            response.substring(0, 500) + '...',
-          );
-          throw new Error(
-            'AI service returned invalid format. This might be due to conversation content not being suitable for quiz generation.',
-          );
-        }
-
-        console.log(
-          'Extracted JSON string:',
-          jsonStr.substring(0, 200) + '...',
-        );
-        quizQuestions = this.parseAndValidateQuiz(jsonStr);
-      }
-
-      if (!Array.isArray(quizQuestions)) {
-        console.error('Response is not an array:', quizQuestions);
+        console.error('Failed to parse quiz JSON:', parseError);
+        console.error('Cleaned JSON that failed (first 1000 chars):', cleanedResponse.substring(0, 1000));
+        console.error('Cleaned JSON that failed (last 500 chars):', cleanedResponse.substring(Math.max(0, cleanedResponse.length - 500)));
         throw new Error(
-          'AI service returned invalid format - expected an array of questions.',
+          `Failed to parse quiz questions from AI response. The AI returned malformed JSON. Please try again.`,
         );
       }
 
-      if (quizQuestions.length === 0) {
-        console.warn('Empty quiz array generated from conversation');
+      if (!Array.isArray(quizQuestions) || quizQuestions.length === 0) {
         throw new Error(
           'Unable to generate quiz questions from this conversation. The discussion may not contain enough educational content.',
         );
       }
 
-      const validQuestions = quizQuestions.filter(
-        (q) =>
-          q &&
-          typeof q.question === 'string' &&
-          q.question.trim().length > 0 &&
-          Array.isArray(q.options) &&
-          q.options.length === 4 &&
-          q.options.every(
-            (opt) => typeof opt === 'string' && opt.trim().length > 0,
-          ) &&
-          typeof q.correctAnswer === 'string' &&
-          q.correctAnswer.trim().length > 0 &&
-          typeof q.explanation === 'string' &&
-          q.explanation.trim().length > 0 &&
-          q.options.includes(q.correctAnswer),
-      );
-
-      if (validQuestions.length < 5) {
+      if (quizQuestions.length !== 10) {
         console.warn(
-          `Only ${validQuestions.length} valid questions generated, expected 5`,
+          `Quiz generation produced ${quizQuestions.length} questions instead of 10. Retrying...`,
         );
         throw new Error(
-          `Generated quiz has insufficient valid questions (${validQuestions.length}/5). Please try generating the quiz again.`,
+          `Generated quiz has incorrect number of questions (${quizQuestions.length}/10). Expected exactly 10 questions.`,
         );
       }
-
-      quizQuestions = validQuestions.slice(0, 5);
+      for (let i = 0; i < quizQuestions.length; i++) {
+        const q = quizQuestions[i];
+        if (
+          !q.question ||
+          !Array.isArray(q.options) ||
+          q.options.length !== 4 ||
+          !q.correctAnswer ||
+          !q.explanation
+        ) {
+          throw new Error(
+            `Question ${i + 1} has invalid structure. All questions must have: question, 4 options, correctAnswer, and explanation.`,
+          );
+        }
+        if (!q.options.includes(q.correctAnswer)) {
+          throw new Error(
+            `Question ${i + 1}: correctAnswer "${q.correctAnswer}" does not match any of the provided options.`,
+          );
+        }
+      }
 
       try {
         const newTestLimit = (chat.testLimit || 0) - 1;
 
+        await this.chatService.decrementTestLimit(chatId);
+
         if (newTestLimit <= 0) {
           await this.chatService.markChatAsTested(chatId);
           chatMarkedAsTested = true;
-        } else {
-          await this.chatService.decrementTestLimit(chatId);
         }
 
         await this.authService.deductUserCredits(userId);
@@ -1896,190 +1875,53 @@ Return ONLY valid JSON with no additional text.
     }
   }
 
-  private extractAndCleanJSON(response: string): string | null {
-    let jsonStr = response.trim();
-
-    if (jsonStr.includes('```json')) {
-      const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        jsonStr = jsonMatch[1].trim();
-      }
-    } else if (jsonStr.includes('```')) {
-      const codeMatch = jsonStr.match(/```\s*([\s\S]*?)\s*```/);
-      if (codeMatch) {
-        jsonStr = codeMatch[1].trim();
-      }
-    }
-
-    const arrayStart = jsonStr.indexOf('[');
-    const arrayEnd = jsonStr.lastIndexOf(']');
-
-    if (arrayStart !== -1 && arrayEnd !== -1 && arrayStart < arrayEnd) {
-      jsonStr = jsonStr.substring(arrayStart, arrayEnd + 1);
-    } else {
-      const objectStart = jsonStr.indexOf('{');
-      const objectEnd = jsonStr.lastIndexOf('}');
-
-      if (objectStart !== -1 && objectEnd !== -1 && objectStart < objectEnd) {
-        jsonStr = jsonStr.substring(objectStart, objectEnd + 1);
-      } else {
-        const jsonPattern = /[\[\{][\s\S]*[\]\}]/;
-        const match = jsonStr.match(jsonPattern);
-        if (match) {
-          jsonStr = match[0];
-        } else {
-          return null;
-        }
-      }
-    }
-
-    jsonStr = jsonStr
-      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
-      .replace(/\r\n/g, '\n')
-      .replace(/\r/g, '\n')
-      .replace(/\n\s*\n/g, '\n')
-      .replace(/\n/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    return jsonStr;
-  }
-
-  private parseAndValidateQuiz(jsonStr: string): any[] | null {
-    try {
-      const parsed = JSON.parse(jsonStr);
-
-      if (!Array.isArray(parsed)) {
-        console.error('Parsed JSON is not an array');
-        return null;
-      }
-
-      const validQuestions = parsed.filter(
-        (question) =>
-          question &&
-          typeof question.question === 'string' &&
-          Array.isArray(question.options) &&
-          question.options.length === 4 &&
-          typeof question.correctAnswer === 'string' &&
-          typeof question.explanation === 'string' &&
-          question.options.includes(question.correctAnswer),
-      );
-
-      if (validQuestions.length === 0) {
-        console.error('No valid questions found in parsed JSON');
-        return null;
-      }
-
-      return validQuestions;
-    } catch (jsonError) {
-      console.error('JSON parsing failed:', jsonError);
-      console.error('Attempted to parse:', jsonStr);
-
-      try {
-        const fixedJson = this.attemptJSONFix(jsonStr);
-        if (fixedJson) {
-          const parsed = JSON.parse(fixedJson);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
-        }
-      } catch (secondError) {
-        console.error('Second parsing attempt failed:', secondError);
-      }
-
-      return null;
-    }
-  }
-
-  private attemptJSONFix(jsonStr: string): string | null {
-    try {
-      let fixed = jsonStr;
-
-      const lastValidEnd = Math.max(
-        fixed.lastIndexOf('}'),
-        fixed.lastIndexOf(']'),
-      );
-      if (lastValidEnd > 0) {
-        const afterLastValid = fixed.substring(lastValidEnd + 1).trim();
-        if (afterLastValid && !afterLastValid.match(/^[,\s]*$/)) {
-          fixed = fixed.substring(0, lastValidEnd + 1);
-        }
-      }
-
-      const quoteCount = (fixed.match(/"/g) || []).length;
-      if (quoteCount % 2 !== 0) {
-        const lastQuoteIndex = fixed.lastIndexOf('"');
-        const afterLastQuote = fixed.substring(lastQuoteIndex + 1);
-
-        if (afterLastQuote.includes('}') || afterLastQuote.includes(']')) {
-          const insertIndex = fixed.lastIndexOf('}');
-          if (insertIndex > lastQuoteIndex) {
-            fixed =
-              fixed.substring(0, insertIndex) +
-              '"' +
-              fixed.substring(insertIndex);
-          }
-        } else {
-          fixed += '"';
-        }
-      }
-
-      let openBraces = 0;
-      let openBrackets = 0;
-      let inString = false;
-      let escaped = false;
-
-      for (let i = 0; i < fixed.length; i++) {
-        const char = fixed[i];
-
-        if (escaped) {
-          escaped = false;
-          continue;
-        }
-
-        if (char === '\\') {
-          escaped = true;
-          continue;
-        }
-
-        if (char === '"') {
-          inString = !inString;
-          continue;
-        }
-
-        if (!inString) {
-          if (char === '{') openBraces++;
-          else if (char === '}') openBraces--;
-          else if (char === '[') openBrackets++;
-          else if (char === ']') openBrackets--;
-        }
-      }
-
-      while (openBraces > 0) {
-        fixed += '}';
-        openBraces--;
-      }
-      while (openBrackets > 0) {
-        fixed += ']';
-        openBrackets--;
-      }
-
-      fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
-
-      fixed = fixed.replace(
-        /{\s*"question":\s*"[^"]*"\s*,?\s*$/,
-        '{"question": "", "options": [], "correctAnswer": "", "explanation": ""}',
-      );
-
-      return fixed;
-    } catch (error) {
-      console.error('Error attempting JSON fix:', error);
-      return null;
-    }
-  }
-
   private getFallbackQuiz(): any[] {
     return [];
+  }
+
+  private cleanQuizJSON(response: string): string {
+    let cleaned = response.trim();
+    
+    // Remove markdown code blocks if present
+    if (cleaned.includes('```json')) {
+      const jsonMatch = cleaned.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        cleaned = jsonMatch[1].trim();
+      }
+    } else if (cleaned.includes('```')) {
+      const codeMatch = cleaned.match(/```\s*([\s\S]*?)\s*```/);
+      if (codeMatch) {
+        cleaned = codeMatch[1].trim();
+      }
+    }
+    
+    // Extract the JSON array (should start with [ and end with ])
+    const arrayStart = cleaned.indexOf('[');
+    const arrayEnd = cleaned.lastIndexOf(']');
+    
+    if (arrayStart !== -1 && arrayEnd !== -1 && arrayStart < arrayEnd) {
+      cleaned = cleaned.substring(arrayStart, arrayEnd + 1);
+    }
+    
+    // Remove control characters that break JSON parsing (but preserve newlines temporarily for cleaning)
+    // Remove null bytes and other problematic control characters except \n, \r, \t
+    cleaned = cleaned.replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F-\u009F]/g, '');
+    
+    // Fix newlines within JSON strings (they should be escaped)
+    // This is a simple approach - replace raw newlines with spaces
+    cleaned = cleaned.replace(/\n/g, ' ').replace(/\r/g, '');
+    
+    // Collapse multiple spaces into one
+    cleaned = cleaned.replace(/\s+/g, ' ');
+    
+    // Fix common JSON issues
+    // Remove trailing commas before closing brackets/braces
+    cleaned = cleaned.replace(/,(\s*[\]}])/g, '$1');
+    
+    // Fix double commas
+    cleaned = cleaned.replace(/,\s*,/g, ',');
+    
+    return cleaned.trim();
   }
 
   async transcribeAudio(file: { path: string }) {

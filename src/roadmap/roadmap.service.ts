@@ -229,7 +229,7 @@ CRITICAL JSON RULES:
     }
 
     async getRoadmapSteps(roadmapId: string) {
-        return await db.select().from(roadMapStep).where(eq(roadMapStep.roadmapId, roadmapId));
+        return await db.select().from(roadMapStep).where(eq(roadMapStep.roadmapId, roadmapId)).orderBy(asc(roadMapStep.createdAt));
     }
 
     async checkAndAwardRoadmapNFT(roadmapId: string, userId: string): Promise<boolean> {
@@ -261,12 +261,6 @@ CRITICAL JSON RULES:
             const chatData = await this.chatService.getChatById(roadmapData.chatId);
             if (!chatData) {
                 console.log(`Chat ${roadmapData.chatId} not found for roadmap ${roadmapId}`);
-                return false;
-            }
-
-            const hasTestedKnowledge = (chatData.testLimit || 3) < 3;
-            if (!hasTestedKnowledge) {
-                console.log(`Chat ${roadmapData.chatId} has not been tested yet. User must complete at least one quiz to verify their knowledge.`);
                 return false;
             }
 
@@ -326,31 +320,13 @@ CRITICAL JSON RULES:
         });
 
         await db.update(roadMapStep).set({ done: true }).where(eq(roadMapStep.id, stepId));
-
-        const nftAwarded = await this.checkAndAwardRoadmapNFT(step.roadmapId, userId);
-        if (nftAwarded && roadmapData.claimableNFT) {
-            const nftInfo = this.aiService.getNFTRewardInfoById(roadmapData.claimableNFT);
-
-            if (nftInfo) {
-                const congratsMessage = `\n\n🎉🎉🎉 **CONGRATULATIONS!** 🎉🎉🎉\n\n` +
-                    `You've completed the entire "${roadmapData.title}" roadmap! 🗺️✨\n\n` +
-                    `As a reward for your dedication and hard work, you've earned the **${nftInfo.name}** NFT certificate! 🏆\n\n` +
-                    `${nftInfo.description}\n\n` +
-                    `💎 You can view and claim your NFT in the rewards section. Keep up the amazing learning journey! 🚀`;
-
-                if (aiResponse.content && typeof aiResponse.content === 'object' && 'text' in aiResponse.content) {
-                    aiResponse.content.text = `${aiResponse.content.text}\n\n${congratsMessage}`;
-                }
-
-                await this.chatService.saveMessages({ messages: [aiResponse] });
-            }
-        }
+        
+        console.log(`✅ Marked step ${stepId} (${step.title}) as done for user ${userId}`);
 
         return {
             step,
             userMessage,
             aiResponse,
-            nftAwarded,
         };
     }
 
