@@ -104,6 +104,43 @@ export class AuthService {
         .from(user)
         .where(eq(user.email, data.email));
 
+      if (data.username && data.username.trim() !== '') {
+        try {
+          console.log(`Fetching Twitter profile picture for username: ${data.username}`);
+          const axios = require('axios');
+          const bearerToken = process.env.TWITTER_BEARER_TOKEN;
+          if (bearerToken) {
+            const response = await axios.get(
+              `https://api.twitter.com/2/users/by/username/${data.username}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${bearerToken}`,
+                },
+                params: {
+                  'user.fields': 'profile_image_url',
+                },
+              }
+            );
+
+            if (response.data?.data?.profile_image_url) {
+              const profilePictureURL = response.data.data.profile_image_url;
+              console.log(`Updating profile picture for ${data.email}: ${profilePictureURL}`);
+              
+              await db
+                .update(user)
+                .set({ profilePictureURL })
+                .where(eq(user.email, data.email));
+                
+              createdUser.profilePictureURL = profilePictureURL;
+            }
+          } else {
+            console.warn('TWITTER_BEARER_TOKEN not configured, skipping profile picture fetch');
+          }
+        } catch (error) {
+          console.error('Failed to fetch Twitter profile picture:', error.response?.data || error.message);
+        }
+      }
+
       this.resendService.sendWelcomeEmail(
         createdUser.email,
         createdUser.name,
@@ -161,6 +198,49 @@ export class AuthService {
       return result[0] ?? null;
     } catch (error) {
       console.error('Failed to get user by ID');
+      throw error;
+    }
+  }
+
+  async checkUserAvailability(email?: string, username?: string): Promise<{ emailAvailable: boolean; usernameAvailable: boolean; message?: string }> {
+    try {
+      let emailAvailable = true;
+      let usernameAvailable = true;
+      const messages: string[] = [];
+
+      if (email) {
+        const existingUserByEmail = await db
+          .select()
+          .from(user)
+          .where(eq(user.email, email))
+          .limit(1);
+        
+        if (existingUserByEmail.length > 0) {
+          emailAvailable = false;
+          messages.push('Email is already registered');
+        }
+      }
+
+      if (username) {
+        const existingUserByUsername = await db
+          .select()
+          .from(user)
+          .where(eq(user.username, username))
+          .limit(1);
+        
+        if (existingUserByUsername.length > 0) {
+          usernameAvailable = false;
+          messages.push('Username is already taken');
+        }
+      }
+
+      return {
+        emailAvailable,
+        usernameAvailable,
+        message: messages.length > 0 ? messages.join('. ') : undefined
+      };
+    } catch (error) {
+      console.error('Failed to check user availability:', error);
       throw error;
     }
   }

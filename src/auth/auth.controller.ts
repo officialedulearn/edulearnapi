@@ -23,6 +23,18 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Post('check-availability')
+  async checkAvailability(@Body() body: { email?: string; username?: string }) {
+    const { email, username } = body;
+    
+    if (!email && !username) {
+      throw new BadRequestException('Either email or username is required');
+    }
+
+    const result = await this.authService.checkUserAvailability(email, username);
+    return result;
+  }
+
   @Post('signup')
   async signUp(@Body() data: signUpDetails) {
     const result = await this.authService.createUser(data);

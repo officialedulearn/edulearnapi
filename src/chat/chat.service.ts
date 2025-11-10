@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { asc, eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../../drizzle';
-import { chat, message, type Chat, type Message } from '../../lib/db/schema';
+import { chat, message, roadmap, roadMapStep, type Chat, type Message } from '../../lib/db/schema';
 
 @Injectable()
 export class ChatService {
@@ -65,10 +65,40 @@ export class ChatService {
   }
 
   async deleteChat(chatId: string) {
-    await db.delete(message).where(eq(message.chatId, chatId));
-
-    const result = await db.delete(chat).where(eq(chat.id, chatId));
-    return { message: 'Chat and associated messages deleted' };
+    try {
+      console.log(`Starting deletion process for chat: ${chatId}`);
+      
+      const chatRoadmaps = await db.select().from(roadmap).where(eq(roadmap.chatId, chatId));
+      console.log(`Found ${chatRoadmaps.length} roadmaps linked to chat ${chatId}`);
+   
+      for (const chatRoadmap of chatRoadmaps) {
+        const deletedSteps = await db.delete(roadMapStep).where(eq(roadMapStep.roadmapId, chatRoadmap.id));
+        console.log(`Deleted roadmap steps for roadmap ${chatRoadmap.id}`);
+      }
+      
+      if (chatRoadmaps.length > 0) {
+        await db.delete(roadmap).where(eq(roadmap.chatId, chatId));
+        console.log(`Deleted ${chatRoadmaps.length} roadmaps for chat ${chatId}`);
+      }
+      
+      await db.delete(message).where(eq(message.chatId, chatId));
+      console.log(`Deleted all messages for chat ${chatId}`);
+      
+      await db.delete(chat).where(eq(chat.id, chatId));
+      console.log(`Deleted chat ${chatId}`);
+      
+      return { 
+        message: 'Chat and all associated data deleted successfully',
+        deleted: {
+          roadmaps: chatRoadmaps.length,
+          chat: true,
+          messages: true
+        }
+      };
+    } catch (error) {
+      console.error(`Error deleting chat ${chatId}:`, error);
+      throw error;
+    }
   }
 
   
