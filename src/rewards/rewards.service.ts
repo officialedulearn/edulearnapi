@@ -206,6 +206,24 @@ export class RewardsService {
       );
       const userPublicKey = new PublicKey(userExists[0].address as string);
 
+      const umi = createUmi(this.connection).use(mplCore());
+      const umiKeypair = umi.eddsa.createKeypairFromSecretKey(
+        bs58.default.decode(secretKey)
+      );
+      
+      const signer = createSignerFromKeypair(umi, umiKeypair);
+      umi.use(keypairIdentity(signer));
+
+      const mint = generateSigner(umi);
+
+      const result = await create(umi, {
+        asset: mint,
+        name: rewardExists[0].title,
+        uri: `${rewardExists[0].ipfs}`,
+        owner: publicKey(userExists[0].address as string)
+      }).sendAndConfirm(umi);
+
+      console.log('NFT Mint Signature:', bs58.default.encode(result.signature));
       const userTokenAccount = await getOrCreateAssociatedTokenAccount(
         this.connection,
         adminKeypair, 
@@ -235,24 +253,7 @@ export class RewardsService {
       
       const txId = await sendAndConfirmTransaction(this.connection, transaction, [adminKeypair, userKeypair]);
 
-      console.log('Transfer Transaction ID:', txId);
-
-      const umi = createUmi(this.connection).use(mplCore());
-      const umiKeypair = umi.eddsa.createKeypairFromSecretKey(
-        bs58.default.decode(secretKey)
-      );
-      
-      const signer = createSignerFromKeypair(umi, umiKeypair);
-      umi.use(keypairIdentity(signer));
-
-      const mint = generateSigner(umi);
-
-      const result = await create(umi, {
-        asset: mint,
-        name: rewardExists[0].title,
-        uri: `${rewardExists[0].ipfs}`,
-        owner: publicKey(userExists[0].address as string)
-      }).sendAndConfirm(umi);
+      console.log('Token Transfer Transaction ID:', txId);
 
      
       const html = this.getNFTClaimEmailTemplate(
@@ -263,8 +264,6 @@ export class RewardsService {
       );
 
       await this.resendService.sendEmail(userExists[0].email, '🎉 Congratulations! You Earned an NFT Certificate!', html);
-
-      console.log('NFT Mint Signature:', bs58.default.encode(result.signature));
       
       await db.update(userReward)
         .set({
