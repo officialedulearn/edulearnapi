@@ -229,7 +229,11 @@ CRITICAL JSON RULES:
     }
 
     async getRoadmapSteps(roadmapId: string) {
-        return await db.select().from(roadMapStep).where(eq(roadMapStep.roadmapId, roadmapId)).orderBy(asc(roadMapStep.createdAt));
+        const steps = await db.select().from(roadMapStep).where(eq(roadMapStep.roadmapId, roadmapId)).orderBy(asc(roadMapStep.createdAt));
+        return steps.map(step => ({
+            ...step,
+            done: Boolean(step.done)
+        }));
     }
 
     async checkAndAwardRoadmapNFT(roadmapId: string, userId: string): Promise<boolean> {

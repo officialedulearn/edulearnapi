@@ -38,6 +38,7 @@ export class RoadmapController {
             throw new NotFoundException('Roadmap not found');
         }
         const steps = await this.roadmapService.getRoadmapSteps(roadmapId);
+        console.log('Steps from DB:', steps.map(s => ({ id: s.id, title: s.title, done: s.done, doneType: typeof s.done })));
         return { roadmap, steps };
     }
 
