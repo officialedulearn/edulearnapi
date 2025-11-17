@@ -27,7 +27,20 @@ export class AuthService {
     private roadmapService: RoadmapService,
   ) {}
   async createUser(data: signUpDetails): Promise<User | Error> {
+    let supabaseUserId: string | null = null;
+    
     try {
+      console.log('🔄 Getting Supabase Auth user ID for potential rollback...');
+      const { data: authUser } = await supabaseAdmin.auth.admin.listUsers();
+      const matchingUser = authUser?.users?.find(u => u.email === data.email);
+      supabaseUserId = matchingUser?.id || null;
+      
+      if (supabaseUserId) {
+        console.log(`✅ Found Supabase Auth user ID: ${supabaseUserId}`);
+      } else {
+        console.log('⚠️ No Supabase Auth user found yet for email:', data.email);
+      }
+      
       console.log('Creating user in database with data:', data);
       const userExists = await db
         .select()
@@ -150,15 +163,49 @@ export class AuthService {
         console.error('Failed to send welcome email:', error);
       });
 
-      return createdUser;
+      return {
+        id: createdUser.id,
+        name: createdUser.name,
+        email: createdUser.email,
+        username: createdUser.username,
+        learning: createdUser.learning,
+        verified: createdUser.verified,
+        level: createdUser.level,
+        xp: createdUser.xp,
+        address: createdUser.address,
+        credits: createdUser.credits,
+        isPremium: createdUser.isPremium,
+        premiumUntil: createdUser.premiumUntil,
+        streak: createdUser.streak,
+        referralCode: createdUser.referralCode,
+        lastLoggedIn: createdUser.lastLoggedIn,
+        profilePictureURL: createdUser.profilePictureURL,
+      } as User;
     } catch (error) {
-      console.error('Failed to create user in database:', error);
+      console.error('❌ Failed to create user in database:', error);
       console.error('Error details:', {
         message: error.message,
         code: error.code,
         detail: error.detail,
         constraint: error.constraint
       });
+      
+      if (supabaseUserId) {
+        console.log(`🔄 ROLLBACK: Deleting Supabase Auth user: ${supabaseUserId}`);
+        try {
+          const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(supabaseUserId);
+          if (deleteError) {
+            console.error('⚠️ Failed to delete Supabase Auth user during rollback:', deleteError);
+          } else {
+            console.log('✅ Successfully deleted Supabase Auth user during rollback');
+          }
+        } catch (deleteErr) {
+          console.error('❌ Error during Supabase Auth rollback:', deleteErr);
+        }
+      } else {
+        console.log('⚠️ No Supabase user ID available for rollback');
+      }
+      
       throw error;
     }
   }
@@ -686,6 +733,7 @@ export class AuthService {
       throw error;
     }
   }
+
   async deleteUserDataAsync(userId: string, supabaseUserId: string): Promise<{ message: string; deletionStarted: boolean }> {
     try {
       const userToDelete = await this.getUserById(userId);
