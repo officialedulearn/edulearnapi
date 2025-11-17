@@ -32,7 +32,7 @@ export class AuthService {
     try {
       console.log('🔄 Getting Supabase Auth user ID for potential rollback...');
       const { data: authUser } = await supabaseAdmin.auth.admin.listUsers();
-      const matchingUser = authUser?.users?.find(u => u.email === data.email);
+      const matchingUser = authUser?.users?.find((u: any) => u.email === data.email);
       supabaseUserId = matchingUser?.id || null;
       
       if (supabaseUserId) {
