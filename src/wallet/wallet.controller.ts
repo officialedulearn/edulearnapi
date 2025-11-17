@@ -22,7 +22,7 @@ export class WalletController {
             });
         } catch (error) {
             console.error('Error upgrading to premium:', error);
-            return res.status(500).json({ error: error.message || 'Failed to upgrade to premium' });
+            return res.status(500).json({ message: error.message || 'Failed to upgrade to premium' });
         }
     }
 
@@ -33,7 +33,7 @@ export class WalletController {
             return res.status(200).json({ balance });
         } catch (error) {
             console.error('Error fetching balance:', error);
-            return res.status(500).json({ error: 'Failed to fetch balance' });      
+            return res.status(500).json({ message: error.message || 'Failed to fetch balance' });      
         }
     }
 
@@ -45,7 +45,7 @@ export class WalletController {
             return res.status(200).json({ earnings });
         } catch (error) {
             console.error('Error fetching user earnings:', error);
-            return res.status(500).json({ error: 'Failed to fetch user earnings' });
+            return res.status(500).json({ message: error.message || 'Failed to fetch user earnings' });
         }
     }
 
@@ -57,7 +57,7 @@ export class WalletController {
             return res.status(200).json({response})
         } catch(error) {
             console.error("Error swapping sol to edln", error)
-            return res.status(500).json({error: "Failed to swap SOL to EDLN"})
+            return res.status(500).json({message: error.message || "Failed to swap SOL to EDLN"})
         }
     }
     
@@ -73,7 +73,7 @@ export class WalletController {
             });
         } catch(error) {
             console.error("Error burning EDLN tokens", error);
-            return res.status(500).json({error: "Failed to burn EDLN tokens"});
+            return res.status(500).json({message: error.message || "Failed to burn EDLN tokens"});
         }
     }
 
@@ -85,7 +85,7 @@ export class WalletController {
             return res.status(200).json(result);
         } catch(error) {
             console.error("Error claiming earnings", error);
-            return res.status(500).json({error: "Failed to claim earnings"});
+            return res.status(500).json({message: error.message || "Failed to claim earnings"});
         }
     }
 
@@ -101,7 +101,7 @@ export class WalletController {
             });
         } catch(error) {
             console.error("Error decrypting private key", error);
-            return res.status(500).json({error: "Failed to decrypt private key", success: false});
+            return res.status(500).json({message: error.message || "Failed to decrypt private key", success: false});
         }
     }
 }

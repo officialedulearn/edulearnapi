@@ -14,7 +14,6 @@ import { decrypt, encrypt } from '../../lib/crypto.util';
 import { Wallet } from '@project-serum/anchor';
 import {
   createBurnCheckedInstruction,
-  createMint,
   createTransferCheckedInstruction,
   getAssociatedTokenAddress,
   getOrCreateAssociatedTokenAccount,
@@ -269,8 +268,22 @@ export class WalletService {
         isFirstTimeBuying = true;
         console.log(`First time EDLN purchase detected for user ${userId}`);
       }
+      
+      const estimatedTxFee = 0.002;
+      const requiredBalance = amount + estimatedTxFee;
+      
+      if (currentBalance.sol < requiredBalance) {
+        throw new Error(
+          `Insufficient SOL balance. You have ${currentBalance.sol.toFixed(4)} SOL but need at least ${requiredBalance.toFixed(4)} SOL (${amount} SOL for swap + ${estimatedTxFee} SOL for transaction fees). Please reduce the amount or add more SOL to your wallet.`
+        );
+      }
+      
+      console.log(`Balance check passed: ${currentBalance.sol.toFixed(4)} SOL available, ${requiredBalance.toFixed(4)} SOL required`);
     } catch (error) {
-      console.log('Could not check current EDLN balance for first-time detection:', error.message);
+      if (error.message.includes('Insufficient SOL balance')) {
+        throw error;
+      }
+      console.log('Could not check balance for first-time detection:', error.message);
       isFirstTimeBuying = false;
     }
     
@@ -369,8 +382,29 @@ export class WalletService {
       } = swapTx.data;
       
       if (simulationError) {
-        console.warn('Simulation error detected:', simulationError);
-        throw new Error(`Transaction simulation failed: ${simulationError.message || 'Unknown simulation error'}`);
+        console.error('Transaction simulation failed:', JSON.stringify(simulationError, null, 2));
+        
+        const errorMsg = simulationError.message || 'Unknown simulation error';
+        
+        if (errorMsg.includes('insufficient') || errorMsg.includes('Insufficient')) {
+          throw new Error(
+            `Insufficient balance for transaction. This usually means you don't have enough SOL to cover both the swap amount and gas fees. Try reducing the swap amount or add more SOL to your wallet.`
+          );
+        }
+        
+        if (errorMsg.includes('slippage')) {
+          throw new Error(
+            `Price slippage too high. The token price changed during the transaction. Please try again.`
+          );
+        }
+        
+        if (errorMsg.includes('blockhash') || errorMsg.includes('BlockhashNotFound')) {
+          throw new Error(
+            `Transaction expired. Please try again.`
+          );
+        }
+        
+        throw new Error(`Transaction simulation failed: ${errorMsg}. This may be due to insufficient balance for gas fees, network congestion, or price volatility. Please try again with a smaller amount.`);
       }
       
       const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
@@ -420,6 +454,21 @@ export class WalletService {
       if (error.response) {
         console.error('API error response:', error.response.data);
       }
+      
+      if (error.message.includes('Insufficient SOL balance') || 
+          error.message.includes('Insufficient balance for transaction') ||
+          error.message.includes('insufficient')) {
+        throw error;
+      }
+      
+      if (error.message.includes('timeout') || error.message.includes('ETIMEDOUT')) {
+        throw new Error('Transaction timeout. The network may be congested. Please try again.');
+      }
+      
+      if (error.message.includes('Failed to get quote') || error.message.includes('Failed to get swap transaction')) {
+        throw new Error('Unable to connect to swap service. Please check your internet connection and try again.');
+      }
+      
       throw new Error(`Swap failed: ${error.message}`);
     }
   }
