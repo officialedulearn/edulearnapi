@@ -8,25 +8,19 @@ import { ExpressAdapter } from '@nestjs/platform-express';
 import * as express from 'express';
 
 async function bootstrap() {
-  // Create Express instance and configure body parser BEFORE NestJS uses it
-  // This ensures body is only consumed once - Express parses it, NestJS reads from req.body
   const server = express();
-  server.use(express.json({ limit: '50mb' }));
-  server.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+  server.use('/onramp-webhook', express.raw({ type: '*/*' }));
   
-  // Create NestJS app with pre-configured Express instance
-  // bodyParser: false ensures NestJS doesn't try to parse body again
-  const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
-    bodyParser: false,
-  });
-  
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
+    
   app.enableCors({
     origin: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
-  app.use(helmet());
   
+  app.use(helmet());
   app.use(compression());
   
   app.useGlobalPipes(
@@ -39,6 +33,7 @@ async function bootstrap() {
       },
     }),
   );
+  
 
   const marketplaceConfig = new DocumentBuilder()
     .setTitle('EduLearn Marketplace API')
