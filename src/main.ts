@@ -10,8 +10,6 @@ import * as express from 'express';
 async function bootstrap() {
   const server = express();
 
-  server.use('/onramp-webhook', express.raw({ type: '*/*' }));
-  
   const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
     
   app.enableCors({
