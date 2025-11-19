@@ -7,7 +7,9 @@ import helmet from 'helmet';
 import { json, urlencoded } from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: false, 
+  });
   
   app.enableCors({
     origin: true,
@@ -32,7 +34,6 @@ async function bootstrap() {
     }),
   );
 
-  // Marketplace API Documentation (filtered for /chat and /ai only)
   const marketplaceConfig = new DocumentBuilder()
     .setTitle('EduLearn Marketplace API')
     .setDescription('API documentation for external marketplace integrations. Use the x-marketplace-key header for authentication.')
@@ -56,7 +57,6 @@ async function bootstrap() {
     deepScanRoutes: true,
   });
 
-  // Filter to only include /chat and /ai routes
   const filteredPaths = {};
   Object.keys(marketplaceDocument.paths).forEach((path) => {
     if (path.startsWith('/chat') || path.startsWith('/ai')) {
@@ -70,7 +70,6 @@ async function bootstrap() {
     customCss: '.swagger-ui .topbar { display: none }',
   });
 
-  // Full Internal API Documentation (all endpoints)
   const internalConfig = new DocumentBuilder()
     .setTitle('EduLearn API')
     .setDescription('Complete API documentation for internal use')
@@ -108,10 +107,6 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, internalDocument, {
     customSiteTitle: 'EduLearn API Documentation',
   });
-
-  console.log('📚 Swagger Documentation Available:');
-  console.log('   Marketplace API: http://localhost:' + (process.env.PORT ?? 3001) + '/api/marketplace');
-  console.log('   Full API (Internal): http://localhost:' + (process.env.PORT ?? 3001) + '/api/docs');
   
   await app.listen(process.env.PORT ?? 3001, '0.0.0.0');
 }

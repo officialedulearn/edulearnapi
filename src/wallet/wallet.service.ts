@@ -26,7 +26,7 @@ import axios from 'axios';
 import { transactionSenderAndConfirmationWaiter } from '../../lib/transaction/transactionSender';
 import { TwitterService } from 'src/twitter/twitter.service';
 import { ResendService } from 'src/resend/resend.service';
-import { initializeSDK, initiate, verify, getTokenValue, createOrder } from 'paj_ramp';
+import { initializeSDK, initiate, verify, getTokenValue, createOrder, TransactionStatus, TransactionType, Currency } from 'paj_ramp';
 
 export interface DeviceInfo {
 
@@ -37,21 +37,7 @@ export interface DeviceInfo {
   ip: string;
 }
 
-export enum Currency {
-  NGN = 'NGN',
-  USD = 'USD',
-}
 
-export enum TransactionStatus {
-  INIT = 'INIT',
-  PAID = 'PAID',
-  COMPLETED = 'COMPLETED',
-}
-
-export enum TransactionType {
-  ON_RAMP = 'ON_RAMP',
-  OFF_RAMP = 'OFF_RAMP',
-}
 
 export interface OnrampWebhookData {
   id: string;
