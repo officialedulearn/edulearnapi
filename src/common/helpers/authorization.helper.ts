@@ -72,6 +72,42 @@ export async function verifyUserEmail(authenticatedUser: any): Promise<string> {
   return email;
 }
 
+export async function verifyUserViewAuthorization(
+  authenticatedUser: any,
+  targetUserId: string
+): Promise<void> {
+  if (!authenticatedUser) {
+    throw new UnauthorizedException('Authentication required');
+  }
+
+  if (authenticatedUser.role === 'reviewer' || authenticatedUser.role === 'marketplace') {
+    return;
+  }
+
+  const email = authenticatedUser.email;
+  if (!email) {
+    throw new UnauthorizedException('Email not found in JWT token');
+  }
+
+  const users = await db.select().from(user).where(eq(user.email, email)).limit(1);
+  
+  if (!users.length) {
+    throw new UnauthorizedException('User not found in database');
+  }
+
+  const authenticatedUserId = users[0].id;
+
+  if (authenticatedUserId === targetUserId) {
+    return;
+  }
+
+  const targetUser = await db.select().from(user).where(eq(user.id, targetUserId)).limit(1);
+  
+  if (!targetUser.length) {
+    throw new UnauthorizedException('Target user not found');
+  }
+}
+
 export async function verifyChatAccess(
   authenticatedUser: any,
   chat: any,

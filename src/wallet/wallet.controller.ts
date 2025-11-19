@@ -1,15 +1,84 @@
-import { Body, Controller, Get, Param, Post, Response, UseGuards, Request } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Response, UseGuards, Request, HttpCode } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { PublicKey } from '@solana/web3.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
+import { DeviceInfo } from './wallet.service';
 
 @Controller('wallet')
-@UseGuards(JwtAuthGuard)
 export class WalletController {
     constructor(private walletService: WalletService) {}
 
+    @Post("onramp/initiate/:userId")
+    @UseGuards(JwtAuthGuard)
+    async initiateOnramp(@Request() req, @Response() res, @Param('userId') userId: string) {
+        try {
+            await verifyUserAuthorization(req.user, userId, 'initiate onramp');
+            const result = await this.walletService.initiateOnramp(userId);
+            return res.status(200).json({ 
+                message: 'Onramp initiated successfully',
+                result 
+            });
+        } catch (error) {
+            console.error('Error initiating onramp:', error);
+            return res.status(500).json({ message: error.message || 'Failed to initiate onramp' });
+        }
+    }
+
+    @Post("onramp/verify")
+    async verifyOnramp(@Response() res, @Body() data: { email: string, otp: string, deviceInfo: DeviceInfo }) {
+        try {
+            const verifiedResponse = await this.walletService.verifyOnramp(data.email, data.otp, data.deviceInfo);
+            return res.status(200).json({ 
+                message: 'Onramp verified successfully',
+                verifiedResponse 
+            });
+        } catch (error) {
+            console.error('Error verifying onramp:', error);
+            return res.status(500).json({ message: error.message || 'Failed to verify onramp' });
+        }
+    }
+
+    @Post("onramp/create-order/:userId")
+    @UseGuards(JwtAuthGuard)
+    async onrampFiatToEdln(@Request() req, @Response() res, @Param('userId') userId: string, @Body() data: { amount: number, verifiedResponse: any }) {
+        try {
+            await verifyUserAuthorization(req.user, userId, 'create onramp order');
+            const order = await this.walletService.onrampFiatToEdln(userId, data.amount, data.verifiedResponse);
+            return res.status(200).json({ 
+                message: 'Order created successfully',
+                order 
+            });
+        } catch (error) {
+            console.error('Error creating onramp order:', error);
+            return res.status(500).json({ message: error.message || 'Failed to create onramp order' });
+        }
+    }
+
+    @Post("onramp-webhook")
+    @HttpCode(200)
+    async onrampWebhook(@Response() res, @Body() data: any) {
+        try {
+            console.log('=== Onramp Webhook Received ===');
+            console.log('Timestamp:', new Date().toISOString());
+            console.log('Webhook Data:', JSON.stringify(data, null, 2));
+            console.log('================================');
+            
+            return res.status(200).json({ 
+                success: true,
+                message: 'Webhook received successfully' 
+            });
+        } catch (error) {
+            console.error('Error processing onramp webhook:', error);
+            return res.status(500).json({ 
+                success: false,
+                message: 'Failed to process webhook' 
+            });
+        }
+    }
+
     @Post("upgrade/:userId")
+    @UseGuards(JwtAuthGuard)
     async upgradeToPremium(@Request() req, @Response() res, @Param('userId') userId: string, @Body() data: { amount: number }) {
         try {
             await verifyUserAuthorization(req.user, userId, 'premium upgrade');
@@ -27,6 +96,7 @@ export class WalletController {
     }
 
     @Get("balance/:publicKey")
+    @UseGuards(JwtAuthGuard)
     async getBalance(@Response() res, @Param('publicKey') publicKey: string) {
         try {
             const balance = await this.walletService.getBalance(new PublicKey(publicKey));
@@ -38,6 +108,7 @@ export class WalletController {
     }
 
     @Get("earnings/:userId")
+    @UseGuards(JwtAuthGuard)
     async getUserEarnings(@Request() req, @Response() res, @Param('userId') userId: string) {
         try {
             await verifyUserAuthorization(req.user, userId, 'viewing earnings');
@@ -50,6 +121,7 @@ export class WalletController {
     }
 
     @Post("swap")
+    @UseGuards(JwtAuthGuard)
     async swapSolToEDLN(@Request() req, @Response() res, @Body() data: {userId: string, amount: number}) {
         try {
             await verifyUserAuthorization(req.user, data.userId, 'token swap');
@@ -62,6 +134,7 @@ export class WalletController {
     }
     
     @Post("burn")
+    @UseGuards(JwtAuthGuard)
     async burnEDLN(@Request() req, @Response() res, @Body() data: {userId: string, amount: number}) {
         try {
             await verifyUserAuthorization(req.user, data.userId, 'token burning');
@@ -78,6 +151,7 @@ export class WalletController {
     }
 
     @Post("earnings/claim")
+    @UseGuards(JwtAuthGuard)
     async claimEarnings(@Request() req, @Response() res, @Body() data: {userId: string, type: 'sol' | 'edln' | 'all'}) {
         try {
             await verifyUserAuthorization(req.user, data.userId, 'claiming earnings');
@@ -90,6 +164,7 @@ export class WalletController {
     }
 
     @Post("decrypt-private-key")
+    @UseGuards(JwtAuthGuard)
     async decryptPrivateKey(@Request() req, @Response() res, @Body() data: {userId: string}) {
         try {
             await verifyUserAuthorization(req.user, data.userId, 'decrypting private key');

@@ -26,6 +26,16 @@ import axios from 'axios';
 import { transactionSenderAndConfirmationWaiter } from '../../lib/transaction/transactionSender';
 import { TwitterService } from 'src/twitter/twitter.service';
 import { ResendService } from 'src/resend/resend.service';
+import { initializeSDK, initiate, verify, getTokenValue, createOrder } from 'paj_ramp';
+
+export interface DeviceInfo {
+
+  uuid: string;
+  device: string;
+  os: string;
+  browser: string;
+  ip: string;
+}
 
 @Injectable()
 export class WalletService {
@@ -993,6 +1003,50 @@ export class WalletService {
       throw new Error(`Failed to decrypt private key: ${error.message}`);
     }
   }
+
+  async initiateOnramp(userId: string) {
+    initializeSDK('production')
+    const user = await this.authService.getUserById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    
+    const initiated = initiate(user.email, "365d7766-608e-4287-8b6e-cd89532441b1")
+    return {
+      initiated: initiated,
+      email: user.email,
+      address: user.address,
+    };
+  }
+
+  async verifyOnramp(email: string, otp: string, deviceInfo: DeviceInfo) {
+    const verified = await verify(email, otp, deviceInfo, "365d7766-608e-4287-8b6e-cd89532441b1");
+    if (!verified) {
+      throw new Error('Failed to verify onramp');
+    }
+    return verified;
+  }
+
+  async onrampFiatToEdln(userId: string, amount: number, verifiedResponse: any) {
+
+  const verifiedResponseToken = verifiedResponse.token
+  const user = await this.authService.getUserById(userId);
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  const order = await createOrder({
+    fiatAmount: amount,
+    currency: 'NGN',    
+    recipient: user.address as string,
+    mint: 'CFw2KxMpWuxivoowkF8vRCrnMuDeg5VMHRR7zjE7pBLV',
+    chain: 'SOLANA',
+    webhookURL: 'https://api.edulearn.fun/wallet/onramp-webhook',
+    token: verifiedResponseToken,
+  });
+
+  return order;
+}
 
   private getEarningsClaimEmailTemplate(
     name: string,

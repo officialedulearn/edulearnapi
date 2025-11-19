@@ -2,7 +2,7 @@ import { Controller, Post, Get, Body, Param, UseGuards, NotFoundException, Reque
 import { RoadmapService } from './roadmap.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AiService } from 'src/ai/ai.service';
-import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
+import { verifyUserAuthorization, verifyUserViewAuthorization } from '../common/helpers/authorization.helper';
 
 @Controller('roadmap')
 @UseGuards(JwtAuthGuard)
@@ -27,7 +27,7 @@ export class RoadmapController {
 
     @Get('user/:userId')
     async getUserRoadmaps(@Request() req, @Param('userId') userId: string) {
-        await verifyUserAuthorization(req.user, userId, 'viewing roadmaps');
+        await verifyUserViewAuthorization(req.user, userId);
         return await this.roadmapService.getRoadmapsByUserId(userId);
     }
 

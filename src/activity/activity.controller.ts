@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Param, Query, BadRequestException, NotFoundException, UseGuards, Request } from '@nestjs/common';
 import { ActivityService } from './activity.service';
 import { FlexibleAuthGuard } from '../auth/guards/flexible-auth.guard';
-import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
+import { verifyUserAuthorization, verifyUserViewAuthorization } from '../common/helpers/authorization.helper';
 import { SubmitQuizDto } from './dto/submit-quiz.dto';
 
 @Controller('activity')
@@ -59,7 +59,7 @@ export class ActivityController {
       throw new BadRequestException('User ID is required');
     }
     
-    await verifyUserAuthorization(req.user, userId, 'viewing activities');
+    await verifyUserViewAuthorization(req.user, userId);
     
     try {
       return await this.activityService.getActivitiesByUser(userId);
@@ -74,7 +74,7 @@ export class ActivityController {
       throw new BadRequestException('User ID is required');
     }
     
-    await verifyUserAuthorization(req.user, userId, 'viewing quiz activities');
+    await verifyUserViewAuthorization(req.user, userId);
     
     try {
       return await this.activityService.getQuizActivitiesByUser(userId);
@@ -89,7 +89,7 @@ export class ActivityController {
       throw new BadRequestException('User ID is required');
     }
     
-    await verifyUserAuthorization(req.user, userId, 'viewing XP');
+    await verifyUserViewAuthorization(req.user, userId);
     
     try {
       const total = await this.activityService.getTotalXpByActivityType(userId, 'quiz');
@@ -113,7 +113,7 @@ export class ActivityController {
       throw new BadRequestException('Valid type is required (quiz, chat, or streak)');
     }
     
-    await verifyUserAuthorization(req.user, userId, 'viewing XP');
+    await verifyUserViewAuthorization(req.user, userId);
     
     try {
       const total = await this.activityService.getTotalXpByActivityType(userId, type);
@@ -129,7 +129,7 @@ export class ActivityController {
       throw new BadRequestException('User ID is required');
     }
     
-    await verifyUserAuthorization(req.user, userId, 'viewing user details');
+    await verifyUserViewAuthorization(req.user, userId);
     
     try {
       const result = await this.activityService.getUserWithActivities(userId);

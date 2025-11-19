@@ -27,20 +27,7 @@ export class AuthService {
     private roadmapService: RoadmapService,
   ) {}
   async createUser(data: signUpDetails): Promise<User | Error> {
-    let supabaseUserId: string | null = null;
-    
     try {
-      console.log('🔄 Getting Supabase Auth user ID for potential rollback...');
-      const { data: authUser } = await supabaseAdmin.auth.admin.listUsers();
-      const matchingUser = authUser?.users?.find((u: any) => u.email === data.email);
-      supabaseUserId = matchingUser?.id || null;
-      
-      if (supabaseUserId) {
-        console.log(`✅ Found Supabase Auth user ID: ${supabaseUserId}`);
-      } else {
-        console.log('⚠️ No Supabase Auth user found yet for email:', data.email);
-      }
-      
       console.log('Creating user in database with data:', data);
       const userExists = await db
         .select()
@@ -190,20 +177,31 @@ export class AuthService {
         constraint: error.constraint
       });
       
-      if (supabaseUserId) {
-        console.log(`🔄 ROLLBACK: Deleting Supabase Auth user: ${supabaseUserId}`);
-        try {
-          const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(supabaseUserId);
-          if (deleteError) {
-            console.error('⚠️ Failed to delete Supabase Auth user during rollback:', deleteError);
+      console.log('🔄 ROLLBACK: Checking for Supabase Auth user to delete...');
+      try {
+        const { data: authUsersData, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+        
+        if (listError) {
+          console.error('⚠️ Error listing Supabase Auth users:', listError);
+        } else {
+          const matchingUser = authUsersData?.users?.find((u: any) => u.email?.toLowerCase() === data.email.toLowerCase());
+          
+          if (matchingUser) {
+            const supabaseUserId = matchingUser.id;
+            console.log(`🔄 ROLLBACK: Found Supabase Auth user (${supabaseUserId}), deleting...`);
+            
+            const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(supabaseUserId);
+            if (deleteError) {
+              console.error('⚠️ Failed to delete Supabase Auth user during rollback:', deleteError);
+            } else {
+              console.log('✅ Successfully deleted Supabase Auth user during rollback');
+            }
           } else {
-            console.log('✅ Successfully deleted Supabase Auth user during rollback');
+            console.log('✅ No Supabase Auth user found - nothing to rollback');
           }
-        } catch (deleteErr) {
-          console.error('❌ Error during Supabase Auth rollback:', deleteErr);
         }
-      } else {
-        console.log('⚠️ No Supabase user ID available for rollback');
+      } catch (rollbackErr) {
+        console.error('❌ Error during Supabase Auth rollback check:', rollbackErr);
       }
       
       throw error;

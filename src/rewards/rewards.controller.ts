@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, BadRequestException, NotFoundException, Request } from '@nestjs/common';
 import { RewardsService } from './rewards.service';
 import { FlexibleAuthGuard } from '../auth/guards/flexible-auth.guard';
-import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
+import { verifyUserAuthorization, verifyUserViewAuthorization } from '../common/helpers/authorization.helper';
 
 @Controller('rewards')
 @UseGuards(FlexibleAuthGuard)
@@ -130,7 +130,7 @@ export class RewardsController {
       throw new BadRequestException('User ID is required');
     }
     
-    await verifyUserAuthorization(req.user, userId, 'viewing rewards');
+    await verifyUserViewAuthorization(req.user, userId);
     
     try {
       return await this.rewardsService.getUserRewards(userId);
@@ -168,7 +168,7 @@ export class RewardsController {
       throw new BadRequestException('User ID is required');
     }
     
-    await verifyUserAuthorization(req.user, userId, 'viewing certificate count');
+    await verifyUserViewAuthorization(req.user, userId);
     
     try {
       const count = await this.rewardsService.getUserCertificateCount(userId);
