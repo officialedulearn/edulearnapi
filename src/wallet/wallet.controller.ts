@@ -57,14 +57,16 @@ export class WalletController {
 
     @Post("onramp-webhook")
     @HttpCode(200)
-    async onrampWebhook(@Body() data: OnrampWebhookData) {
+    async onrampWebhook(@Request() req) {
+        const webhookData: OnrampWebhookData = req.body;
+        
         try {
             console.log('=== Onramp Webhook Received ===');
             console.log('Timestamp:', new Date().toISOString());
-            console.log('Webhook Data:', JSON.stringify(data, null, 2));
+            console.log('Webhook Data:', JSON.stringify(webhookData, null, 2));
             console.log('================================');
             
-            this.walletService.processWebhookEvent(data);
+            this.walletService.processWebhookEvent(webhookData);
             
             return { 
                 success: true,
