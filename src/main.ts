@@ -4,11 +4,20 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as compression from 'compression';
 import helmet from 'helmet';
-import { json, urlencoded } from 'express';
+import { ExpressAdapter } from '@nestjs/platform-express';
+import * as express from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    bodyParser: false, 
+  // Create Express instance and configure body parser BEFORE NestJS uses it
+  // This ensures body is only consumed once - Express parses it, NestJS reads from req.body
+  const server = express();
+  server.use(express.json({ limit: '50mb' }));
+  server.use(express.urlencoded({ extended: true, limit: '50mb' }));
+  
+  // Create NestJS app with pre-configured Express instance
+  // bodyParser: false ensures NestJS doesn't try to parse body again
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
+    bodyParser: false,
   });
   
   app.enableCors({
@@ -19,9 +28,6 @@ async function bootstrap() {
   app.use(helmet());
   
   app.use(compression());
-  
-  app.use(json({ limit: '50mb' }));
-  app.use(urlencoded({ extended: true, limit: '50mb' }));
   
   app.useGlobalPipes(
     new ValidationPipe({
