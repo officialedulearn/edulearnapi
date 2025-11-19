@@ -37,6 +37,38 @@ export interface DeviceInfo {
   ip: string;
 }
 
+export enum Currency {
+  NGN = 'NGN',
+  USD = 'USD',
+}
+
+export enum TransactionStatus {
+  INIT = 'INIT',
+  PAID = 'PAID',
+  COMPLETED = 'COMPLETED',
+}
+
+export enum TransactionType {
+  ON_RAMP = 'ON_RAMP',
+  OFF_RAMP = 'OFF_RAMP',
+}
+
+export interface OnrampWebhookData {
+  id: string;
+  address: string;
+  signature?: string;
+  mint: string;
+  currency: Currency;
+  amount: number;
+  usdcAmount: number;
+  fiatAmount: number;
+  sender: string;
+  receipiant: string;
+  rate: number;
+  status: TransactionStatus;
+  transactionType: TransactionType;
+}
+
 @Injectable()
 export class WalletService {
   private readonly EDLN: PublicKey = new PublicKey(
@@ -57,6 +89,8 @@ export class WalletService {
 
   private readonly proPaymentWallet: PublicKey = new PublicKey("CT9ispmUxpBrbXT4kiLuJNMKoYWEZXtos2cKcSds4jY5")
   private readonly lamportsToSend = 0.0007;
+
+  private readonly webhookEvents = new Map<string, OnrampWebhookData[]>();
 
   constructor(
     @Inject(forwardRef(() => AuthService))
@@ -1047,6 +1081,58 @@ export class WalletService {
 
   return order;
 }
+
+  processWebhookEvent(data: OnrampWebhookData): void {
+    const recipientAddress = data.receipiant || data.address;
+    
+    if (!this.webhookEvents.has(recipientAddress)) {
+      this.webhookEvents.set(recipientAddress, []);
+    }
+    
+    const events = this.webhookEvents.get(recipientAddress)!;
+    const existingIndex = events.findIndex(e => e.id === data.id);
+    
+    if (existingIndex >= 0) {
+      events[existingIndex] = data;
+    } else {
+      events.push(data);
+    }
+    
+    console.log(`Webhook event stored for address ${recipientAddress}:`, {
+      id: data.id,
+      status: data.status,
+      amount: data.amount,
+      type: data.transactionType
+    });
+    
+    setTimeout(() => {
+      const currentEvents = this.webhookEvents.get(recipientAddress);
+      if (currentEvents) {
+        const filtered = currentEvents.filter(e => e.id !== data.id);
+        if (filtered.length === 0) {
+          this.webhookEvents.delete(recipientAddress);
+        } else {
+          this.webhookEvents.set(recipientAddress, filtered);
+        }
+      }
+    }, 5 * 60 * 1000);
+  }
+
+  getPendingWebhookEvents(address: string): OnrampWebhookData[] {
+    return this.webhookEvents.get(address) || [];
+  }
+
+  clearWebhookEvent(address: string, eventId: string): void {
+    const events = this.webhookEvents.get(address);
+    if (events) {
+      const filtered = events.filter(e => e.id !== eventId);
+      if (filtered.length === 0) {
+        this.webhookEvents.delete(address);
+      } else {
+        this.webhookEvents.set(address, filtered);
+      }
+    }
+  }
 
   private getEarningsClaimEmailTemplate(
     name: string,

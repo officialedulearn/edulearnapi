@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { eq, and, sql } from 'drizzle-orm';
 import db from '../../drizzle';
 import {
@@ -12,7 +12,7 @@ import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { create, mplCore } from '@metaplex-foundation/mpl-core';
 import * as bs58 from 'bs58';
 
-import { clusterApiUrl, Connection, Keypair, PublicKey, Transaction, sendAndConfirmTransaction } from '@solana/web3.js';
+import { clusterApiUrl, Connection, Keypair, PublicKey, Transaction, sendAndConfirmTransaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import {
   createSignerFromKeypair,
   generateSigner,
@@ -23,15 +23,24 @@ import { decrypt } from 'lib/crypto.util';
 import { createTransferCheckedInstruction, getAssociatedTokenAddress, getOrCreateAssociatedTokenAccount } from '@solana/spl-token';
 import { ResendService } from '../resend/resend.service';
 import { TwitterService } from '../twitter/twitter.service';
+import { AuthService } from '../auth/auth.service';
 
 @Injectable()
 export class RewardsService {
   private readonly connection = new Connection(clusterApiUrl('mainnet-beta'));
-  constructor(private readonly resendService: ResendService, private readonly twitterService: TwitterService) {
+  private readonly EDLN: PublicKey = new PublicKey("CFw2KxMpWuxivoowkF8vRCrnMuDeg5VMHRR7zjE7pBLV");
+  private readonly reciepient = new PublicKey("CPfwdgYWhKL9Lshsdm5TKxB7sC8tHyKuLWzRTZtKCR7p");
+  private readonly REQUIRED_SOL = 0.02;
+  private readonly REQUIRED_EDLN = 1000;
+
+  constructor(
+    private readonly resendService: ResendService,
+    private readonly twitterService: TwitterService,
+    @Inject(forwardRef(() => AuthService))
+    private readonly authService: AuthService
+  ) {
     this.resendService = resendService;
   }
-  private readonly tokenMint = new PublicKey("CFw2KxMpWuxivoowkF8vRCrnMuDeg5VMHRR7zjE7pBLV")
-  private readonly reciepient = new PublicKey("CPfwdgYWhKL9Lshsdm5TKxB7sC8tHyKuLWzRTZtKCR7p")
 
 
   async createReward(data: {
@@ -41,30 +50,61 @@ export class RewardsService {
     imageUrl?: string;
   }): Promise<Reward> {
     try {
+      if (!data.type || (data.type !== 'certificate' && data.type !== 'points')) {
+        throw new Error('Invalid reward type. Must be either "certificate" or "points"');
+      }
+      if (!data.title || data.title.trim().length === 0) {
+        throw new Error('Reward title is required and cannot be empty');
+      }
+      if (!data.description || data.description.trim().length === 0) {
+        throw new Error('Reward description is required and cannot be empty');
+      }
+      if (data.title.length > 200) {
+        throw new Error('Reward title cannot exceed 200 characters');
+      }
+      if (data.description.length > 1000) {
+        throw new Error('Reward description cannot exceed 1000 characters');
+      }
+
       const [newReward] = await db.insert(reward).values(data).returning();
+      if (!newReward) {
+        throw new Error('Failed to create reward. Database insertion returned no result');
+      }
       return newReward;
     } catch (error) {
-      console.error('Failed to create reward', error);
-      throw error;
+      console.error('Failed to create reward:', error.message);
+      if (error.message.includes('Invalid reward type') || 
+          error.message.includes('required') || 
+          error.message.includes('cannot exceed')) {
+        throw error;
+      }
+      throw new Error(`Failed to create reward: ${error.message || 'Database error occurred'}`);
     }
   }
 
   async getAllRewards(): Promise<Reward[]> {
     try {
-      return await db.select().from(reward);
+      const rewards = await db.select().from(reward);
+      return rewards;
     } catch (error) {
-      console.error('Failed to get all rewards', error);
-      throw error;
+      console.error('Failed to get all rewards:', error.message);
+      throw new Error(`Failed to fetch rewards: ${error.message || 'Database connection error'}`);
     }
   }
 
   async getRewardById(id: string): Promise<Reward | null> {
     try {
+      if (!id || id.trim().length === 0) {
+        throw new Error('Reward ID is required');
+      }
       const results = await db.select().from(reward).where(eq(reward.id, id));
       return results[0] || null;
     } catch (error) {
-      console.error(`Failed to get reward with id ${id}`, error);
-      throw error;
+      console.error(`Failed to get reward with id ${id}:`, error.message);
+      if (error.message.includes('Reward ID is required')) {
+        throw error;
+      }
+      throw new Error(`Failed to fetch reward: ${error.message || 'Database error occurred'}`);
     }
   }
 
@@ -73,6 +113,30 @@ export class RewardsService {
     data: Partial<Omit<Reward, 'id' | 'createdAt'>>,
   ): Promise<Reward | null> {
     try {
+      if (!id || id.trim().length === 0) {
+        throw new Error('Reward ID is required');
+      }
+      if (data.type && data.type !== 'certificate' && data.type !== 'points') {
+        throw new Error('Invalid reward type. Must be either "certificate" or "points"');
+      }
+      if (data.title !== undefined && (!data.title || data.title.trim().length === 0)) {
+        throw new Error('Reward title cannot be empty');
+      }
+      if (data.title && data.title.length > 200) {
+        throw new Error('Reward title cannot exceed 200 characters');
+      }
+      if (data.description !== undefined && (!data.description || data.description.trim().length === 0)) {
+        throw new Error('Reward description cannot be empty');
+      }
+      if (data.description && data.description.length > 1000) {
+        throw new Error('Reward description cannot exceed 1000 characters');
+      }
+
+      const existingReward = await db.select().from(reward).where(eq(reward.id, id));
+      if (!existingReward.length) {
+        throw new Error(`Reward with id ${id} not found`);
+      }
+
       const [updatedReward] = await db
         .update(reward)
         .set(data)
@@ -80,13 +144,29 @@ export class RewardsService {
         .returning();
       return updatedReward || null;
     } catch (error) {
-      console.error(`Failed to update reward with id ${id}`, error);
-      throw error;
+      console.error(`Failed to update reward with id ${id}:`, error.message);
+      if (error.message.includes('Reward ID is required') || 
+          error.message.includes('Invalid reward type') || 
+          error.message.includes('cannot be empty') ||
+          error.message.includes('cannot exceed') ||
+          error.message.includes('not found')) {
+        throw error;
+      }
+      throw new Error(`Failed to update reward: ${error.message || 'Database error occurred'}`);
     }
   }
 
   async deleteReward(id: string): Promise<boolean> {
     try {
+      if (!id || id.trim().length === 0) {
+        throw new Error('Reward ID is required');
+      }
+
+      const existingReward = await db.select().from(reward).where(eq(reward.id, id));
+      if (!existingReward.length) {
+        throw new Error(`Reward with id ${id} not found`);
+      }
+
       await db.delete(userReward).where(eq(userReward.rewardId, id));
 
       const result = await db
@@ -95,8 +175,11 @@ export class RewardsService {
         .returning();
       return result.length > 0;
     } catch (error) {
-      console.error(`Failed to delete reward with id ${id}`, error);
-      throw error;
+      console.error(`Failed to delete reward with id ${id}:`, error.message);
+      if (error.message.includes('Reward ID is required') || error.message.includes('not found')) {
+        throw error;
+      }
+      throw new Error(`Failed to delete reward: ${error.message || 'Database error occurred'}`);
     }
   }
 
@@ -105,12 +188,19 @@ export class RewardsService {
     rewardId: string,
   ): Promise<UserReward> {
     try {
+      if (!userId || userId.trim().length === 0) {
+        throw new Error('User ID is required');
+      }
+      if (!rewardId || rewardId.trim().length === 0) {
+        throw new Error('Reward ID is required');
+      }
+
       const userExists = await db
         .select()
         .from(user)
         .where(eq(user.id, userId));
       if (!userExists.length) {
-        throw new Error(`User with id ${userId} not found`);
+        throw new Error(`User with id ${userId} not found. Please verify the user ID is correct`);
       }
 
       const rewardExists = await db
@@ -118,7 +208,7 @@ export class RewardsService {
         .from(reward)
         .where(eq(reward.id, rewardId));
       if (!rewardExists.length) {
-        throw new Error(`Reward with id ${rewardId} not found`);
+        throw new Error(`Reward with id ${rewardId} not found. Please verify the reward ID is correct`);
       }
 
       const existingAward = await db
@@ -129,7 +219,7 @@ export class RewardsService {
         );
 
       if (existingAward.length) {
-        throw new Error(`User already has this reward`);
+        throw new Error(`User ${userExists[0].email} already has the reward "${rewardExists[0].title}". Cannot award the same reward twice`);
       }
 
       const [newUserReward] = await db
@@ -140,6 +230,10 @@ export class RewardsService {
           earnedAt: new Date(),
         })
         .returning();
+
+      if (!newUserReward) {
+        throw new Error('Failed to create user-reward relationship. Database insertion returned no result');
+      }
 
         const postText = `Congratulations to @${userExists[0].username} for earning the ${rewardExists[0].title} NFT certificate!
 
@@ -172,19 +266,41 @@ export class RewardsService {
 
       return newUserReward;
     } catch (error) {
-      console.error(`Failed to award reward to user`, error);
-      throw error;
+      console.error(`Failed to award reward to user:`, error.message);
+      if (error.message.includes('User ID is required') || 
+          error.message.includes('Reward ID is required') ||
+          error.message.includes('not found') ||
+          error.message.includes('already has') ||
+          error.message.includes('Failed to create')) {
+        throw error;
+      }
+      throw new Error(`Failed to award reward: ${error.message || 'Database error occurred'}`);
     }
   }
 
   async claimReward(userId: string, rewardId: string) {
     try {
+      if (!userId || userId.trim().length === 0) {
+        throw new Error('User ID is required');
+      }
+      if (!rewardId || rewardId.trim().length === 0) {
+        throw new Error('Reward ID is required');
+      }
+
       const userExists = await db
         .select()
         .from(user)
         .where(eq(user.id, userId));
       if (!userExists.length) {
-        throw new Error(`User with id ${userId} not found`);
+        throw new Error(`User with id ${userId} not found. Please verify the user ID is correct`);
+      }
+
+      if (!userExists[0].encryptedPrivateKey) {
+        throw new Error('User wallet not found. Please ensure the user has a valid wallet configured');
+      }
+
+      if (!userExists[0].address) {
+        throw new Error('User wallet address not found. Please ensure the user has a valid wallet address');
       }
 
       const rewardExists = await db
@@ -192,68 +308,168 @@ export class RewardsService {
         .from(reward)
         .where(eq(reward.id, rewardId));
       if (!rewardExists.length) {
-        throw new Error(`Reward with id ${rewardId} not found`);
+        throw new Error(`Reward with id ${rewardId} not found. Please verify the reward ID is correct`);
       }
+
+      const userRewardCheck = await db
+        .select()
+        .from(userReward)
+        .where(
+          and(eq(userReward.userId, userId), eq(userReward.rewardId, rewardId)),
+        );
+      if (!userRewardCheck.length) {
+        throw new Error(`User has not been awarded the reward "${rewardExists[0].title}". You must be awarded a reward before you can claim it`);
+      }
+
+      if (userRewardCheck[0].signature) {
+        throw new Error(`Reward "${rewardExists[0].title}" has already been claimed. NFT signature: ${userRewardCheck[0].signature}`);
+      }
+
       const adminSecretKey = process.env.ADMIN_WALLET_SECRET_KEY;
       if (!adminSecretKey) {
-        throw new Error('Admin wallet secret key not configured');
+        throw new Error('Admin wallet secret key not configured. Please contact support');
       }
-      const adminKeypair = Keypair.fromSecretKey(bs58.default.decode(adminSecretKey));
+
+      let adminKeypair: Keypair;
+      try {
+        adminKeypair = Keypair.fromSecretKey(bs58.default.decode(adminSecretKey));
+      } catch (keyError) {
+        throw new Error('Invalid admin wallet secret key configuration. Please contact support');
+      }
     
-      const secretKey = decrypt(userExists[0].encryptedPrivateKey);
-      const userKeypair = Keypair.fromSecretKey(
-        bs58.default.decode(secretKey),
-      );
-      const userPublicKey = new PublicKey(userExists[0].address as string);
+      let secretKey: string;
+      let userKeypair: Keypair;
+      try {
+        secretKey = decrypt(userExists[0].encryptedPrivateKey);
+        userKeypair = Keypair.fromSecretKey(bs58.default.decode(secretKey));
+      } catch (decryptError) {
+        throw new Error('Failed to decrypt user wallet. Please contact support if this issue persists');
+      }
 
-      const umi = createUmi(this.connection).use(mplCore());
-      const umiKeypair = umi.eddsa.createKeypairFromSecretKey(
-        bs58.default.decode(secretKey)
-      );
-      
-      const signer = createSignerFromKeypair(umi, umiKeypair);
-      umi.use(keypairIdentity(signer));
+      let userPublicKey: PublicKey;
+      try {
+        userPublicKey = new PublicKey(userExists[0].address as string);
+      } catch (pubKeyError) {
+        throw new Error(`Invalid wallet address format: ${userExists[0].address}. Please contact support`);
+      }
 
-      const mint = generateSigner(umi);
+      try {
+        const solBalance = await this.connection.getBalance(userPublicKey);
+        const solBalanceInSol = solBalance / LAMPORTS_PER_SOL;
+        
+        if (solBalanceInSol < this.REQUIRED_SOL) {
+          throw new Error(
+            `Insufficient SOL balance. You have ${solBalanceInSol.toFixed(4)} SOL but need at least ${this.REQUIRED_SOL} SOL for gas fees. Please add more SOL to your wallet and try again.`
+          );
+        }
 
-      const result = await create(umi, {
-        asset: mint,
-        name: rewardExists[0].title,
-        uri: `${rewardExists[0].ipfs}`,
-        owner: publicKey(userExists[0].address as string)
-      }).sendAndConfirm(umi);
+        let edlnBalance = 0;
+        try {
+          const tokenAccounts = await this.connection.getParsedTokenAccountsByOwner(userPublicKey, {
+            mint: this.EDLN,
+          });
+          if (tokenAccounts.value.length > 0) {
+            const amount = tokenAccounts.value[0].account.data.parsed.info.tokenAmount.amount;
+            const decimals = tokenAccounts.value[0].account.data.parsed.info.tokenAmount.decimals;
+            edlnBalance = Number(amount) / Math.pow(10, decimals);
+          }
+        } catch (tokenError) {
+          console.log('Could not check EDLN balance, assuming 0:', tokenError.message);
+        }
 
-      console.log('NFT Mint Signature:', bs58.default.encode(result.signature));
-      const userTokenAccount = await getOrCreateAssociatedTokenAccount(
-        this.connection,
-        adminKeypair, 
-        this.tokenMint,
-        userPublicKey
-      );
+        if (edlnBalance < this.REQUIRED_EDLN) {
+          throw new Error(
+            `Insufficient EDLN balance. You have ${edlnBalance.toFixed(2)} EDLN but need at least ${this.REQUIRED_EDLN} EDLN for platform fees. Please add more EDLN tokens to your wallet and try again.`
+          );
+        }
+      } catch (balanceError) {
+        if (balanceError.message.includes('Insufficient SOL balance') || balanceError.message.includes('Insufficient EDLN balance')) {
+          throw balanceError;
+        }
+        throw new Error(`Failed to check wallet balance: ${balanceError.message || 'Network error occurred'}`);
+      }
 
-      const recipientTokenAccount = await getAssociatedTokenAddress(
-        this.tokenMint,
-        this.reciepient
-      );
+      if (!rewardExists[0].ipfs) {
+        throw new Error(`Reward "${rewardExists[0].title}" does not have an IPFS URI configured. Cannot mint NFT without metadata URI`);
+      }
 
-      const transferInstruction = createTransferCheckedInstruction(
-        userTokenAccount.address,
-        this.tokenMint,
-        recipientTokenAccount,
-        userPublicKey,
-        1_000_000_000_000, 
-        9
-      );
+      let umi;
+      let mint;
+      let result;
+      try {
+        umi = createUmi(this.connection).use(mplCore());
+        const umiKeypair = umi.eddsa.createKeypairFromSecretKey(
+          bs58.default.decode(secretKey)
+        );
+        
+        const signer = createSignerFromKeypair(umi, umiKeypair);
+        umi.use(keypairIdentity(signer));
 
-      const transaction = new Transaction().add(transferInstruction);
-      transaction.recentBlockhash = (await this.connection.getLatestBlockhash()).blockhash;
-      transaction.feePayer = adminKeypair.publicKey; 
-      
-      transaction.sign(adminKeypair, userKeypair);
-      
-      const txId = await sendAndConfirmTransaction(this.connection, transaction, [adminKeypair, userKeypair]);
+        mint = generateSigner(umi);
 
-      console.log('Token Transfer Transaction ID:', txId);
+        result = await create(umi, {
+          asset: mint,
+          name: rewardExists[0].title,
+          uri: `${rewardExists[0].ipfs}`,
+          owner: publicKey(userExists[0].address as string)
+        }).sendAndConfirm(umi);
+
+        console.log('NFT Mint Signature:', bs58.default.encode(result.signature));
+      } catch (nftError) {
+        console.error('Error minting NFT:', nftError.message);
+        if (nftError.message.includes('insufficient') || nftError.message.includes('Insufficient')) {
+          throw new Error(`Insufficient balance for NFT minting: ${nftError.message}. Please ensure you have enough SOL for gas fees`);
+        }
+        if (nftError.message.includes('network') || nftError.message.includes('timeout')) {
+          throw new Error(`Network error during NFT minting: ${nftError.message}. Please try again in a few moments`);
+        }
+        throw new Error(`Failed to mint NFT: ${nftError.message || 'Unknown error occurred during NFT creation'}`);
+      }
+
+      let userTokenAccount;
+      let recipientTokenAccount;
+      let txId;
+      try {
+        userTokenAccount = await getOrCreateAssociatedTokenAccount(
+          this.connection,
+          adminKeypair, 
+          this.EDLN,
+          userPublicKey
+        );
+
+        recipientTokenAccount = await getAssociatedTokenAddress(
+          this.EDLN,
+          this.reciepient
+        );
+
+        const transferInstruction = createTransferCheckedInstruction(
+          userTokenAccount.address,
+          this.EDLN,
+          recipientTokenAccount,
+          userPublicKey,
+          1_000_000_000_000, 
+          9
+        );
+
+        const transaction = new Transaction().add(transferInstruction);
+        transaction.recentBlockhash = (await this.connection.getLatestBlockhash()).blockhash;
+        transaction.feePayer = adminKeypair.publicKey; 
+        
+        transaction.sign(adminKeypair, userKeypair);
+        
+        txId = await sendAndConfirmTransaction(this.connection, transaction, [adminKeypair, userKeypair]);
+
+        console.log('Token Transfer Transaction ID:', txId);
+      } catch (transferError) {
+        console.error('Error transferring tokens:', transferError.message);
+        if (transferError.message.includes('insufficient') || transferError.message.includes('Insufficient')) {
+          throw new Error(`Insufficient balance for token transfer: ${transferError.message}. Please ensure you have enough EDLN tokens`);
+        }
+        if (transferError.message.includes('network') || transferError.message.includes('timeout')) {
+          throw new Error(`Network error during token transfer: ${transferError.message}. Please try again in a few moments`);
+        }
+        throw new Error(`Failed to transfer tokens: ${transferError.message || 'Unknown error occurred during token transfer'}`);
+      }
 
      
       const html = this.getNFTClaimEmailTemplate(
@@ -265,24 +481,47 @@ export class RewardsService {
 
       await this.resendService.sendEmail(userExists[0].email, '🎉 Congratulations! You Earned an NFT Certificate!', html);
       
-      await db.update(userReward)
-        .set({
-          signature: bs58.default.encode(result.signature),
-          lockTransactionId: txId
-        })
-        .where(
-          and(eq(userReward.userId, userId), eq(userReward.rewardId, rewardId)),
-        );
+      try {
+        await db.update(userReward)
+          .set({
+            signature: bs58.default.encode(result.signature),
+            lockTransactionId: txId
+          })
+          .where(
+            and(eq(userReward.userId, userId), eq(userReward.rewardId, rewardId)),
+          );
+      } catch (dbError) {
+        console.error('Error updating user reward record:', dbError.message);
+        throw new Error(`Failed to update reward claim status: ${dbError.message || 'Database error occurred'}`);
+      }
 
       return bs58.default.encode(result.signature);
     } catch (error) {
-      console.error(`Failed to claim reward for user`, error);
-      throw error;
+      console.error(`Failed to claim reward for user:`, error.message);
+      if (error.message.includes('User ID is required') ||
+          error.message.includes('Reward ID is required') ||
+          error.message.includes('not found') ||
+          error.message.includes('already been claimed') ||
+          error.message.includes('has not been awarded') ||
+          error.message.includes('Insufficient') ||
+          error.message.includes('Failed to decrypt') ||
+          error.message.includes('Invalid wallet') ||
+          error.message.includes('does not have an IPFS') ||
+          error.message.includes('Failed to mint') ||
+          error.message.includes('Failed to transfer') ||
+          error.message.includes('Failed to update')) {
+        throw error;
+      }
+      throw new Error(`Failed to claim reward: ${error.message || 'Unknown error occurred'}`);
     }
   }
 
   async getUserCertificateCount(userId: string): Promise<number> {
     try {
+      if (!userId || userId.trim().length === 0) {
+        throw new Error('User ID is required');
+      }
+
       const result = await db
         .select({ count: sql`count(*)` })
         .from(userReward)
@@ -294,15 +533,22 @@ export class RewardsService {
       return Number(result[0].count) || 0;
     } catch (error) {
       console.error(
-        `Failed to get certificate count for user with id ${userId}`,
-        error,
+        `Failed to get certificate count for user with id ${userId}:`,
+        error.message,
       );
-      throw error;
+      if (error.message.includes('User ID is required')) {
+        throw error;
+      }
+      throw new Error(`Failed to fetch certificate count: ${error.message || 'Database error occurred'}`);
     }
   }
 
   async getUserRewards(userId: string): Promise<Reward[]> {
     try {
+      if (!userId || userId.trim().length === 0) {
+        throw new Error('User ID is required');
+      }
+
       const results = await db
         .select({
           id: reward.id,
@@ -321,8 +567,11 @@ export class RewardsService {
 
       return results;
     } catch (error) {
-      console.error(`Failed to get rewards for user with id ${userId}`, error);
-      throw error;
+      console.error(`Failed to get rewards for user with id ${userId}:`, error.message);
+      if (error.message.includes('User ID is required')) {
+        throw error;
+      }
+      throw new Error(`Failed to fetch user rewards: ${error.message || 'Database error occurred'}`);
     }
   }
 
@@ -331,6 +580,13 @@ export class RewardsService {
     rewardId: string,
   ): Promise<boolean> {
     try {
+      if (!userId || userId.trim().length === 0) {
+        throw new Error('User ID is required');
+      }
+      if (!rewardId || rewardId.trim().length === 0) {
+        throw new Error('Reward ID is required');
+      }
+
       const result = await db
         .delete(userReward)
         .where(
@@ -340,8 +596,11 @@ export class RewardsService {
 
       return result.length > 0;
     } catch (error) {
-      console.error(`Failed to remove reward from user`, error);
-      throw error;
+      console.error(`Failed to remove reward from user:`, error.message);
+      if (error.message.includes('User ID is required') || error.message.includes('Reward ID is required')) {
+        throw error;
+      }
+      throw new Error(`Failed to remove reward from user: ${error.message || 'Database error occurred'}`);
     }
   }
 
@@ -351,6 +610,15 @@ export class RewardsService {
     { userId: string; name: string; email: string; earnedAt: Date }[]
   > {
     try {
+      if (!rewardId || rewardId.trim().length === 0) {
+        throw new Error('Reward ID is required');
+      }
+
+      const rewardExists = await db.select().from(reward).where(eq(reward.id, rewardId));
+      if (!rewardExists.length) {
+        throw new Error(`Reward with id ${rewardId} not found. Please verify the reward ID is correct`);
+      }
+
       const results = await db
         .select({
           userId: user.id,
@@ -365,8 +633,11 @@ export class RewardsService {
 
       return results;
     } catch (error) {
-      console.error(`Failed to get users with reward id ${rewardId}`, error);
-      throw error;
+      console.error(`Failed to get users with reward id ${rewardId}:`, error.message);
+      if (error.message.includes('Reward ID is required') || error.message.includes('not found')) {
+        throw error;
+      }
+      throw new Error(`Failed to fetch reward recipients: ${error.message || 'Database error occurred'}`);
     }
   }
 

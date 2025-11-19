@@ -20,27 +20,12 @@ export class RewardsController {
     await verifyUserAuthorization(req.user, data.userId, 'claiming reward');
     
     try {
-      return await this.rewardsService.claimReward(data.userId, data.rewardId);
+      const signature = await this.rewardsService.claimReward(data.userId, data.rewardId);
+      return { success: true, signature, message: 'Reward claimed successfully' };
     } catch (error) {
-      throw new BadRequestException('Failed to claim reward: ' + error.message);
-    }
-  }
-
-  @Post()
-  async createReward(@Body() data: {
-    type: 'certificate' | 'points'
-    title: string;
-    description: string;
-    imageUrl?: string;
-  }) {
-    if (!data.type || !data.title || !data.description) {
-      throw new BadRequestException('Type, title, and description are required');
-    }
-    
-    try {
-      return await this.rewardsService.createReward(data);
-    } catch (error) {
-      throw new BadRequestException('Failed to create reward: ' + error.message);
+      console.error('Error claiming reward:', error.message);
+      const errorMessage = error?.message || 'Failed to claim reward';
+      throw new BadRequestException(errorMessage);
     }
   }
 
@@ -49,7 +34,9 @@ export class RewardsController {
     try {
       return await this.rewardsService.getAllRewards();
     } catch (error) {
-      throw new BadRequestException('Failed to fetch rewards: ' + error.message);
+      console.error('Error fetching rewards:', error.message);
+      const errorMessage = error?.message || 'Failed to fetch rewards';
+      throw new BadRequestException(errorMessage);
     }
   }
 
@@ -65,49 +52,12 @@ export class RewardsController {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new BadRequestException('Failed to fetch reward: ' + error.message);
+      console.error('Error fetching reward:', error.message);
+      const errorMessage = error?.message || 'Failed to fetch reward';
+      throw new BadRequestException(errorMessage);
     }
   }
 
-  @Put(':id')
-  async updateReward(
-    @Param('id') id: string,
-    @Body() data: {
-      type?: 'certificate' | 'points';
-      title?: string;
-      description?: string;
-      imageUrl?: string;
-    }
-  ) {
-    try {
-      const updatedReward = await this.rewardsService.updateReward(id, data);
-      if (!updatedReward) {
-        throw new NotFoundException(`Reward with id ${id} not found`);
-      }
-      return updatedReward;
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException('Failed to update reward: ' + error.message);
-    }
-  }
-
-  @Delete(':id')
-  async deleteReward(@Param('id') id: string) {
-    try {
-      const deleted = await this.rewardsService.deleteReward(id);
-      if (!deleted) {
-        throw new NotFoundException(`Reward with id ${id} not found`);
-      }
-      return { success: true, message: 'Reward deleted successfully' };
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException('Failed to delete reward: ' + error.message);
-    }
-  }
 
   @Post('award')
   async awardRewardToUser(
@@ -120,7 +70,9 @@ export class RewardsController {
     try {
       return await this.rewardsService.awardRewardToUser(data.userId, data.rewardId);
     } catch (error) {
-      throw new BadRequestException('Failed to award reward: ' + error.message);
+      console.error('Error awarding reward:', error.message);
+      const errorMessage = error?.message || 'Failed to award reward';
+      throw new BadRequestException(errorMessage);
     }
   }
 
@@ -135,32 +87,12 @@ export class RewardsController {
     try {
       return await this.rewardsService.getUserRewards(userId);
     } catch (error) {
-      throw new BadRequestException('Failed to fetch user rewards: ' + error.message);
+      console.error('Error fetching user rewards:', error.message);
+      const errorMessage = error?.message || 'Failed to fetch user rewards';
+      throw new BadRequestException(errorMessage);
     }
   }
 
-  @Delete('user')
-  async removeRewardFromUser(
-    @Query('userId') userId: string,
-    @Query('rewardId') rewardId: string
-  ) {
-    if (!userId || !rewardId) {
-      throw new BadRequestException('User ID and reward ID are required');
-    }
-    
-    try {
-      const removed = await this.rewardsService.removeRewardFromUser(userId, rewardId);
-      if (!removed) {
-        throw new NotFoundException('User-reward relationship not found');
-      }
-      return { success: true, message: 'Reward removed from user successfully' };
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException('Failed to remove reward from user: ' + error.message);
-    }
-  }
 
   @Get('user/:userId/certificate-count')
   async getUserCertificateCount(@Request() req, @Param('userId') userId: string) {
@@ -174,7 +106,9 @@ export class RewardsController {
       const count = await this.rewardsService.getUserCertificateCount(userId);
       return { count };
     } catch (error) {
-      throw new BadRequestException('Failed to fetch user certificate count: ' + error.message);
+      console.error('Error fetching certificate count:', error.message);
+      const errorMessage = error?.message || 'Failed to fetch user certificate count';
+      throw new BadRequestException(errorMessage);
     }
   }
 
@@ -187,7 +121,9 @@ export class RewardsController {
     try {
       return await this.rewardsService.getUsersWithReward(rewardId);
     } catch (error) {
-      throw new BadRequestException('Failed to fetch reward recipients: ' + error.message);
+      console.error('Error fetching reward recipients:', error.message);
+      const errorMessage = error?.message || 'Failed to fetch reward recipients';
+      throw new BadRequestException(errorMessage);
     }
   }
 }

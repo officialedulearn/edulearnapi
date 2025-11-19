@@ -1,11 +1,16 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { RewardsController } from './rewards.controller';
 import { RewardsService } from './rewards.service';
 import { ResendModule } from 'src/resend/resend.module';
-import {TwitterModule} from 'src/twitter/twitter.module'
+import { TwitterModule } from 'src/twitter/twitter.module';
+import { AuthModule } from 'src/auth/auth.module';
 
 @Module({
-  imports: [ResendModule, TwitterModule],
+  imports: [
+    ResendModule, 
+    TwitterModule,
+    forwardRef(() => AuthModule)
+  ],
   controllers: [RewardsController],
   providers: [RewardsService],
   exports: [RewardsService]

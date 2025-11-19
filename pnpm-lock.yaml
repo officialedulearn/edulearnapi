@@ -129,8 +129,8 @@ importers:
         specifier: ^2.0.2
         version: 2.0.2
       paj_ramp:
-        specifier: ^1.2.10
-        version: 1.2.10(@babel/core@7.28.3)(@jest/transform@30.2.0)(@jest/types@30.2.0)(@types/node@22.17.2)(babel-jest@30.2.0(@babel/core@7.28.3))(bufferutil@4.0.9)(esbuild-register@3.6.0(esbuild@0.25.9))(esbuild@0.25.9)(jest-util@30.2.0)(ts-node@10.9.2(@swc/core@1.13.3(@swc/helpers@0.5.17))(@types/node@22.17.2)(typescript@5.9.2))(typescript@5.9.2)(utf-8-validate@5.0.10)
+        specifier: ^1.3.1
+        version: 1.3.1(@babel/core@7.28.3)(@jest/transform@30.2.0)(@jest/types@30.2.0)(@types/node@22.17.2)(babel-jest@30.2.0(@babel/core@7.28.3))(bufferutil@4.0.9)(esbuild-register@3.6.0(esbuild@0.25.9))(esbuild@0.25.9)(jest-util@30.2.0)(ts-node@10.9.2(@swc/core@1.13.3(@swc/helpers@0.5.17))(@types/node@22.17.2)(typescript@5.9.2))(typescript@5.9.2)(utf-8-validate@5.0.10)
       pg:
         specifier: ^8.16.3
         version: 8.16.3
@@ -6515,8 +6515,8 @@ packages:
   package-json-from-dist@1.0.1:
     resolution: {integrity: sha512-UEZIS3/by4OC8vL3P2dTXRETpebLI2NiI5vIrjaD/5UtrkFX/tNbwjTSRAGC/+7CAo2pIcBaRgWmcBBHcsaCIw==}
 
-  paj_ramp@1.2.10:
-    resolution: {integrity: sha512-a5oQBRTzLYkp2IKVQ2kEiug5BpP4P5HanTRpc2j4aP6KcBZCOR7pGm5QgajRgsFuSeOlsKUSRUt65Ou+OFHP7Q==}
+  paj_ramp@1.3.1:
+    resolution: {integrity: sha512-EvNRvtgZEWs04BUvxCrOrWVEjIAKnuPsNa0sCKqTR1gdSpXDiF1n/kOJdCcVwIbyjemYZwXYStUuE2qMjpPwrA==}
 
   pako@2.1.0:
     resolution: {integrity: sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==}
@@ -16190,7 +16190,7 @@ snapshots:
 
   package-json-from-dist@1.0.1: {}
 
-  paj_ramp@1.2.10(@babel/core@7.28.3)(@jest/transform@30.2.0)(@jest/types@30.2.0)(@types/node@22.17.2)(babel-jest@30.2.0(@babel/core@7.28.3))(bufferutil@4.0.9)(esbuild-register@3.6.0(esbuild@0.25.9))(esbuild@0.25.9)(jest-util@30.2.0)(ts-node@10.9.2(@swc/core@1.13.3(@swc/helpers@0.5.17))(@types/node@22.17.2)(typescript@5.9.2))(typescript@5.9.2)(utf-8-validate@5.0.10):
+  paj_ramp@1.3.1(@babel/core@7.28.3)(@jest/transform@30.2.0)(@jest/types@30.2.0)(@types/node@22.17.2)(babel-jest@30.2.0(@babel/core@7.28.3))(bufferutil@4.0.9)(esbuild-register@3.6.0(esbuild@0.25.9))(esbuild@0.25.9)(jest-util@30.2.0)(ts-node@10.9.2(@swc/core@1.13.3(@swc/helpers@0.5.17))(@types/node@22.17.2)(typescript@5.9.2))(typescript@5.9.2)(utf-8-validate@5.0.10):
     dependencies:
       '@solana/web3.js': 1.98.4(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)
       '@types/jest': 29.5.14

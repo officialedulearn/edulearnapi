@@ -3,7 +3,7 @@ import { WalletService } from './wallet.service';
 import { PublicKey } from '@solana/web3.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
-import { DeviceInfo } from './wallet.service';
+import { DeviceInfo, OnrampWebhookData } from './wallet.service';
 
 @Controller('wallet')
 export class WalletController {
@@ -57,12 +57,14 @@ export class WalletController {
 
     @Post("onramp-webhook")
     @HttpCode(200)
-    async onrampWebhook(@Response() res, @Body() data: any) {
+    async onrampWebhook(@Response() res, @Body() data: OnrampWebhookData) {
         try {
             console.log('=== Onramp Webhook Received ===');
             console.log('Timestamp:', new Date().toISOString());
             console.log('Webhook Data:', JSON.stringify(data, null, 2));
             console.log('================================');
+            
+            this.walletService.processWebhookEvent(data);
             
             return res.status(200).json({ 
                 success: true,
@@ -73,6 +75,41 @@ export class WalletController {
             return res.status(500).json({ 
                 success: false,
                 message: 'Failed to process webhook' 
+            });
+        }
+    }
+
+    @Get("onramp-webhook/pending/:address")
+    @UseGuards(JwtAuthGuard)
+    async getPendingWebhookEvents(@Response() res, @Param('address') address: string) {
+        try {
+            const events = this.walletService.getPendingWebhookEvents(address);
+            return res.status(200).json({ 
+                events,
+                hasUpdates: events.length > 0
+            });
+        } catch (error) {
+            console.error('Error fetching pending webhook events:', error);
+            return res.status(500).json({ 
+                message: error.message || 'Failed to fetch pending events' 
+            });
+        }
+    }
+
+    @Post("onramp-webhook/clear/:address")
+    @UseGuards(JwtAuthGuard)
+    async clearWebhookEvent(@Response() res, @Param('address') address: string, @Body() data: { eventId: string }) {
+        try {
+            this.walletService.clearWebhookEvent(address, data.eventId);
+            return res.status(200).json({ 
+                success: true,
+                message: 'Webhook event cleared' 
+            });
+        } catch (error) {
+            console.error('Error clearing webhook event:', error);
+            return res.status(500).json({ 
+                success: false,
+                message: 'Failed to clear webhook event' 
             });
         }
     }
