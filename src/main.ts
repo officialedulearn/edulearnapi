@@ -8,10 +8,9 @@ import { ExpressAdapter } from '@nestjs/platform-express';
 import * as express from 'express';
 
 async function bootstrap() {
-  const server = express();
-
-  const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
-    
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true, 
+  });
   app.enableCors({
     origin: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
