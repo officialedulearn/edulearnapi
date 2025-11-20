@@ -31,19 +31,36 @@ const updateUserPFPs = async () => {
         let processedCount = 0;
 
         const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-        const CONCURRENCY_LIMIT = 5;
-        const REQUEST_DELAY = 200;
+        
+        let rateLimitRemaining = 300;
+        let rateLimitReset = Date.now() + 15 * 60 * 1000;
+        const BASE_DELAY = 3000;
 
-        const processUser = async (sUser: typeof users[0]) => {
-            if (!sUser.username) {
-                console.log(`⚠️  Skipping ${sUser.email}: no username`);
-                return { success: false, skipped: true };
+        const checkAndWaitForRateLimit = async () => {
+            const now = Date.now();
+            
+            if (rateLimitRemaining <= 5) {
+                const waitTime = rateLimitReset - now + 1000;
+                if (waitTime > 0) {
+                    console.log(`⏳ Rate limit low (${rateLimitRemaining} remaining). Waiting ${Math.ceil(waitTime / 1000)}s for reset...`);
+                    await delay(waitTime);
+                    rateLimitRemaining = 300;
+                    rateLimitReset = Date.now() + 15 * 60 * 1000;
+                }
             }
+        };
 
-            let retries = 0;
-            const maxRetries = 2;
+        for (const sUser of users) {
+            try {
+                if (!sUser.username) {
+                    console.log(`⚠️  Skipping ${sUser.email}: no username`);
+                    failCount++;
+                    processedCount++;
+                    continue;
+                }
 
-            while (retries <= maxRetries) {
+                await checkAndWaitForRateLimit();
+
                 try {
                     const response = await axios.get(
                         `https://api.twitter.com/2/users/by/username/${sUser.username}`,
@@ -57,6 +74,16 @@ const updateUserPFPs = async () => {
                         }
                       );
 
+                    const remaining = parseInt(response.headers['x-rate-limit-remaining'] || '0');
+                    const reset = parseInt(response.headers['x-rate-limit-reset'] || '0');
+                    
+                    if (remaining !== 0) {
+                        rateLimitRemaining = remaining;
+                    }
+                    if (reset !== 0) {
+                        rateLimitReset = reset * 1000;
+                    }
+
                     if (response.data?.data?.profile_image_url) {
                         const profilePictureURL = response.data.data.profile_image_url;
                         
@@ -65,61 +92,90 @@ const updateUserPFPs = async () => {
                           .set({ profilePictureURL })
                           .where(eq(user.email, sUser.email));
                         
-                        console.log(`✅ Updated PFP for ${sUser.email}`);
-                        return { success: true };
+                        console.log(`✅ Updated PFP for ${sUser.email} (${rateLimitRemaining} requests remaining)`);
+                        successCount++;
                     } else {
                         console.log(`⚠️  No profile image found for ${sUser.username}`);
-                        return { success: false };
+                        failCount++;
                     }
                 } catch (error: any) {
                     if (error.response?.status === 404) {
                         console.log(`⚠️  User not found on Twitter: ${sUser.username}`);
-                        return { success: false };
+                        failCount++;
                     } else if (error.response?.status === 429) {
                         const resetTime = error.response?.headers?.['x-rate-limit-reset'];
-                        if (resetTime && retries < maxRetries) {
-                            const waitTime = (parseInt(resetTime) * 1000) - Date.now() + 1000;
+                        if (resetTime) {
+                            rateLimitReset = parseInt(resetTime) * 1000;
+                            rateLimitRemaining = 0;
+                            const waitTime = rateLimitReset - Date.now() + 1000;
                             if (waitTime > 0) {
-                                console.log(`⏳ Rate limit hit. Waiting ${Math.ceil(waitTime / 1000)}s for reset...`);
+                                console.log(`⏳ Rate limit exceeded. Waiting ${Math.ceil(waitTime / 1000)}s for reset...`);
                                 await delay(waitTime);
-                                retries++;
-                                continue;
+                                rateLimitRemaining = 300;
+                                rateLimitReset = Date.now() + 15 * 60 * 1000;
+                                
+                                try {
+                                    const retryResponse = await axios.get(
+                                        `https://api.twitter.com/2/users/by/username/${sUser.username}`,
+                                        {
+                                          headers: {
+                                            Authorization: `Bearer ${bearerToken}`,
+                                          },
+                                          params: {
+                                            'user.fields': 'profile_image_url',
+                                          },
+                                        }
+                                      );
+
+                                    const retryRemaining = parseInt(retryResponse.headers['x-rate-limit-remaining'] || '0');
+                                    const retryReset = parseInt(retryResponse.headers['x-rate-limit-reset'] || '0');
+                                    
+                                    if (retryRemaining !== 0) {
+                                        rateLimitRemaining = retryRemaining;
+                                    }
+                                    if (retryReset !== 0) {
+                                        rateLimitReset = retryReset * 1000;
+                                    }
+
+                                    if (retryResponse.data?.data?.profile_image_url) {
+                                        const profilePictureURL = retryResponse.data.data.profile_image_url;
+                                        
+                                        await db
+                                          .update(user)
+                                          .set({ profilePictureURL })
+                                          .where(eq(user.email, sUser.email));
+                                        
+                                        console.log(`✅ Updated PFP for ${sUser.email} (${rateLimitRemaining} requests remaining)`);
+                                        successCount++;
+                                    } else {
+                                        console.log(`⚠️  No profile image found for ${sUser.username}`);
+                                        failCount++;
+                                    }
+                                } catch (retryError: any) {
+                                    console.error(`❌ Error retrying ${sUser.username}:`, retryError.message);
+                                    failCount++;
+                                }
+                            } else {
+                                failCount++;
                             }
+                        } else {
+                            console.error(`❌ Rate limit exceeded for ${sUser.username} (no reset time)`);
+                            failCount++;
                         }
-                        console.error(`❌ Rate limit exceeded for ${sUser.username}`);
-                        return { success: false };
                     } else {
-                        if (retries < maxRetries) {
-                            retries++;
-                            const backoffDelay = Math.min(500 * Math.pow(2, retries), 3000);
-                            await delay(backoffDelay);
-                            continue;
-                        }
                         console.error(`❌ Error updating ${sUser.email}:`, error.message);
-                        return { success: false };
+                        failCount++;
                     }
                 }
-            }
-            return { success: false };
-        };
 
-        for (let i = 0; i < users.length; i += CONCURRENCY_LIMIT) {
-            const batch = users.slice(i, i + CONCURRENCY_LIMIT);
-            const results = await Promise.all(
-                batch.map(sUser => processUser(sUser))
-            );
-
-            results.forEach(result => {
                 processedCount++;
-                if (result.success) {
-                    successCount++;
-                } else if (!result.skipped) {
-                    failCount++;
-                }
-            });
-
-            if (i + CONCURRENCY_LIMIT < users.length) {
-                await delay(REQUEST_DELAY);
+                
+                const delayTime = rateLimitRemaining > 50 ? BASE_DELAY : BASE_DELAY * 2;
+                await delay(delayTime);
+            } catch (error: any) {
+                console.error(`❌ Unexpected error processing ${sUser.email}:`, error.message);
+                failCount++;
+                processedCount++;
             }
         }
 
