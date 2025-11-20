@@ -20,7 +20,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed:rewards": "ts-node -r tsconfig-paths/register scripts/seed-rewards.ts",
     "check:orphaned-users": "ts-node -r tsconfig-paths/register scripts/check-orphaned-users.ts",
-    "cleanup:orphaned-users": "ts-node -r tsconfig-paths/register scripts/cleanup-orphaned-users.ts"
+    "cleanup:orphaned-users": "ts-node -r tsconfig-paths/register scripts/cleanup-orphaned-users.ts",
+    "updatepfps": "ts-node -r tsconfig-paths/register scripts/updatepfps.ts"
   },
   "dependencies": {
     "@google-cloud/speech": "^7.2.0",
