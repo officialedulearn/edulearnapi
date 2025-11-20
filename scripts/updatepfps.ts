@@ -31,99 +31,95 @@ const updateUserPFPs = async () => {
         let processedCount = 0;
 
         const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+        const CONCURRENCY_LIMIT = 5;
+        const REQUEST_DELAY = 200;
 
-        const waitForRateLimit = async (error: any) => {
-            const resetTime = error.response?.headers?.['x-rate-limit-reset'];
-            if (resetTime) {
-                const waitTime = (parseInt(resetTime) * 1000) - Date.now() + 1000;
-                if (waitTime > 0) {
-                    console.log(`⏳ Rate limit reset at ${new Date(parseInt(resetTime) * 1000).toLocaleTimeString()}. Waiting ${Math.ceil(waitTime / 1000)} seconds...`);
-                    await delay(waitTime);
-                    return true;
-                }
+        const processUser = async (sUser: typeof users[0]) => {
+            if (!sUser.username) {
+                console.log(`⚠️  Skipping ${sUser.email}: no username`);
+                return { success: false, skipped: true };
             }
-            return false;
-        };
 
-        for (const sUser of users) {
-            try {
-                if (!sUser.username) {
-                    console.log(`⚠️  Skipping ${sUser.email}: no username`);
-                    failCount++;
-                    processedCount++;
-                    continue;
-                }
+            let retries = 0;
+            const maxRetries = 2;
 
-                let retries = 0;
-                const maxRetries = 3;
-                let success = false;
-
-                while (retries < maxRetries && !success) {
-                    try {
-                        const response = await axios.get(
-                            `https://api.twitter.com/2/users/by/username/${sUser.username}`,
-                            {
-                              headers: {
-                                Authorization: `Bearer ${bearerToken}`,
-                              },
-                              params: {
-                                'user.fields': 'profile_image_url',
-                              },
-                            }
-                          );
-
-                        if (response.data?.data?.profile_image_url) {
-                            const profilePictureURL = response.data.data.profile_image_url;
-                            
-                            await db
-                              .update(user)
-                              .set({ profilePictureURL })
-                              .where(eq(user.email, sUser.email));
-                            
-                            console.log(`✅ Updated PFP for ${sUser.email}`);
-                            successCount++;
-                            success = true;
-                        } else {
-                            console.log(`⚠️  No profile image found for ${sUser.username}`);
-                            failCount++;
-                            success = true;
+            while (retries <= maxRetries) {
+                try {
+                    const response = await axios.get(
+                        `https://api.twitter.com/2/users/by/username/${sUser.username}`,
+                        {
+                          headers: {
+                            Authorization: `Bearer ${bearerToken}`,
+                          },
+                          params: {
+                            'user.fields': 'profile_image_url',
+                          },
                         }
-                    } catch (error: any) {
-                        if (error.response?.status === 404) {
-                            console.log(`⚠️  User not found on Twitter: ${sUser.username}`);
-                            failCount++;
-                            success = true;
-                        } else if (error.response?.status === 429) {
-                            const waited = await waitForRateLimit(error);
-                            if (waited) {
+                      );
+
+                    if (response.data?.data?.profile_image_url) {
+                        const profilePictureURL = response.data.data.profile_image_url;
+                        
+                        await db
+                          .update(user)
+                          .set({ profilePictureURL })
+                          .where(eq(user.email, sUser.email));
+                        
+                        console.log(`✅ Updated PFP for ${sUser.email}`);
+                        return { success: true };
+                    } else {
+                        console.log(`⚠️  No profile image found for ${sUser.username}`);
+                        return { success: false };
+                    }
+                } catch (error: any) {
+                    if (error.response?.status === 404) {
+                        console.log(`⚠️  User not found on Twitter: ${sUser.username}`);
+                        return { success: false };
+                    } else if (error.response?.status === 429) {
+                        const resetTime = error.response?.headers?.['x-rate-limit-reset'];
+                        if (resetTime && retries < maxRetries) {
+                            const waitTime = (parseInt(resetTime) * 1000) - Date.now() + 1000;
+                            if (waitTime > 0) {
+                                console.log(`⏳ Rate limit hit. Waiting ${Math.ceil(waitTime / 1000)}s for reset...`);
+                                await delay(waitTime);
                                 retries++;
-                                console.log(`🔄 Retrying (${retries}/${maxRetries})...`);
-                            } else {
-                                console.error(`❌ Rate limit exceeded. Skipping ${sUser.username}`);
-                                failCount++;
-                                success = true;
-                            }
-                        } else {
-                            if (retries < maxRetries - 1) {
-                                retries++;
-                                const backoffDelay = Math.min(1000 * Math.pow(2, retries), 10000);
-                                console.log(`⚠️  Error updating ${sUser.email}: ${error.message}. Retrying in ${backoffDelay}ms...`);
-                                await delay(backoffDelay);
-                            } else {
-                                console.error(`❌ Error updating ${sUser.email}:`, error.message);
-                                failCount++;
-                                success = true;
+                                continue;
                             }
                         }
+                        console.error(`❌ Rate limit exceeded for ${sUser.username}`);
+                        return { success: false };
+                    } else {
+                        if (retries < maxRetries) {
+                            retries++;
+                            const backoffDelay = Math.min(500 * Math.pow(2, retries), 3000);
+                            await delay(backoffDelay);
+                            continue;
+                        }
+                        console.error(`❌ Error updating ${sUser.email}:`, error.message);
+                        return { success: false };
                     }
                 }
+            }
+            return { success: false };
+        };
 
+        for (let i = 0; i < users.length; i += CONCURRENCY_LIMIT) {
+            const batch = users.slice(i, i + CONCURRENCY_LIMIT);
+            const results = await Promise.all(
+                batch.map(sUser => processUser(sUser))
+            );
+
+            results.forEach(result => {
                 processedCount++;
-                await delay(1000);
-            } catch (error: any) {
-                console.error(`❌ Unexpected error processing ${sUser.email}:`, error.message);
-                failCount++;
-                processedCount++;
+                if (result.success) {
+                    successCount++;
+                } else if (!result.skipped) {
+                    failCount++;
+                }
+            });
+
+            if (i + CONCURRENCY_LIMIT < users.length) {
+                await delay(REQUEST_DELAY);
             }
         }
 
