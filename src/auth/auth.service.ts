@@ -465,7 +465,7 @@ export class AuthService {
         userId: currentUser.id,
         type: type,
         title: title,
-        xpEarned: newXP,
+        xpEarned: xp,
       });
 
       let newLevel = 'novice';
