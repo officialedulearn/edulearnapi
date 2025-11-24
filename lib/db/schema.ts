@@ -190,3 +190,16 @@ export const roadMapStep = pgTable('roadmap_step', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   done: boolean('done').default(false),
 })
+
+export const totalVolumes = pgTable('total_volumes', {
+  id: integer('id').primaryKey().notNull().default(1),
+  totalRevenue: numeric('totalRevenue', { precision: 10, scale: 2 })
+    .notNull()
+    .default('0.00'),
+  totalEdlnBurned: numeric('totalEdlnBurned', { precision: 10, scale: 2 })
+    .notNull()
+    .default('0.00'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+})
+
+export type TotalVolumes = InferSelectModel<typeof totalVolumes>;

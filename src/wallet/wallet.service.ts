@@ -20,7 +20,7 @@ import {
 } from '@solana/spl-token';
 import db from '../../drizzle';
 import { AuthService } from 'src/auth/auth.service';
-import { earning, premiumTransactions, user as userSchema } from 'lib/db/schema';
+import { earning, premiumTransactions, totalVolumes, user as userSchema } from 'lib/db/schema';
 import { eq } from 'drizzle-orm';
 import axios from 'axios';
 import { transactionSenderAndConfirmationWaiter } from '../../lib/transaction/transactionSender';
@@ -250,6 +250,9 @@ export class WalletService {
       signature: signature,
       amount: amount,
     });
+    await db.update(totalVolumes).set({
+      totalRevenue: `${Number(totalVolumes.totalRevenue) + Number(amount)}`
+    }).where(eq(totalVolumes.id, 1));
 
     if(user.referredBy !== null) {
       const cut = .2 * amount
@@ -547,6 +550,10 @@ export class WalletService {
         throw new Error('Transaction failed or expired');
       }
       
+      await db.update(totalVolumes).set({
+        totalEdlnBurned: `${Number(totalVolumes.totalEdlnBurned) + Number(amount)}`
+      }).where(eq(totalVolumes.id, 1));
+
       const signature = txResponse.transaction.signatures[0];
       console.log('Burn transaction confirmed with signature:', signature);
       return signature;

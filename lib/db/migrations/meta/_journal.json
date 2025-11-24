@@ -239,6 +239,13 @@
       "when": 1762431297257,
       "tag": "0033_real_blazing_skull",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1763994420380,
+      "tag": "0034_melted_kinsey_walden",
+      "breakpoints": true
     }
   ]
 }

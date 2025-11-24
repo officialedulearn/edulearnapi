@@ -14,10 +14,11 @@ import { PublicKey } from '@solana/web3.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
 import { DeviceInfo, OnrampWebhookData } from './wallet.service';
+import { AuthService } from '../auth/auth.service';
 
 @Controller('wallet')
 export class WalletController {
-  constructor(private walletService: WalletService) {}
+  constructor(private walletService: WalletService, private authService: AuthService) {}
 
   @Post('onramp/initiate/:userId')
   @UseGuards(JwtAuthGuard)
@@ -253,6 +254,20 @@ export class WalletController {
         data.userId,
         data.amount,
       );
+
+      switch(data.amount) {
+        case 1000:
+          await this.authService.incrementCredits(data.userId as unknown as string, 3);
+          break;
+        case 5000:
+          await this.authService.incrementCredits(data.userId as unknown as string, 10);
+          break;
+        case 10000:
+          await this.authService.incrementCredits(data.userId as unknown as string, 20);
+          break;
+        default:
+          break;
+      }
       return res.status(200).json({
         message: 'EDLN tokens burned successfully',
         signature,
