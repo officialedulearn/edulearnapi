@@ -27,7 +27,7 @@ import { AuthService } from '../auth/auth.service';
 
 @Injectable()
 export class RewardsService {
-  private readonly connection = new Connection(clusterApiUrl('mainnet-beta'));
+  private readonly connection = new Connection("https://solana-mainnet.g.alchemy.com/v2/pVe3T4LaDnJDqmmlBrkp_");
   private readonly EDLN: PublicKey = new PublicKey("CFw2KxMpWuxivoowkF8vRCrnMuDeg5VMHRR7zjE7pBLV");
   private readonly reciepient = new PublicKey("CPfwdgYWhKL9Lshsdm5TKxB7sC8tHyKuLWzRTZtKCR7p");
   private readonly REQUIRED_SOL = 0.02;
