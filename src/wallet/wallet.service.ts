@@ -21,7 +21,7 @@ import {
 import db from '../../drizzle';
 import { AuthService } from 'src/auth/auth.service';
 import { earning, premiumTransactions, totalVolumes, user as userSchema } from 'lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import axios from 'axios';
 import { transactionSenderAndConfirmationWaiter } from '../../lib/transaction/transactionSender';
 import { TwitterService } from 'src/twitter/twitter.service';
@@ -250,8 +250,9 @@ export class WalletService {
       signature: signature,
       amount: amount,
     });
+    // Increment total revenue atomically using SQL expression
     await db.update(totalVolumes).set({
-      totalRevenue: `${Number(totalVolumes.totalRevenue) + Number(amount)}`
+      totalRevenue: sql`${totalVolumes.totalRevenue} + ${amount}`,
     }).where(eq(totalVolumes.id, 1));
 
     if(user.referredBy !== null) {
@@ -551,7 +552,7 @@ export class WalletService {
       }
       
       await db.update(totalVolumes).set({
-        totalEdlnBurned: `${Number(totalVolumes.totalEdlnBurned) + Number(amount)}`
+        totalEdlnBurned: sql`${totalVolumes.totalEdlnBurned} + ${amount}`,
       }).where(eq(totalVolumes.id, 1));
 
       const signature = txResponse.transaction.signatures[0];
