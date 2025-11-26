@@ -250,7 +250,6 @@ export class WalletService {
       signature: signature,
       amount: amount,
     });
-    // Increment total revenue atomically using SQL expression
     await db.update(totalVolumes).set({
       totalRevenue: sql`${totalVolumes.totalRevenue} + ${amount}`,
     }).where(eq(totalVolumes.id, 1));
@@ -513,6 +512,12 @@ export class WalletService {
       const user = await this.authService.getUserById(userId);
       if (!user) {
         throw new Error('User not found');
+      }
+
+      const userBalance = await this.getBalance(user.address as unknown as PublicKey);
+
+      if (userBalance.tokenAccount < amount) {
+        throw new Error(`Insufficient EDLN balance. You have ${userBalance.tokenAccount} EDLN but need ${amount} EDLN to burn.`);
       }
 
       const userPublicKey = new PublicKey(user?.address as unknown as string);
