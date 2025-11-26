@@ -514,7 +514,7 @@ export class WalletService {
         throw new Error('User not found');
       }
 
-      const userBalance = await this.getBalance(user.address as unknown as PublicKey);
+      const userBalance = await this.getBalance(new PublicKey(user.address as unknown as string));
 
       if (userBalance.tokenAccount < amount) {
         throw new Error(`Insufficient EDLN balance. You have ${userBalance.tokenAccount} EDLN but need ${amount} EDLN to burn.`);
