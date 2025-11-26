@@ -52,7 +52,7 @@ Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
       }
     }
 
-    @Cron('0 0 * * *')
+    @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
     async handleCreditRenewal() {
       this.logger.log('Running daily credit renewal');
       try {
@@ -68,14 +68,14 @@ Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
       }
     }
     
-    @Cron('0 0 18 * *') 
+    @Cron('0 0 1 * *') 
     async rewardTopUsersMonthly() {
       this.logger.log('Starting monthly top user rewards job');
       
       try {
         const today = new Date();
-        if (today.getDate() !== 18) {
-          this.logger.log('Not the 18th day of the month, skipping rewards');
+        if (today.getDate() !== 1) {
+          this.logger.log('Not the 1st day of the month, skipping rewards');
           return;
         }
         

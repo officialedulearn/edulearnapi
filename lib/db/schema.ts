@@ -192,7 +192,7 @@ export const roadMapStep = pgTable('roadmap_step', {
 })
 
 export const totalVolumes = pgTable('total_volumes', {
-  id: integer('id').primaryKey().notNull().default(1),
+  id: integer('id').primaryKey(),
   totalRevenue: numeric('totalRevenue', { precision: 10, scale: 2 })
     .notNull()
     .default('0.00'),

@@ -1,5 +1,5 @@
 {
-  "id": "287a2c01-1113-407e-bd04-a38acca0f674",
+  "id": "2c992a2d-5f98-44da-a06a-00a63b86849e",
   "prevId": "e3aef6fd-443d-4926-8839-eba1ac7695e9",
   "version": "7",
   "dialect": "postgresql",
@@ -565,10 +565,9 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
+          "type": "integer",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
+          "notNull": true
         },
         "totalRevenue": {
           "name": "totalRevenue",
