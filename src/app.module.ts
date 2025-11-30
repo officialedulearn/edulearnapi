@@ -15,6 +15,10 @@ import { RoadmapModule } from './roadmap/roadmap.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { ResendModule } from './resend/resend.module';
 import { CommonModule } from './common/common.module';
+import { CommunityModule } from './community/community.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { RedisService } from './redis/redis.service';
+import { RedisModule } from './redis/redis.module';
 
 @Module({
   imports: [
@@ -35,8 +39,11 @@ import { CommonModule } from './common/common.module';
     RoadmapModule,
     SubscriptionModule,
     ResendModule,
+    CommunityModule,
+    NotificationsModule,
+    RedisModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, RedisService],
 })
 export class AppModule {}

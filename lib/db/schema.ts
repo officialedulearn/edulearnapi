@@ -203,3 +203,81 @@ export const totalVolumes = pgTable('total_volumes', {
 })
 
 export type TotalVolumes = InferSelectModel<typeof totalVolumes>;
+
+export const community = pgTable('chat_room', {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  title: text('title').notNull(),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  inviteCode: varchar('inviteCode', { length: 256 }).notNull().unique(),
+  visibility: varchar('visibility', { enum: ['public', 'private'] })
+    .notNull()
+    .default('private'),
+})
+
+export const roomMessage = pgTable("room_message", {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  roomId: uuid('roomId')
+    .notNull()
+    .references(() => community.id),
+  userId: uuid('userId')
+    .notNull()
+    .references(() => user.id),
+  content: text('content').notNull(),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+})
+
+export const messageReaction = pgTable("message_reaction", {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  messageId: uuid('messageId')
+    .notNull()
+    .references(() => roomMessage.id),
+  userId: uuid('userId')
+    .notNull()
+    .references(() => user.id),
+  reaction: text('reaction').notNull(),
+})
+
+export const mention = pgTable("mention", {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  messageId: uuid('messageId')
+    .notNull()
+    .references(() => roomMessage.id),
+  mentionedUserId: uuid('mentionedUserId')
+    .notNull()
+    .references(() => user.id),
+})
+
+export const community_members = pgTable("community_members", {
+  id: uuid("id").primaryKey().defaultRandom().notNull(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => user.id),
+  communityId: uuid("communityId")
+    .notNull()
+    .references(() => community.id),
+  role: varchar('role', {
+    enum: ['mod', 'member'],
+  })
+    .notNull()
+    .default('member'),
+})
+
+export const notifications = pgTable("notifications", {
+  id: uuid("id").notNull().primaryKey().defaultRandom(),
+  content: text("content").notNull(),
+  title: text("title").notNull(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => user.id),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+})
+
+export const community_join_request = pgTable("community_join_request", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("userId").notNull().references(() => user.id),
+  communityId: uuid("communityId").notNull().references(() => community.id),
+  createdAt: timestamp("createdAt").defaultNow(),
+  status: varchar("status", { enum: ["pending", "approved", "rejected"] })
+    .notNull()
+    .default("pending"),
+});

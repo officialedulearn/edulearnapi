@@ -82,27 +82,18 @@ Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
         const topUsers = await db.select()
           .from(user)
           .orderBy(desc(user.xp))
-          .limit(3);
+          .limit(10);
           
         this.logger.log(`Found ${topUsers.length} top users to reward`);
         
-        
-        const rewards = [
-          { sol: 50, edln: 0 },   
-          { sol: 30, edln: 0 },   
-          { sol: 20, edln: 0 }    
-        ];
-        
         for (let i = 0; i < topUsers.length; i++) {
           const currentUser = topUsers[i];
-          const reward = rewards[i];
           
-          this.logger.log(`Awarding position ${i+1} rewards to user ${currentUser.id}: ${JSON.stringify(reward)}`);
-          
+          const earning = 5
           try {
             await this.walletService.addEarnings(currentUser.id, {
-              sol: reward.sol,
-              edln: reward.edln
+              sol: earning,
+              edln: 0
             });
 
             if(currentUser.expoPushToken) {
