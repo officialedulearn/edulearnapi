@@ -16,7 +16,6 @@ import { SubscriptionModule } from './subscription/subscription.module';
 import { ResendModule } from './resend/resend.module';
 import { CommonModule } from './common/common.module';
 import { CommunityModule } from './community/community.module';
-import { NotificationsModule } from './notifications/notifications.module';
 import { RedisService } from './redis/redis.service';
 import { RedisModule } from './redis/redis.module';
 
@@ -40,7 +39,6 @@ import { RedisModule } from './redis/redis.module';
     SubscriptionModule,
     ResendModule,
     CommunityModule,
-    NotificationsModule,
     RedisModule,
   ],
   controllers: [AppController],
