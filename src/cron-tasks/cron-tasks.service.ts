@@ -7,7 +7,6 @@ import db from '../../drizzle';
 import { desc, and, eq, lt } from 'drizzle-orm';
 import {  user } from '../../lib/db/schema';
 import { ExpoPushService } from 'src/common/services/expo-push.service';
-
 @Injectable()
 export class CronTasksService { 
   

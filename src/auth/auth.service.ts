@@ -563,12 +563,13 @@ export class AuthService {
 
       const currentUser = users[0];
       const currentCredits = Number(currentUser.credits || 0);
-      const lastCreditRenewal = currentUser.lastCreditRenewal || new Date(0);
       const now = new Date();
-      
-      const hoursSinceLastRenewal = Math.floor((now.getTime() - lastCreditRenewal.getTime()) / (1000 * 60 * 60));
-      
-      if (hoursSinceLastRenewal >= 24) {
+      const todayMidnight = new Date(now);
+      todayMidnight.setHours(0, 0, 0, 0);
+      const lastRenewalMidnight = currentUser.lastCreditRenewal ? new Date(currentUser.lastCreditRenewal) : new Date(0);
+      lastRenewalMidnight.setHours(0, 0, 0, 0);
+
+      if (lastRenewalMidnight.getTime() < todayMidnight.getTime()) {
         const newCredits = currentUser.isPremium ? currentCredits + 20 : 10
         const newUploadLimit = currentUser.isPremium ? 5 : 2;
         
