@@ -653,7 +653,9 @@ export class WalletService {
       if (!user) {
         throw new Error('User not found');
       }
-      const earnings = await db.select().from(earning).where(eq(earning.userId, userId));
+      
+      // Delete earnings FIRST to prevent race condition from multiple claims
+      const earnings = await db.delete(earning).where(eq(earning.userId, userId)).returning();
       
       if (!earnings.length) {
         console.log(`No earnings found for user ${userId}`);
@@ -672,6 +674,10 @@ export class WalletService {
 
       if ((type === 'sol' && totalSol <= 0) || (type === 'edln' && totalEdln <= 0) || 
           (type === 'all' && totalSol <= 0 && totalEdln <= 0)) {
+        // Restore earnings if nothing to claim for this type
+        for (const earn of earnings) {
+          await db.insert(earning).values(earn);
+        }
         return { success: false, message: 'No earnings to claim for the selected type' };
       }
 
@@ -679,34 +685,34 @@ export class WalletService {
       
       const transactions: any = [];
 
-      if ((type === 'sol' || type === 'all') && totalSol > 0) {
-        const usdcTransaction = await this.transferUSDC(
-          userPublicKey, 
-          totalSol
-        );
-        transactions.push({ type: 'usdc', amount: totalSol, tx: usdcTransaction });
-      }
-
-      if ((type === 'edln' || type === 'all') && totalEdln > 0) {
-        const edlnTransaction = await this.transferEDLN(
-          userPublicKey, 
-          totalEdln
-        );
-        transactions.push({ type: 'edln', amount: totalEdln, tx: edlnTransaction });
-      }
-      
-      if (type === 'all' && transactions.length > 0) {
-        await db.delete(earning).where(eq(earning.userId, userId));
-      } else if (type === 'sol' && totalSol > 0) {
-        await db.delete(earning).where(eq(earning.userId, userId));
-        if (totalEdln > 0) {
-          await this.addEarnings(userId, { edln: totalEdln });
+      try {
+        if ((type === 'sol' || type === 'all') && totalSol > 0) {
+          const usdcTransaction = await this.transferUSDC(
+            userPublicKey, 
+            totalSol
+          );
+          transactions.push({ type: 'usdc', amount: totalSol, tx: usdcTransaction });
         }
-      } else if (type === 'edln' && totalEdln > 0) {
-        await db.delete(earning).where(eq(earning.userId, userId));
-        if (totalSol > 0) {
+
+        if ((type === 'edln' || type === 'all') && totalEdln > 0) {
+          const edlnTransaction = await this.transferEDLN(
+            userPublicKey, 
+            totalEdln
+          );
+          transactions.push({ type: 'edln', amount: totalEdln, tx: edlnTransaction });
+        }
+        
+        if (type === 'sol' && totalEdln > 0) {
+          await this.addEarnings(userId, { edln: totalEdln });
+        } else if (type === 'edln' && totalSol > 0) {
           await this.addEarnings(userId, { sol: totalSol });
         }
+      } catch (transferError) {
+        console.error('Transfer failed, restoring earnings:', transferError.message);
+        for (const earn of earnings) {
+          await db.insert(earning).values(earn);
+        }
+        throw transferError;
       }
 
       const post = `
