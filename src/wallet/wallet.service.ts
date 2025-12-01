@@ -668,10 +668,6 @@ export class WalletService {
         totalEdln += Number(earn.edln);
       });
 
-      const totalSolForEdln = totalSol * 0.05;
-      const totalSolToTransfer = totalSol - totalSolForEdln;
-
-      
       console.log(`Found earnings - SOL: ${totalSol}, EDLN: ${totalEdln}`);
 
       if ((type === 'sol' && totalSol <= 0) || (type === 'edln' && totalEdln <= 0) || 
@@ -684,14 +680,11 @@ export class WalletService {
       const transactions: any = [];
 
       if ((type === 'sol' || type === 'all') && totalSol > 0) {
-        const edlnSwapTx = await this.swapAdminUsdcToEdln(totalSolForEdln);
-        transactions.push({ type: 'admin_buyback', amount: totalSolForEdln, tx: edlnSwapTx });
-
         const usdcTransaction = await this.transferUSDC(
           userPublicKey, 
-          totalSolToTransfer
+          totalSol
         );
-        transactions.push({ type: 'usdc', amount: totalSolToTransfer, tx: usdcTransaction });
+        transactions.push({ type: 'usdc', amount: totalSol, tx: usdcTransaction });
       }
 
       if ((type === 'edln' || type === 'all') && totalEdln > 0) {
@@ -717,11 +710,11 @@ export class WalletService {
       }
 
       const post = `
-        @${user.username} claimed ${totalSol} USDC on EduLearn
-        Putting their total earnings to ${Number(user.totalEarnings).toFixed(2)} USDC
+      @${user.username} claimed ${totalSol} USDC on EduLearn
+      Putting their total earnings to ${Number(user.totalEarnings).toFixed(2)} USDC
 
-        Solscan link: https://solscan.io/tx/${transactions[0].tx}
-        Start learning and earning rewards on edulearn.fun
+      Solscan link: https://solscan.io/tx/${transactions[0].tx}
+      Start learning and earning rewards on edulearn.fun
       `
 
       const html = this.getEarningsClaimEmailTemplate(
@@ -1258,7 +1251,7 @@ export class WalletService {
                                     💡 Keep Earning More!
                                 </h4>
                                 <p style="margin: 0; color: #BFBFBF; font-size: 14px; line-height: 1.6;">
-                                    Continue sharing your referral code with friends to earn even more rewards. Every referral who goes premium earns you 20% commission!
+                                    Continue sharing your referral code with friends to earn even more rewards. Every referral who goes premium earns you 20% commission! and also staying top on the leaderboard
                                 </p>
                             </div>
                         </td>
@@ -1391,20 +1384,6 @@ export class WalletService {
                   </div>
                 </div>
                 ` : ''}
-              </div>
-            </td>
-          </tr>
-
-          <!-- How it works -->
-          <tr>
-            <td style="padding:20px 30px;">
-              <div style="border-left:3px solid #00FF80;padding-left:16px;">
-                <h4 style="margin:0 0 8px 0;color:#FFFFFF;font-size:16px;font-weight:600;">
-                  📖 How Affiliate Earnings Work
-                </h4>
-                <p style="margin:0;color:#BFBFBF;font-size:14px;line-height:1.6;">
-                  Every time someone you referred upgrades to premium, you earn 20% commission on their payment. These earnings accumulate in your account and can be claimed whenever you're ready!
-                </p>
               </div>
             </td>
           </tr>
