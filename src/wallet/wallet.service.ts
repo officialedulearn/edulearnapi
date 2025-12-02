@@ -996,11 +996,22 @@ export class WalletService {
       );
 
       const transaction = new Transaction().add(transferInstruction);
-      transaction.recentBlockhash = (await this.connection.getLatestBlockhash()).blockhash;
+      const blockhashWithExpiryBlockHeight = await this.connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhashWithExpiryBlockHeight.blockhash;
       transaction.feePayer = adminKeypair.publicKey;
       transaction.sign(adminKeypair);
 
-      const txid = await sendAndConfirmTransaction(this.connection, transaction, [adminKeypair]);
+      const txResponse = await transactionSenderAndConfirmationWaiter({
+        connection: this.connection,
+        serializedTransaction: transaction.serialize(),
+        blockhashWithExpiryBlockHeight,
+      });
+
+      if (!txResponse) {
+        throw new Error('Transaction failed or expired');
+      }
+
+      const txid = txResponse.transaction.signatures[0];
       console.log('USDC transfer successful with signature:', txid);
       
       return txid;
