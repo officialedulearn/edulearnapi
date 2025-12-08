@@ -18,6 +18,7 @@ import { CommonModule } from './common/common.module';
 import { CommunityModule } from './community/community.module';
 import { RedisService } from './redis/redis.service';
 import { RedisModule } from './redis/redis.module';
+import { CardsModule } from './cards/cards.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { RedisModule } from './redis/redis.module';
     ResendModule,
     CommunityModule,
     RedisModule,
+    CardsModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisService],

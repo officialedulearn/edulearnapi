@@ -5,8 +5,10 @@ import { WalletService } from 'src/wallet/wallet.service';
 import { TwitterService } from 'src/twitter/twitter.service';
 import db from '../../drizzle';
 import { desc, and, eq, lt } from 'drizzle-orm';
-import {  user } from '../../lib/db/schema';
+import {  roadmap, roadMapStep, user } from '../../lib/db/schema';
 import { ExpoPushService } from 'src/common/services/expo-push.service';
+import { NotificationsService } from 'src/common/services/notifications.service';
+import { ResendService } from 'src/resend/resend.service';
 @Injectable()
 export class CronTasksService { 
   
@@ -16,7 +18,9 @@ export class CronTasksService {
         private authService: AuthService,
         private walletService: WalletService,
         private twitterService: TwitterService,
-        private expoPushService: ExpoPushService
+        private expoPushService: ExpoPushService,
+        private notificationsService: NotificationsService,
+        private resendService: ResendService
     ) {
     }
 
@@ -142,5 +146,24 @@ Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
       }
     }
 
-    
-}
+    @Cron(CronExpression.EVERY_WEEK) 
+    async remindUsersAboutRoadmaps() {
+      const roadmapSteps = await db.select().from(roadMapStep).where(eq(roadMapStep.done, false))
+
+      for (const roadmapStep of roadmapSteps) {
+        const roadmapData = await db.select().from(roadmap).where(eq(roadmap.id, roadmapStep.roadmapId))
+        const userData = await db.select().from(user).where(eq(user.id, roadmapData[0].userId))
+        if(userData) {
+          await this.notificationsService.createNotification({
+            title: "Roadmap Reminder",
+            content: `You have a roadmap step that is not done. Please complete it to continue your learning journey.
+            Roadmap: ${roadmapData[0].topic} - ${roadmapData[0].title}
+            Step: ${roadmapStep.title} - ${roadmapStep.description} - ${roadmapStep.time} minutes`,
+            userId: userData[0].id
+          })
+          await this.resendService.sendRoadmapReminderEmail(userData[0].email, userData[0].name, roadmapData[0].topic, roadmapData[0].title, roadmapStep.title, roadmapStep.description, roadmapStep.time)
+        }
+      }
+    }
+
+  }

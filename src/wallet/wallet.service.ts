@@ -26,7 +26,7 @@ import axios from 'axios';
 import { transactionSenderAndConfirmationWaiter } from '../../lib/transaction/transactionSender';
 import { TwitterService } from 'src/twitter/twitter.service';
 import { ResendService } from 'src/resend/resend.service';
-import { initializeSDK, initiate, verify, getTokenValue, createOrder, TransactionStatus, TransactionType, Currency } from 'paj_ramp';
+import { initializeSDK, initiate, verify, getTokenValue, TransactionStatus, TransactionType, Currency, createOnrampOrder, Environment } from 'paj_ramp';
 
 export interface DeviceInfo {
 
@@ -1048,7 +1048,7 @@ export class WalletService {
   }
 
   async initiateOnramp(userId: string) {
-    initializeSDK('production')
+    initializeSDK(Environment.Production)
     const user = await this.authService.getUserById(userId);
     if (!user) {
       throw new Error('User not found');
@@ -1069,6 +1069,27 @@ export class WalletService {
     }
     return verified;
   }
+ 
+  async onrampFiatToSol(userId: string, amount: number, verifiedResponse: any) {
+    const verifiedResponseToken = verifiedResponse.token
+  const user = await this.authService.getUserById(userId);
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  const order = await createOnrampOrder({
+    fiatAmount: amount,
+    currency: 'NGN',    
+    recipient: user.address as string,
+    mint: 'So11111111111111111111111111111111111111112',
+    chain: 'SOLANA',
+    webhookURL: 'https://api.edulearn.fun/wallet/onramp-webhook',
+  },
+  verifiedResponseToken,
+);
+
+  return order;
+  }
 
   async onrampFiatToEdln(userId: string, amount: number, verifiedResponse: any) {
 
@@ -1078,15 +1099,16 @@ export class WalletService {
     throw new Error('User not found');
   }
 
-  const order = await createOrder({
+  const order = await createOnrampOrder({
     fiatAmount: amount,
     currency: 'NGN',    
     recipient: user.address as string,
     mint: 'CFw2KxMpWuxivoowkF8vRCrnMuDeg5VMHRR7zjE7pBLV',
     chain: 'SOLANA',
     webhookURL: 'https://api.edulearn.fun/wallet/onramp-webhook',
-    token: verifiedResponseToken,
-  });
+  },
+  verifiedResponseToken,
+);
 
   return order;
 }

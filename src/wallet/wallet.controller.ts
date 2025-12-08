@@ -92,6 +92,33 @@ export class WalletController {
     }
   }
 
+  @Post('onramp/create-order-sol/:userId')
+  @UseGuards(JwtAuthGuard)
+  async onrampFiatToSol(
+    @Request() req,
+    @Response() res,
+    @Param('userId') userId: string,
+    @Body() data: { amount: number; verifiedResponse: any },
+  ) {
+    try {
+      await verifyUserAuthorization(req.user, userId, 'create onramp order');
+      const order = await this.walletService.onrampFiatToSol(
+        userId,
+        data.amount,
+        data.verifiedResponse,
+      );
+      return res.status(200).json({
+        message: 'Order created successfully',
+        order,
+      });
+    } catch (error) {
+      console.error('Error creating onramp order:', error);
+      return res
+        .status(500)
+        .json({ message: error.message || 'Failed to create onramp order' });
+    }
+  }
+
   @Post('onramp-webhook')
   @HttpCode(200)
   async onrampWebhook(@Request() req) {

@@ -37,6 +37,71 @@ export class ResendService {
         return this.sendEmail(to, '🚀 Your Learning Roadmap is Ready!', html);
     }
 
+    async sendRoadmapReminderEmail(to: string, name: string, roadmapTopic: string, roadmapTitle: string, roadmapStepTitle: string, roadmapStepDescription: string, roadmapStepTime: number) {
+        const html = this.getRoadmapReminderEmailTemplate(name, roadmapTopic, roadmapTitle, roadmapStepTitle, roadmapStepDescription, roadmapStepTime);
+        return this.sendEmail(to, '🔔 Roadmap Reminder', html);
+    }
+
+    private getRoadmapReminderEmailTemplate(name: string, roadmapTopic: string, roadmapTitle: string, roadmapStepTitle: string, roadmapStepDescription: string, roadmapStepTime: number): string {
+        return `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Roadmap Reminder</title>
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700&display=swap" rel="stylesheet">
+        </head>
+        <body style="margin:0;padding:0;background-color:#0D0D0D;font-family:'Urbanist',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#CCCCCC;">
+        
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#0D0D0D;">
+                <tr>
+                    <td align="center" style="padding:40px 20px;">
+                        <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="background-color:#151515;border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;max-width:600px;">
+        
+                            <!-- Header -->
+                            <tr>
+                                <td style="background-color:#121212;padding:40px 30px;text-align:center;border-bottom:2px solid #00FF80;">
+                                    <div style="font-size:64px;margin-bottom:15px;">🔔</div>
+                                    <h1 style="margin:0;color:#FFFFFF;font-size:32px;font-weight:700;letter-spacing:-0.5px;">Roadmap Reminder</h1>
+                                    <p style="margin:10px 0 0;color:#BFBFBF;font-size:16px;">You have a roadmap step that is not done. Please complete it to continue your learning journey.</p>
+                                </td>
+                            </tr>
+        
+                            <!-- Greeting -->
+                            <tr>
+                                <td style="padding:40px 30px 20px 30px;">
+                                    <h2 style="margin:0 0 15px 0;color:#FFFFFF;font-size:24px;font-weight:600;">Hey ${name}! 🔔</h2>
+                                    <p style="margin:0;color:#CCCCCC;font-size:15px;line-height:1.6;">
+                                        You have a roadmap step that is not done. Please complete it to continue your learning journey.
+                                    </p>
+                                </td>
+                            </tr>
+        
+                            <!-- Roadmap Card -->
+                            <tr>
+                                <td style="padding:20px 30px;">
+                                    <div style="background:linear-gradient(135deg, rgba(0,255,128,0.08) 0%, rgba(0,255,128,0.04) 100%);border-radius:12px;padding:24px;border:2px solid rgba(0,255,128,0.2);text-align:center;">
+                                <h3 style="margin:0 0 15px 0;color:#00FF80;font-size:22px;font-weight:700;">
+                                    📚 ${roadmapTopic} - ${roadmapTitle}
+                                </h3>
+                                <p style="margin:0;color:#BFBFBF;font-size:15px;line-height:1.6;">
+                                    A comprehensive learning path tailored to your goals and skill level.
+                                </p>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+    </body>
+    </html>
+    `;
+    }
+
     private getRoadmapGeneratedEmailTemplate(name: string, roadmapTitle: string): string {
         return `
         <!DOCTYPE html>
