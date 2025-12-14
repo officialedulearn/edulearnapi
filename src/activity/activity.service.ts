@@ -49,7 +49,7 @@ export class ActivityService {
         try {
           await this.rewardService.awardRewardToUser(
             data.userId,
-            'e7928044-628c-4a82-982d-f08fd997fea0',
+            '5e077518-2122-450d-b469-8388175a5a5f',
           );
           console.log(`Successfully awarded beginner NFT to user ${data.userId}`);
         } catch (error) {

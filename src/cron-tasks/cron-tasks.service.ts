@@ -153,12 +153,20 @@ Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
       for (const roadmapStep of roadmapSteps) {
         const roadmapData = await db.select().from(roadmap).where(eq(roadmap.id, roadmapStep.roadmapId))
         const userData = await db.select().from(user).where(eq(user.id, roadmapData[0].userId))
-        if(userData) {
+        if(userData && userData.length > 0) {
+          const funMessages = [
+            `🦉 Don't make me come find you! "${roadmapStep.title}" is waiting. Only ${roadmapStep.time} minutes to level up! 🚀`,
+            `🔥 Your learning streak is crying! Complete "${roadmapStep.title}" and keep that momentum going! ⚡`,
+            `😢 We miss you! "${roadmapStep.title}" has been lonely. Come back and smash it in ${roadmapStep.time} minutes! 💪`,
+            `⏰ Tick tock! Your roadmap "${roadmapData[0].title}" needs some love. Let's crush "${roadmapStep.title}" together! 🎯`,
+            `🌟 Legend status awaits! Complete "${roadmapStep.title}" and show everyone what you're made of! 💎`
+          ]
+          
+          const randomMessage = funMessages[Math.floor(Math.random() * funMessages.length)]
+          
           await this.notificationsService.createNotification({
-            title: "Roadmap Reminder",
-            content: `You have a roadmap step that is not done. Please complete it to continue your learning journey.
-            Roadmap: ${roadmapData[0].topic} - ${roadmapData[0].title}
-            Step: ${roadmapStep.title} - ${roadmapStep.description} - ${roadmapStep.time} minutes`,
+            title: "Hey, you forgot something! 👀",
+            content: randomMessage,
             userId: userData[0].id
           })
           await this.resendService.sendRoadmapReminderEmail(userData[0].email, userData[0].name, roadmapData[0].topic, roadmapData[0].title, roadmapStep.title, roadmapStep.description, roadmapStep.time)
