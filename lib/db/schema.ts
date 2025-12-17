@@ -204,7 +204,7 @@ export const totalVolumes = pgTable('total_volumes', {
 
 export type TotalVolumes = InferSelectModel<typeof totalVolumes>;
 
-export const community = pgTable('chat_room', {
+export const community = pgTable('community', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
   title: text('title').notNull(),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
@@ -212,7 +212,10 @@ export const community = pgTable('chat_room', {
   visibility: varchar('visibility', { enum: ['public', 'private'] })
     .notNull()
     .default('private'),
+  imageUrl: text('imageUrl'),
 })
+
+export type Community = InferSelectModel<typeof community>;
 
 export const roomMessage = pgTable("room_message", {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
@@ -226,6 +229,8 @@ export const roomMessage = pgTable("room_message", {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 })
 
+export type roomMessage = InferSelectModel<typeof roomMessage>;
+
 export const messageReaction = pgTable("message_reaction", {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
   messageId: uuid('messageId')
@@ -237,6 +242,8 @@ export const messageReaction = pgTable("message_reaction", {
   reaction: text('reaction').notNull(),
 })
 
+export type MessageReaction = InferSelectModel<typeof messageReaction>;
+
 export const mention = pgTable("mention", {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
   messageId: uuid('messageId')
@@ -246,6 +253,8 @@ export const mention = pgTable("mention", {
     .notNull()
     .references(() => user.id),
 })
+
+export type Mention = InferSelectModel<typeof mention>;
 
 export const community_members = pgTable("community_members", {
   id: uuid("id").primaryKey().defaultRandom().notNull(),
@@ -261,6 +270,8 @@ export const community_members = pgTable("community_members", {
     .notNull()
     .default('member'),
 })
+
+export type CommunityMembers = InferSelectModel<typeof community_members>;
 
 export const notifications = pgTable("notifications", {
   id: uuid("id").notNull().primaryKey().defaultRandom(),
@@ -281,3 +292,5 @@ export const community_join_request = pgTable("community_join_request", {
     .notNull()
     .default("pending"),
 });
+
+export type CommunityJoinRequest = InferSelectModel<typeof community_join_request>;

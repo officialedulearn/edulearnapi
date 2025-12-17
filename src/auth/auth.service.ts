@@ -12,6 +12,7 @@ import { CronTasksService } from 'src/cron-tasks/cron-tasks.service';
 import { ResendService } from 'src/resend/resend.service';
 import { supabaseAdmin } from '../../lib/supabase';
 import { RoadmapService } from 'src/roadmap/roadmap.service';
+import { CommunityService } from 'src/community/community.service';
 import { update } from '@metaplex-foundation/mpl-core';
 
 @Injectable()
@@ -25,6 +26,7 @@ export class AuthService {
     private cronTasksService: CronTasksService,
     private resendService: ResendService,
     private roadmapService: RoadmapService,
+    private communityService: CommunityService,
   ) {}
   async createUser(data: signUpDetails): Promise<User | Error> {
     try {
@@ -505,6 +507,13 @@ export class AuthService {
             | 'expert',
         })
         .where(eq(user.id, userId));
+
+      try {
+        await this.communityService.updateModStatusBasedOnXP(userId);
+      } catch (error) {
+        console.error('Failed to update mod status after XP change:', error);
+    
+      }
 
       return { level: newLevel, xp: newXP };
     } catch (error) {

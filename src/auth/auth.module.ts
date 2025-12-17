@@ -9,9 +9,18 @@ import { ResendModule } from 'src/resend/resend.module';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ApiKeyGuard } from './guards/api-key.guard';
 import { RoadmapModule } from 'src/roadmap/roadmap.module';
+import { CommunityModule } from 'src/community/community.module';
 
 @Module({
-  imports: [ActivityModule, forwardRef(() => WalletModule), RewardsModule, forwardRef(() => CronTasksModule), ResendModule, forwardRef(() => RoadmapModule)],
+  imports: [
+    ActivityModule, 
+    forwardRef(() => WalletModule), 
+    RewardsModule, 
+    forwardRef(() => CronTasksModule), 
+    ResendModule, 
+    forwardRef(() => RoadmapModule),
+    forwardRef(() => CommunityModule),
+  ],
   controllers: [AuthController],
   providers: [AuthService, JwtAuthGuard, ApiKeyGuard],
   exports: [AuthService, JwtAuthGuard, ApiKeyGuard],

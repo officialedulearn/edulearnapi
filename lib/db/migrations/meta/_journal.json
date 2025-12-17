@@ -246,6 +246,13 @@
       "when": 1764151790321,
       "tag": "0038_illegal_forge",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1765928190978,
+      "tag": "0035_nervous_swordsman",
+      "breakpoints": true
     }
   ]
 }
