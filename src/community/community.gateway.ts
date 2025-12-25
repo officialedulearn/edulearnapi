@@ -151,6 +151,7 @@ export class CommunityGateway
         userId: dbUserId,
         username: client.username,
         timestamp: new Date().toISOString(),
+        onlineCount: roomStats.onlineCount,
       });
 
       client.emit('room_joined', {
@@ -188,10 +189,13 @@ export class CommunityGateway
 
       await this.redisService.clearTyping(communityId, client.userId);
 
+      const roomStats = await this.redisService.getRoomStats(communityId);
+
       this.server.to(communityId).emit('room_user_left', {
         userId: client.userId,
         username: client.username,
         timestamp: new Date().toISOString(),
+        onlineCount: roomStats.onlineCount,
       });
 
       this.logger.log(

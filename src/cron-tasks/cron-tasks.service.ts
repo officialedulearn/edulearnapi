@@ -146,7 +146,7 @@ Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
       }
     }
 
-    @Cron(CronExpression.EVERY_WEEK) 
+    @Cron(CronExpression.EVERY_WEEKEND) 
     async remindUsersAboutRoadmaps() {
       const roadmapSteps = await db.select().from(roadMapStep).where(eq(roadMapStep.done, false))
 

@@ -41,18 +41,22 @@ export interface DeviceInfo {
 
 export interface OnrampWebhookData {
   id: string;
-  address: string;
+  address?: string;
   signature?: string;
   mint: string;
   currency: Currency;
   amount: number;
-  usdcAmount: number;
+  usdcAmount?: number;
   fiatAmount: number;
-  sender: string;
-  receipiant: string;
+  sender?: string;
+  recipient: string;
   rate: number;
   status: TransactionStatus;
   transactionType: TransactionType;
+  accountNumber?: string;
+  accountName?: string;
+  bank?: string;
+  createdAt?: string;
 }
 
 @Injectable()
@@ -1114,7 +1118,12 @@ export class WalletService {
 }
 
   processWebhookEvent(data: OnrampWebhookData): void {
-    const recipientAddress = data.receipiant || data.address;
+    const recipientAddress = data.recipient || data.address;
+    
+    if (!recipientAddress) {
+      console.error('Webhook event missing recipient address:', data.id);
+      return;
+    }
     
     if (!this.webhookEvents.has(recipientAddress)) {
       this.webhookEvents.set(recipientAddress, []);

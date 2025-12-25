@@ -45,11 +45,30 @@ export class FlexibleAuthGuard implements CanActivate {
 
     const now = Date.now();
     if (!this.marketplaceUser || (now - this.lastFetchTime > this.CACHE_DURATION)) {
-      const users = await db
-        .select()
-        .from(user)
-        .where(eq(user.email, 'marketplace@edulearn.com'))
-        .limit(1);
+      let users;
+      try {
+        users = await db
+          .select()
+          .from(user)
+          .where(eq(user.email, 'marketplace@edulearn.com'))
+          .limit(1);
+      } catch (error: any) {
+        const isConnectionError = 
+          error?.cause?.code === 'XX000' ||
+          error?.cause?.message?.includes('Tenant or user not found') ||
+          error?.code === 'ECONNRESET';
+        
+        if (isConnectionError) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          users = await db
+            .select()
+            .from(user)
+            .where(eq(user.email, 'marketplace@edulearn.com'))
+            .limit(1);
+        } else {
+          throw error;
+        }
+      }
 
       if (!users.length) {
         throw new UnauthorizedException('Marketplace user not found in database. Please create the marketplace user account first.');

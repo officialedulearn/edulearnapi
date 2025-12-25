@@ -218,6 +218,36 @@ export class CommunityService {
       .insert(community_join_request)
       .values(data)
       .returning();
+
+    try {
+      const mods = await this.getAllCommunityMods(data.communityId);
+      const community = await this.getCommunityById(data.communityId);
+      const requestingUser = await db
+        .select({
+          id: user.id,
+          username: user.username,
+          name: user.name,
+        })
+        .from(user)
+        .where(eq(user.id, data.userId))
+        .limit(1);
+
+      const requester = requestingUser[0];
+      const communityTitle = community?.title || 'Community';
+
+      if (requester && mods.length > 0) {
+        for (const mod of mods) {
+          await this.notificationsService.createNotification({
+            title: `New join request for ${communityTitle}`,
+            content: `${requester.name || requester.username} wants to join ${communityTitle}`,
+            userId: mod.userId,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to notify mods about join request:', error);
+    }
+
     return request;
   }
 
@@ -522,6 +552,30 @@ export class CommunityService {
       .limit(1);
 
     return mod || null;
+  }
+
+  async getAllCommunityMods(communityId: string) {
+    return await db
+      .select({
+        id: community_members.id,
+        userId: community_members.userId,
+        user: {
+          id: user.id,
+          username: user.username,
+          name: user.name,
+          xp: user.xp,
+          level: user.level,
+          profilePictureURL: user.profilePictureURL,
+        },
+      })
+      .from(community_members)
+      .innerJoin(user, eq(community_members.userId, user.id))
+      .where(
+        and(
+          eq(community_members.communityId, communityId),
+          eq(community_members.role, 'mod')
+        )
+      );
   }
 
   async createMention(data: {

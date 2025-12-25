@@ -1,0 +1,83 @@
+import { Controller, Get, Post, Body, Query, UseGuards, BadRequestException } from '@nestjs/common';
+import { AdminService } from './admin.service';
+import { AdminApiKeyGuard } from '../auth/guards/admin-api-key.guard';
+
+@Controller('admin')
+@UseGuards(AdminApiKeyGuard)
+export class AdminController {
+  constructor(private readonly adminService: AdminService) {}
+
+  @Get('analytics/signups')
+  async getSignupStats(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    return await this.adminService.getSignupStats(start, end);
+  }
+
+  @Get('analytics/metrics')
+  async getPlatformMetrics() {
+    return await this.adminService.getPlatformMetrics();
+  }
+
+  @Get('analytics/activity-trends')
+  async getActivityTrends(@Query('days') days?: string) {
+    const daysNum = days ? parseInt(days, 10) : 30;
+    return await this.adminService.getActivityTrends(daysNum);
+  }
+
+  @Get('users')
+  async getAllUsers() {
+    return await this.adminService.getAllUsersForAdmin();
+  }
+
+  @Post('notifications/broadcast')
+  async broadcastNotification(
+    @Body() body: { title: string; content: string },
+  ) {
+    if (!body.title || !body.content) {
+      throw new BadRequestException('Title and content are required');
+    }
+    return await this.adminService.broadcastNotification(body.title, body.content);
+  }
+
+  @Post('notifications/send')
+  async sendNotificationToUsers(
+    @Body() body: { userIds: string[]; title: string; content: string },
+  ) {
+    if (!body.userIds || body.userIds.length === 0) {
+      throw new BadRequestException('At least one user ID is required');
+    }
+    if (!body.title || !body.content) {
+      throw new BadRequestException('Title and content are required');
+    }
+    return await this.adminService.sendNotificationToUsers(body.userIds, body.title, body.content);
+  }
+
+  @Post('emails/broadcast')
+  async broadcastEmail(
+    @Body() body: { subject: string; htmlContent: string },
+  ) {
+    if (!body.subject || !body.htmlContent) {
+      throw new BadRequestException('Subject and HTML content are required');
+    }
+    return await this.adminService.broadcastEmail(body.subject, body.htmlContent);
+  }
+
+  @Post('emails/send')
+  async sendEmailToUsers(
+    @Body() body: { emails: string[]; subject: string; htmlContent: string },
+  ) {
+    if (!body.emails || body.emails.length === 0) {
+      throw new BadRequestException('At least one email address is required');
+    }
+    if (!body.subject || !body.htmlContent) {
+      throw new BadRequestException('Subject and HTML content are required');
+    }
+    return await this.adminService.sendEmailToUsers(body.emails, body.subject, body.htmlContent);
+  }
+}
+
+

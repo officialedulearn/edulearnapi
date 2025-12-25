@@ -19,6 +19,7 @@ import { CommunityModule } from './community/community.module';
 import { RedisService } from './redis/redis.service';
 import { RedisModule } from './redis/redis.module';
 import { CardsModule } from './cards/cards.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { CardsModule } from './cards/cards.module';
     CommunityModule,
     RedisModule,
     CardsModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisService],
