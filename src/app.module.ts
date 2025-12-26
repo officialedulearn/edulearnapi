@@ -20,6 +20,7 @@ import { RedisService } from './redis/redis.service';
 import { RedisModule } from './redis/redis.module';
 import { CardsModule } from './cards/cards.module';
 import { AdminModule } from './admin/admin.module';
+import { FeedbackModule } from './feedback/feedback.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { AdminModule } from './admin/admin.module';
     RedisModule,
     CardsModule,
     AdminModule,
+    FeedbackModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisService],

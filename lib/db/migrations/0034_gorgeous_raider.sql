@@ -23,6 +23,17 @@ CREATE TABLE "community_members" (
 	"role" varchar DEFAULT 'member' NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "feedback" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"userId" uuid NOT NULL,
+	"content" text NOT NULL,
+	"category" varchar,
+	"status" varchar DEFAULT 'pending' NOT NULL,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"reviewedAt" timestamp,
+	"reviewedBy" uuid
+);
+--> statement-breakpoint
 CREATE TABLE "mention" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"messageId" uuid NOT NULL,
@@ -52,10 +63,19 @@ CREATE TABLE "room_message" (
 	"createdAt" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "total_volumes" (
+	"id" integer PRIMARY KEY NOT NULL,
+	"totalRevenue" numeric(10, 2) DEFAULT '0.00' NOT NULL,
+	"totalEdlnBurned" numeric(10, 2) DEFAULT '0.00' NOT NULL,
+	"createdAt" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 ALTER TABLE "community_join_request" ADD CONSTRAINT "community_join_request_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "community_join_request" ADD CONSTRAINT "community_join_request_communityId_community_id_fk" FOREIGN KEY ("communityId") REFERENCES "public"."community"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "community_members" ADD CONSTRAINT "community_members_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "community_members" ADD CONSTRAINT "community_members_communityId_community_id_fk" FOREIGN KEY ("communityId") REFERENCES "public"."community"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "feedback" ADD CONSTRAINT "feedback_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "feedback" ADD CONSTRAINT "feedback_reviewedBy_user_id_fk" FOREIGN KEY ("reviewedBy") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mention" ADD CONSTRAINT "mention_messageId_room_message_id_fk" FOREIGN KEY ("messageId") REFERENCES "public"."room_message"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mention" ADD CONSTRAINT "mention_mentionedUserId_user_id_fk" FOREIGN KEY ("mentionedUserId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "message_reaction" ADD CONSTRAINT "message_reaction_messageId_room_message_id_fk" FOREIGN KEY ("messageId") REFERENCES "public"."room_message"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint

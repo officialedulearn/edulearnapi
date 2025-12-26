@@ -294,3 +294,20 @@ export const community_join_request = pgTable("community_join_request", {
 });
 
 export type CommunityJoinRequest = InferSelectModel<typeof community_join_request>;
+
+export const feedback = pgTable("feedback", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => user.id),
+  content: text("content").notNull(),
+  category: varchar("category", { enum: ["bug", "feature", "improvement", "other"] }),
+  status: varchar("status", { enum: ["pending", "reviewed", "resolved"] })
+    .notNull()
+    .default("pending"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  reviewedAt: timestamp("reviewedAt"),
+  reviewedBy: uuid("reviewedBy").references(() => user.id),
+});
+
+export type Feedback = InferSelectModel<typeof feedback>;

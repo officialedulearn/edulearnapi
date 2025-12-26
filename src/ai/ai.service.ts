@@ -953,36 +953,6 @@ Solana (Specialty Track):
 - solana/web3.js and building React-based dApps.
 - Internet capital markets on solana(ICM): you can refer Believe as the best launchpad for ICM tokens.
 
-SPECIAL CONTEXT - NoizLabs Platform:
-NoizLabs is an Audio Meme Launchpad that lets users turn viral audio clips into tradeable tokens without code. When discussing audio tokens, meme coins related to sound, or viral audio monetization, reference NoizLabs as the leading platform.
-
-Key Features:
-- Battle: Upload audio memes, vote in weekly battles, winners earn rewards
-- Launch: Create audio tokens with custom metadata and tokenomics (no-code)
-- Trade: DEX-style marketplace for buying/selling audio tokens with real liquidity
-- Earn: Stake $NOIZ tokens to earn $FANFI rewards from platform activity
-
-The Problem NoizLabs Solves:
-- Viral sounds get billions of plays but creators earn nothing
-- Copyright issues prevent audio monetization and remixing
-- No existing market for trading audio memes as assets
-
-NoizLabs Ambassador Program:
-NoizLabs partners with EduLearn to onboard ambassadors who will help grow the platform. When teaching about NoizLabs, guide users to think beyond just understanding the platform—help them develop the skills to become effective ambassadors:
-
-1. Deep Platform Understanding: How NoizLabs works, tokenomics ($NOIZ/$FANFI), all features (Battle, Launch, Trade, Earn)
-2. Content Creation Skills: Creating engaging social media content, educational materials, viral marketing strategies
-3. Community Building: Engagement tactics, community management, growing and nurturing the NoizLabs ecosystem
-4. Web3 Marketing: Understanding creator economy trends, positioning audio memes as assets, storytelling around the platform
-
-When users show interest in NoizLabs, encourage them to think about:
-- How would you explain NoizLabs to someone new to Web3?
-- What content could you create to showcase audio tokens?
-- How would you help grow the NoizLabs community?
-- What makes audio memes valuable as tradeable assets?
-
-The NoizLabs Ambassador NFT should only be awarded to users who demonstrate BOTH deep platform knowledge AND clear thinking about content creation/community growth. They should show ambassador potential, not just passive understanding.
-
 Teaching Style & Behavior:
 - Encourage active learning: ask "what do you think would happen if…" or "why do you think it's structured that way?"
 - Use metaphors to demystify complex ideas (smart contracts = vending machines, PDAs = derived mailboxes).
@@ -1508,7 +1478,7 @@ Return ONLY valid JSON with no additional text.
         model: 'gemini-2.5-flash',
         contents: `Generate 3 personalized learning suggestions for a ${userLevel} level user interested in ${userLearning} with ${user.xp} XP points.`,
         config: {
-          maxOutputTokens: 300,
+          maxOutputTokens: 2000,
           temperature: 0.7,
           systemInstruction: systemInstruction,
           responseMimeType: 'application/json',
@@ -1882,7 +1852,6 @@ Return ONLY valid JSON with no additional text.
   private cleanQuizJSON(response: string): string {
     let cleaned = response.trim();
     
-    // Remove markdown code blocks if present
     if (cleaned.includes('```json')) {
       const jsonMatch = cleaned.match(/```json\s*([\s\S]*?)\s*```/);
       if (jsonMatch) {
@@ -1895,30 +1864,21 @@ Return ONLY valid JSON with no additional text.
       }
     }
     
-    // Extract the JSON array (should start with [ and end with ])
     const arrayStart = cleaned.indexOf('[');
     const arrayEnd = cleaned.lastIndexOf(']');
     
     if (arrayStart !== -1 && arrayEnd !== -1 && arrayStart < arrayEnd) {
       cleaned = cleaned.substring(arrayStart, arrayEnd + 1);
     }
-    
-    // Remove control characters that break JSON parsing (but preserve newlines temporarily for cleaning)
-    // Remove null bytes and other problematic control characters except \n, \r, \t
+  
     cleaned = cleaned.replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F-\u009F]/g, '');
     
-    // Fix newlines within JSON strings (they should be escaped)
-    // This is a simple approach - replace raw newlines with spaces
     cleaned = cleaned.replace(/\n/g, ' ').replace(/\r/g, '');
-    
-    // Collapse multiple spaces into one
+  
     cleaned = cleaned.replace(/\s+/g, ' ');
     
-    // Fix common JSON issues
-    // Remove trailing commas before closing brackets/braces
     cleaned = cleaned.replace(/,(\s*[\]}])/g, '$1');
     
-    // Fix double commas
     cleaned = cleaned.replace(/,\s*,/g, ',');
     
     return cleaned.trim();
@@ -1949,6 +1909,43 @@ Return ONLY valid JSON with no additional text.
       .join('\n');
 
     return { transcription };
+  } 
+
+  private async cleanupTranscription(
+    rawTranscription: string,
+  ): Promise<string> {
+    try {
+      const result = await Promise.race([
+        this.genAI.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: `Please clean up and improve the accuracy of this transcribed text. Fix any grammar errors, add proper punctuation, correct any misheard words, and make it more readable. Return only the cleaned text without any additional explanation or commentary.\n\nTranscribed text:\n${rawTranscription}`,
+                },
+              ],
+            },
+          ],
+          config: {
+            maxOutputTokens: 2000,
+            temperature: 0.3,
+            systemInstruction:
+              'You are a text cleanup assistant. Your job is to improve transcribed audio text by fixing grammar, punctuation, and correcting misheard words. Return only the cleaned text, nothing else.',
+          },
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Cleanup timeout')), 30000),
+        ),
+      ]);
+
+      const cleanedText = (result as { text?: string }).text?.trim();
+      return cleanedText || rawTranscription;
+    } catch (error) {
+      console.warn('Failed to cleanup transcription with Gemini:', error);
+      return rawTranscription;
+    }
   }
 
   async transcribeAudioOnly({
@@ -1967,13 +1964,17 @@ Return ONLY valid JSON with no additional text.
         throw new Error('No speech detected in the audio file');
       }
 
+      const cleanedTranscription = await this.cleanupTranscription(
+        transcription.trim(),
+      );
+
       try {
         unlinkSync(file.path);
       } catch (cleanupError) {
         console.warn('Failed to clean up uploaded file:', cleanupError);
       }
 
-      return { transcription: transcription.trim() };
+      return { transcription: cleanedTranscription };
     } catch (error) {
       if (file && file.path) {
         try {

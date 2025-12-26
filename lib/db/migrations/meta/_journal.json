@@ -243,22 +243,8 @@
     {
       "idx": 34,
       "version": "7",
-      "when": 1764151790321,
-      "tag": "0038_illegal_forge",
-      "breakpoints": true
-    },
-    {
-      "idx": 35,
-      "version": "7",
-      "when": 1765928190978,
-      "tag": "0035_nervous_swordsman",
-      "breakpoints": true
-    },
-    {
-      "idx": 36,
-      "version": "7",
-      "when": 1766602888397,
-      "tag": "0036_puzzling_malice",
+      "when": 1766773849343,
+      "tag": "0034_gorgeous_raider",
       "breakpoints": true
     }
   ]
