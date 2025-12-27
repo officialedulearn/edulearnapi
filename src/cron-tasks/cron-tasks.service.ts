@@ -148,18 +148,35 @@ Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
 
     @Cron(CronExpression.EVERY_WEEKEND) 
     async remindUsersAboutRoadmaps() {
-      const roadmapSteps = await db.select().from(roadMapStep).where(eq(roadMapStep.done, false))
+      const incompleteSteps = await db.select().from(roadMapStep).where(eq(roadMapStep.done, false))
 
-      for (const roadmapStep of roadmapSteps) {
-        const roadmapData = await db.select().from(roadmap).where(eq(roadmap.id, roadmapStep.roadmapId))
-        const userData = await db.select().from(user).where(eq(user.id, roadmapData[0].userId))
-        if(userData && userData.length > 0) {
+      const userRoadmapMap = new Map<string, Array<{ roadmapId: string, step: typeof roadMapStep.$inferSelect }>>()
+
+      for (const step of incompleteSteps) {
+        const roadmapData = await db.select().from(roadmap).where(eq(roadmap.id, step.roadmapId))
+        if (roadmapData.length > 0) {
+          const userId = roadmapData[0].userId
+          if (!userRoadmapMap.has(userId)) {
+            userRoadmapMap.set(userId, [])
+          }
+          userRoadmapMap.get(userId)!.push({ roadmapId: step.roadmapId, step })
+        }
+      }
+
+      for (const [userId, roadmapSteps] of userRoadmapMap.entries()) {
+        const randomRoadmapData = roadmapSteps[Math.floor(Math.random() * roadmapSteps.length)]
+        const roadmapData = await db.select().from(roadmap).where(eq(roadmap.id, randomRoadmapData.roadmapId))
+        const userData = await db.select().from(user).where(eq(user.id, userId))
+        
+        if (userData && userData.length > 0 && roadmapData.length > 0) {
+          const step = randomRoadmapData.step
+          
           const funMessages = [
-            `🦉 Don't make me come find you! "${roadmapStep.title}" is waiting. Only ${roadmapStep.time} minutes to level up! 🚀`,
-            `🔥 Your learning streak is crying! Complete "${roadmapStep.title}" and keep that momentum going! ⚡`,
-            `😢 We miss you! "${roadmapStep.title}" has been lonely. Come back and smash it in ${roadmapStep.time} minutes! 💪`,
-            `⏰ Tick tock! Your roadmap "${roadmapData[0].title}" needs some love. Let's crush "${roadmapStep.title}" together! 🎯`,
-            `🌟 Legend status awaits! Complete "${roadmapStep.title}" and show everyone what you're made of! 💎`
+            `🦉 Don't make me come find you! "${step.title}" is waiting. Only ${step.time} minutes to level up! 🚀`,
+            `🔥 Your learning streak is crying! Complete "${step.title}" and keep that momentum going! ⚡`,
+            `😢 We miss you! "${step.title}" has been lonely. Come back and smash it in ${step.time} minutes! 💪`,
+            `⏰ Tick tock! Your roadmap "${roadmapData[0].title}" needs some love. Let's crush "${step.title}" together! 🎯`,
+            `🌟 Legend status awaits! Complete "${step.title}" and show everyone what you're made of! 💎`
           ]
           
           const randomMessage = funMessages[Math.floor(Math.random() * funMessages.length)]
@@ -169,7 +186,16 @@ Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
             content: randomMessage,
             userId: userData[0].id
           })
-          await this.resendService.sendRoadmapReminderEmail(userData[0].email, userData[0].name, roadmapData[0].topic, roadmapData[0].title, roadmapStep.title, roadmapStep.description, roadmapStep.time)
+          
+          await this.resendService.sendRoadmapReminderEmail(
+            userData[0].email, 
+            userData[0].name, 
+            roadmapData[0].topic, 
+            roadmapData[0].title, 
+            step.title, 
+            step.description, 
+            step.time
+          )
         }
       }
     }
