@@ -85,14 +85,14 @@ Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
         const topUsers = await db.select()
           .from(user)
           .orderBy(desc(user.xp))
-          .limit(10);
+          .limit(3);
           
         this.logger.log(`Found ${topUsers.length} top users to reward`);
         
         for (let i = 0; i < topUsers.length; i++) {
           const currentUser = topUsers[i];
           
-          const earning = 5
+          const earning = 3
           try {
             await this.walletService.addEarnings(currentUser.id, {
               sol: earning,
