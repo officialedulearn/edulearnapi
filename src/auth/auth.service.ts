@@ -14,6 +14,7 @@ import { supabaseAdmin } from '../../lib/supabase';
 import { RoadmapService } from 'src/roadmap/roadmap.service';
 import { CommunityService } from 'src/community/community.service';
 import { update } from '@metaplex-foundation/mpl-core';
+import { SocialService } from 'src/social/social.service';
 
 @Injectable()
 export class AuthService {
@@ -27,6 +28,8 @@ export class AuthService {
     private resendService: ResendService,
     private roadmapService: RoadmapService,
     private communityService: CommunityService,
+    @Inject(forwardRef(() => SocialService))
+    private socialService: SocialService,
   ) {}
   async createUser(data: signUpDetails): Promise<User | Error> {
     try {
@@ -471,6 +474,7 @@ export class AuthService {
       });
 
       let newLevel = 'novice';
+      const oldLevel = currentUser.level;
 
       if (newXP >= 5000) {
         newLevel = 'expert';
@@ -495,6 +499,7 @@ export class AuthService {
           }
         }
       }
+      const levels = ['novice', 'beginner', 'intermediate', 'advanced', 'expert'];
       await db
         .update(user)
         .set({
@@ -513,6 +518,17 @@ export class AuthService {
       } catch (error) {
         console.error('Failed to update mod status after XP change:', error);
     
+      }
+
+      if (oldLevel !== newLevel) {
+        try {
+          await this.socialService.notifyFollowers(userId, {
+            type: 'level_up',
+            data: { level: levels[levels.indexOf(newLevel)], levelTitle: title, xpTotal: newXP },
+          });
+        } catch (notifyError) {
+          console.error('Failed to notify followers about level change:', notifyError);
+        }
       }
 
       return { level: newLevel, xp: newXP };
@@ -554,7 +570,19 @@ export class AuthService {
         throw new Error(`User with id ${userId} not found`);
       }
 
+      const oldLevel = users[0].level;
       await db.update(user).set({ level }).where(eq(user.id, userId));
+
+      if (oldLevel !== level) {
+        try {
+          await this.socialService.notifyFollowers(userId, {
+            type: 'level_up',
+            data: { level },
+          });
+        } catch (notifyError) {
+          console.error('Failed to notify followers about level change:', notifyError);
+        }
+      }
 
       return level;
     } catch (error) {

@@ -10,6 +10,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ApiKeyGuard } from './guards/api-key.guard';
 import { RoadmapModule } from 'src/roadmap/roadmap.module';
 import { CommunityModule } from 'src/community/community.module';
+import { SocialModule } from 'src/social/social.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { CommunityModule } from 'src/community/community.module';
     ResendModule, 
     forwardRef(() => RoadmapModule),
     forwardRef(() => CommunityModule),
+    forwardRef(() => SocialModule),
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtAuthGuard, ApiKeyGuard],

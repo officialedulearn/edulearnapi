@@ -8,10 +8,10 @@ import { eq, and, desc, asc } from 'drizzle-orm';
 export class NotificationsService {
     private readonly logger = new Logger(NotificationsService.name)
     constructor(private expoPushService: ExpoPushService) {}
-    async createNotification(notification: {title: string, content: string, userId: string}) {
+    async createNotification(notification: {title: string, content: string, userId: string}, sendPush: boolean = true) {
         try {
             const userResponse = await db.select().from(user).where(eq(user.id, notification.userId))
-            if(userResponse[0].expoPushToken) {
+            if(sendPush && userResponse[0].expoPushToken) {
                 await this.expoPushService.sendPushNotification(userResponse[0].expoPushToken, notification.title, notification.content)
             }
             await db.insert(notifications).values(notification)

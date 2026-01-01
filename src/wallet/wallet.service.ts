@@ -20,24 +20,37 @@ import {
 } from '@solana/spl-token';
 import db from '../../drizzle';
 import { AuthService } from 'src/auth/auth.service';
-import { earning, premiumTransactions, totalVolumes, user as userSchema } from 'lib/db/schema';
+import {
+  earning,
+  premiumTransactions,
+  totalVolumes,
+  user as userSchema,
+} from 'lib/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import axios from 'axios';
 import { transactionSenderAndConfirmationWaiter } from '../../lib/transaction/transactionSender';
 import { TwitterService } from 'src/twitter/twitter.service';
 import { ResendService } from 'src/resend/resend.service';
-import { initializeSDK, initiate, verify, getTokenValue, TransactionStatus, TransactionType, Currency, createOnrampOrder, Environment } from 'paj_ramp';
+import {
+  initializeSDK,
+  initiate,
+  verify,
+  getTokenValue,
+  TransactionStatus,
+  TransactionType,
+  Currency,
+  createOnrampOrder,
+  Environment,
+} from 'paj_ramp';
+import { SocialService } from 'src/social/social.service';
 
 export interface DeviceInfo {
-
   uuid: string;
   device: string;
   os: string;
   browser: string;
   ip: string;
 }
-
-
 
 export interface OnrampWebhookData {
   id: string;
@@ -74,10 +87,12 @@ export class WalletService {
     'https://solana-mainnet.g.alchemy.com/v2/pVe3T4LaDnJDqmmlBrkp_',
   );
   private readonly heliusConnection = new Connection(
-    "https://mainnet.helius-rpc.com/?api-key=36181439-ce38-4a9f-8adc-d413c0a4e218"
+    'https://mainnet.helius-rpc.com/?api-key=36181439-ce38-4a9f-8adc-d413c0a4e218',
   );
 
-  private readonly proPaymentWallet: PublicKey = new PublicKey("CT9ispmUxpBrbXT4kiLuJNMKoYWEZXtos2cKcSds4jY5")
+  private readonly proPaymentWallet: PublicKey = new PublicKey(
+    'CT9ispmUxpBrbXT4kiLuJNMKoYWEZXtos2cKcSds4jY5',
+  );
   private readonly lamportsToSend = 0.0007;
 
   private readonly webhookEvents = new Map<string, OnrampWebhookData[]>();
@@ -86,7 +101,9 @@ export class WalletService {
     @Inject(forwardRef(() => AuthService))
     private authService: AuthService,
     private twitterService: TwitterService,
-    private resendService: ResendService
+    private resendService: ResendService,
+    @Inject(forwardRef(() => SocialService))
+    private socialService: SocialService,
   ) {}
 
   async genereteWallet() {
@@ -169,7 +186,9 @@ export class WalletService {
     }
 
     if (amount !== 5 && amount !== 50) {
-      throw new Error('Invalid premium amount. Must be 5 (monthly) or 50 (annual)');
+      throw new Error(
+        'Invalid premium amount. Must be 5 (monthly) or 50 (annual)',
+      );
     }
 
     const userPublicKey = new PublicKey(user.address as unknown as string);
@@ -179,56 +198,65 @@ export class WalletService {
     try {
       userUsdcTokenAccount = await getAssociatedTokenAddress(
         this.USDC,
-        userPublicKey
+        userPublicKey,
       );
-      
-      const accountInfo = await this.connection.getAccountInfo(userUsdcTokenAccount);
+
+      const accountInfo =
+        await this.connection.getAccountInfo(userUsdcTokenAccount);
       if (!accountInfo) {
-        throw new Error('User does not have a USDC token account. Please ensure you have USDC in your wallet.');
+        throw new Error(
+          'User does not have a USDC token account. Please ensure you have USDC in your wallet.',
+        );
       }
 
-      const tokenAccountInfo = await this.connection.getParsedTokenAccountsByOwner(userPublicKey, {
-        mint: this.USDC,
-      });
+      const tokenAccountInfo =
+        await this.connection.getParsedTokenAccountsByOwner(userPublicKey, {
+          mint: this.USDC,
+        });
 
       if (tokenAccountInfo.value.length === 0) {
         throw new Error('No USDC token account found');
       }
 
-      const usdcBalance = tokenAccountInfo.value[0].account.data.parsed.info.tokenAmount.uiAmount;
+      const usdcBalance =
+        tokenAccountInfo.value[0].account.data.parsed.info.tokenAmount.uiAmount;
       if (usdcBalance < amount) {
-        throw new Error(`Insufficient USDC balance. Required: ${amount} USDC, Available: ${usdcBalance} USDC`);
+        throw new Error(
+          `Insufficient USDC balance. Required: ${amount} USDC, Available: ${usdcBalance} USDC`,
+        );
       }
     } catch (error) {
       console.error('Error checking USDC balance:', error.message);
       throw new Error(`Failed to verify USDC balance: ${error.message}`);
     }
 
-
     const adminSecretKey = process.env.ADMIN_WALLET_SECRET_KEY;
     if (!adminSecretKey) {
       throw new Error('Admin wallet secret key not configured');
     }
-    
-    const adminKeypair = Keypair.fromSecretKey(bs58.default.decode(adminSecretKey));
 
+    const adminKeypair = Keypair.fromSecretKey(
+      bs58.default.decode(adminSecretKey),
+    );
 
     const adminUsdcTokenAccount = await getAssociatedTokenAddress(
       this.USDC,
-      this.proPaymentWallet
+      this.proPaymentWallet,
     );
 
     await getOrCreateAssociatedTokenAccount(
       this.connection,
       userKeypair,
       this.USDC,
-      adminKeypair.publicKey
+      adminKeypair.publicKey,
     );
 
     const usdcDecimals = 6;
     const adjustedAmount = amount * Math.pow(10, usdcDecimals);
 
-    console.log(`Processing premium payment: ${amount} USDC from user ${userId}`);
+    console.log(
+      `Processing premium payment: ${amount} USDC from user ${userId}`,
+    );
 
     const transferInstruction = createTransferCheckedInstruction(
       userUsdcTokenAccount,
@@ -236,11 +264,13 @@ export class WalletService {
       adminUsdcTokenAccount,
       userPublicKey,
       adjustedAmount,
-      usdcDecimals
+      usdcDecimals,
     );
 
     const transaction = new Transaction().add(transferInstruction);
-    transaction.recentBlockhash = (await this.connection.getLatestBlockhash()).blockhash;
+    transaction.recentBlockhash = (
+      await this.connection.getLatestBlockhash()
+    ).blockhash;
     transaction.feePayer = userPublicKey;
     transaction.sign(userKeypair);
 
@@ -254,36 +284,49 @@ export class WalletService {
       signature: signature,
       amount: amount,
     });
-    await db.update(totalVolumes).set({
-      totalRevenue: sql`${totalVolumes.totalRevenue} + ${amount}`,
-    }).where(eq(totalVolumes.id, 1));
+    await db
+      .update(totalVolumes)
+      .set({
+        totalRevenue: sql`${totalVolumes.totalRevenue} + ${amount}`,
+      })
+      .where(eq(totalVolumes.id, 1));
 
-    if(user.referredBy !== null) {
-      const cut = .2 * amount
-      console.log(`Processing affiliate earning: ${cut} SOL for referral code ${user.referredBy}`);
+    if (user.referredBy !== null) {
+      const cut = 0.2 * amount;
+      console.log(
+        `Processing affiliate earning: ${cut} SOL for referral code ${user.referredBy}`,
+      );
 
-      const affiliate = await this.authService.getUserByRefCode(user.referredBy)
+      const affiliate = await this.authService.getUserByRefCode(
+        user.referredBy,
+      );
       if (affiliate) {
         const existingEarnings = await this.getUserEarnings(affiliate.id);
-        console.log(`Affiliate ${affiliate.id} existing earnings: ${existingEarnings.sol} SOL, ${existingEarnings.edln} EDLN`);
-      
-        await this.addEarnings(affiliate.id, {sol: cut, edln: 0});
-        
+        console.log(
+          `Affiliate ${affiliate.id} existing earnings: ${existingEarnings.sol} SOL, ${existingEarnings.edln} EDLN`,
+        );
+
+        await this.addEarnings(affiliate.id, { sol: cut, edln: 0 });
+
         const updatedEarnings = await this.getUserEarnings(affiliate.id);
-        console.log(`Affiliate ${affiliate.id} updated earnings: ${updatedEarnings.sol} SOL, ${updatedEarnings.edln} EDLN`);
+        console.log(
+          `Affiliate ${affiliate.id} updated earnings: ${updatedEarnings.sol} SOL, ${updatedEarnings.edln} EDLN`,
+        );
       } else {
-        console.error(`Affiliate not found for referral code: ${user.referredBy}`);
+        console.error(
+          `Affiliate not found for referral code: ${user.referredBy}`,
+        );
       }
     }
 
     await this.authService.updateUserPremiumStatus(userId, true);
     console.log('Premium payment transaction sent with signature:', signature);
-    
+
     return {
       signature,
       amount,
       currency: 'USDC',
-      type: amount === 5 ? 'monthly' : 'annual'
+      type: amount === 5 ? 'monthly' : 'annual',
     };
   }
 
@@ -292,12 +335,12 @@ export class WalletService {
     if (!user) {
       throw new Error('User not found');
     }
-    
+
     const userPublicKey = new PublicKey(user.address as unknown as string);
     const adminKeypair = Keypair.fromSecretKey(
       bs58.default.decode(process.env.ADMIN_WALLET_SECRET_KEY || ''),
     );
-   
+
     let isFirstTimeBuying = false;
     try {
       const currentBalance = await this.getBalance(userPublicKey);
@@ -305,25 +348,30 @@ export class WalletService {
         isFirstTimeBuying = true;
         console.log(`First time EDLN purchase detected for user ${userId}`);
       }
-      
+
       const estimatedTxFee = 0.002;
       const requiredBalance = amount + estimatedTxFee;
-      
+
       if (currentBalance.sol < requiredBalance) {
         throw new Error(
-          `Insufficient SOL balance. You have ${currentBalance.sol.toFixed(4)} SOL but need at least ${requiredBalance.toFixed(4)} SOL (${amount} SOL for swap + ${estimatedTxFee} SOL for transaction fees). Please reduce the amount or add more SOL to your wallet.`
+          `Insufficient SOL balance. You have ${currentBalance.sol.toFixed(4)} SOL but need at least ${requiredBalance.toFixed(4)} SOL (${amount} SOL for swap + ${estimatedTxFee} SOL for transaction fees). Please reduce the amount or add more SOL to your wallet.`,
         );
       }
-      
-      console.log(`Balance check passed: ${currentBalance.sol.toFixed(4)} SOL available, ${requiredBalance.toFixed(4)} SOL required`);
+
+      console.log(
+        `Balance check passed: ${currentBalance.sol.toFixed(4)} SOL available, ${requiredBalance.toFixed(4)} SOL required`,
+      );
     } catch (error) {
       if (error.message.includes('Insufficient SOL balance')) {
         throw error;
       }
-      console.log('Could not check balance for first-time detection:', error.message);
+      console.log(
+        'Could not check balance for first-time detection:',
+        error.message,
+      );
       isFirstTimeBuying = false;
     }
-    
+
     const secretKey = bs58.default.decode(decrypt(user.encryptedPrivateKey));
     const keypair = Keypair.fromSecretKey(secretKey);
     const wallet = new Wallet(keypair);
@@ -331,25 +379,26 @@ export class WalletService {
     const axiosInstance = axios.create({
       timeout: 30000,
     });
-    
-    const jupiterApiEndpoints = [
-      'https://lite-api.jup.ag/swap/v1',
-    ];
-    
+
+    const jupiterApiEndpoints = ['https://lite-api.jup.ag/swap/v1'];
+
     try {
       console.log('Swapping SOL to EDLN for user:', userId);
       console.log('Amount:', amount * LAMPORTS_PER_SOL, 'lamports');
-      
+
       let quoteResponse;
       let currentEndpointIndex = 0;
-      
-      while (!quoteResponse && currentEndpointIndex < jupiterApiEndpoints.length) {
+
+      while (
+        !quoteResponse &&
+        currentEndpointIndex < jupiterApiEndpoints.length
+      ) {
         const baseUrl = jupiterApiEndpoints[currentEndpointIndex];
         const quoteUrl = `${baseUrl}/quote?inputMint=${usdc ? 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' : 'So11111111111111111111111111111111111111112'}\
 &outputMint=CFw2KxMpWuxivoowkF8vRCrnMuDeg5VMHRR7zjE7pBLV\
 &amount=${amount * LAMPORTS_PER_SOL}\
 &slippageBps=50`;
-        
+
         try {
           console.log(`Requesting quote from: ${quoteUrl}`);
           quoteResponse = await axiosInstance.get(quoteUrl);
@@ -359,109 +408,132 @@ export class WalletService {
           currentEndpointIndex++;
         }
       }
-      
+
       if (!quoteResponse) {
         throw new Error('Failed to get quote from any Jupiter API endpoint');
       }
-      
+
       let swapTx;
       currentEndpointIndex = 0;
-      
+
       while (!swapTx && currentEndpointIndex < jupiterApiEndpoints.length) {
         const baseUrl = jupiterApiEndpoints[currentEndpointIndex];
         const swapUrl = `${baseUrl}/swap`;
-        
+
         try {
           console.log(`Requesting swap transaction from: ${swapUrl}`);
           swapTx = await axiosInstance.post(swapUrl, {
             quoteResponse: quoteResponse.data,
             userPublicKey: wallet.publicKey.toString(),
-            
+
             dynamicComputeUnitLimit: true,
             dynamicSlippage: true,
             prioritizationFeeLamports: {
               priorityLevelWithMaxLamports: {
                 maxLamports: 1000000,
-                priorityLevel: "veryHigh"
-              }
-            }
+                priorityLevel: 'veryHigh',
+              },
+            },
           });
           console.log('Swap transaction received with optimization parameters');
-          
+
           if (swapTx.data.prioritizationFeeLamports) {
-            console.log('Prioritization fee lamports:', swapTx.data.prioritizationFeeLamports);
+            console.log(
+              'Prioritization fee lamports:',
+              swapTx.data.prioritizationFeeLamports,
+            );
           }
           if (swapTx.data.computeUnitLimit) {
             console.log('Compute unit limit:', swapTx.data.computeUnitLimit);
           }
           if (swapTx.data.dynamicSlippageReport) {
-            console.log('Dynamic slippage report:', swapTx.data.dynamicSlippageReport);
+            console.log(
+              'Dynamic slippage report:',
+              swapTx.data.dynamicSlippageReport,
+            );
           }
-          
         } catch (error) {
-          console.warn(`Failed to get swap transaction from ${baseUrl}:`, error.message);
+          console.warn(
+            `Failed to get swap transaction from ${baseUrl}:`,
+            error.message,
+          );
           currentEndpointIndex++;
         }
       }
-      
+
       if (!swapTx) {
-        throw new Error('Failed to get swap transaction from any Jupiter API endpoint');
+        throw new Error(
+          'Failed to get swap transaction from any Jupiter API endpoint',
+        );
       }
 
-      const { 
-        swapTransaction, 
+      const {
+        swapTransaction,
         lastValidBlockHeight,
         prioritizationFeeLamports,
         computeUnitLimit,
         prioritizationType,
         dynamicSlippageReport,
-        simulationError
+        simulationError,
       } = swapTx.data;
-      
+
       if (simulationError) {
-        console.error('Transaction simulation failed:', JSON.stringify(simulationError, null, 2));
-        
+        console.error(
+          'Transaction simulation failed:',
+          JSON.stringify(simulationError, null, 2),
+        );
+
         const errorMsg = simulationError.message || 'Unknown simulation error';
-        
-        if (errorMsg.includes('insufficient') || errorMsg.includes('Insufficient')) {
+
+        if (
+          errorMsg.includes('insufficient') ||
+          errorMsg.includes('Insufficient')
+        ) {
           throw new Error(
-            `Insufficient balance for transaction. This usually means you don't have enough SOL to cover both the swap amount and gas fees. Try reducing the swap amount or add more SOL to your wallet.`
+            `Insufficient balance for transaction. This usually means you don't have enough SOL to cover both the swap amount and gas fees. Try reducing the swap amount or add more SOL to your wallet.`,
           );
         }
-        
+
         if (errorMsg.includes('slippage')) {
           throw new Error(
-            `Price slippage too high. The token price changed during the transaction. Please try again.`
+            `Price slippage too high. The token price changed during the transaction. Please try again.`,
           );
         }
-        
-        if (errorMsg.includes('blockhash') || errorMsg.includes('BlockhashNotFound')) {
-          throw new Error(
-            `Transaction expired. Please try again.`
-          );
+
+        if (
+          errorMsg.includes('blockhash') ||
+          errorMsg.includes('BlockhashNotFound')
+        ) {
+          throw new Error(`Transaction expired. Please try again.`);
         }
-        
-        throw new Error(`Transaction simulation failed: ${errorMsg}. This may be due to insufficient balance for gas fees, network congestion, or price volatility. Please try again with a smaller amount.`);
+
+        throw new Error(
+          `Transaction simulation failed: ${errorMsg}. This may be due to insufficient balance for gas fees, network congestion, or price volatility. Please try again with a smaller amount.`,
+        );
       }
-      
+
       const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
       const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
 
       if (prioritizationFeeLamports) {
-        console.log(`Transaction will use prioritization fee: ${prioritizationFeeLamports} lamports`);
+        console.log(
+          `Transaction will use prioritization fee: ${prioritizationFeeLamports} lamports`,
+        );
       }
       if (computeUnitLimit) {
         console.log(`Transaction compute unit limit: ${computeUnitLimit}`);
       }
       if (dynamicSlippageReport) {
-        console.log(`Dynamic slippage applied: ${dynamicSlippageReport.slippageBps} bps`);
+        console.log(
+          `Dynamic slippage applied: ${dynamicSlippageReport.slippageBps} bps`,
+        );
       }
 
       transaction.sign([keypair]);
 
-      const blockhashWithExpiryBlockHeight = await this.connection.getLatestBlockhash();
+      const blockhashWithExpiryBlockHeight =
+        await this.connection.getLatestBlockhash();
 
-      
       console.log('Sending transaction with improved transaction sender...');
       const txResponse = await transactionSenderAndConfirmationWaiter({
         connection: this.connection,
@@ -475,37 +547,54 @@ export class WalletService {
 
       const txid = txResponse.transaction.signatures[0];
       console.log('Transaction confirmed with signature:', txid);
-      
+
       if (isFirstTimeBuying) {
         try {
           await this.authService.incrementCredits(userId, 5);
-          console.log(`Awarded 5 KP to user ${userId} for first-time EDLN purchase`);
+          console.log(
+            `Awarded 5 KP to user ${userId} for first-time EDLN purchase`,
+          );
         } catch (kpError) {
-          console.error('Failed to award first-time purchase KP:', kpError.message);
+          console.error(
+            'Failed to award first-time purchase KP:',
+            kpError.message,
+          );
         }
       }
-      
+
       return `https://solscan.io/tx/${txid}`;
     } catch (error) {
       console.error('Error during SOL to EDLN swap:', error.message);
       if (error.response) {
         console.error('API error response:', error.response.data);
       }
-      
-      if (error.message.includes('Insufficient SOL balance') || 
-          error.message.includes('Insufficient balance for transaction') ||
-          error.message.includes('insufficient')) {
+
+      if (
+        error.message.includes('Insufficient SOL balance') ||
+        error.message.includes('Insufficient balance for transaction') ||
+        error.message.includes('insufficient')
+      ) {
         throw error;
       }
-      
-      if (error.message.includes('timeout') || error.message.includes('ETIMEDOUT')) {
-        throw new Error('Transaction timeout. The network may be congested. Please try again.');
+
+      if (
+        error.message.includes('timeout') ||
+        error.message.includes('ETIMEDOUT')
+      ) {
+        throw new Error(
+          'Transaction timeout. The network may be congested. Please try again.',
+        );
       }
-      
-      if (error.message.includes('Failed to get quote') || error.message.includes('Failed to get swap transaction')) {
-        throw new Error('Unable to connect to swap service. Please check your internet connection and try again.');
+
+      if (
+        error.message.includes('Failed to get quote') ||
+        error.message.includes('Failed to get swap transaction')
+      ) {
+        throw new Error(
+          'Unable to connect to swap service. Please check your internet connection and try again.',
+        );
       }
-      
+
       throw new Error(`Swap failed: ${error.message}`);
     }
   }
@@ -518,23 +607,29 @@ export class WalletService {
         throw new Error('User not found');
       }
 
-      const userBalance = await this.getBalance(new PublicKey(user.address as unknown as string));
+      const userBalance = await this.getBalance(
+        new PublicKey(user.address as unknown as string),
+      );
 
       if (userBalance.tokenAccount < amount) {
-        throw new Error(`Insufficient EDLN balance. You have ${userBalance.tokenAccount} EDLN but need ${amount} EDLN to burn.`);
+        throw new Error(
+          `Insufficient EDLN balance. You have ${userBalance.tokenAccount} EDLN but need ${amount} EDLN to burn.`,
+        );
       }
 
       const userPublicKey = new PublicKey(user?.address as unknown as string);
       const secretKey = bs58.default.decode(decrypt(user.encryptedPrivateKey));
       const userKeyPair = Keypair.fromSecretKey(secretKey);
-      
+
       const tokenAccount = await getAssociatedTokenAddress(
         this.EDLN,
         userPublicKey,
       );
       const tokenDecimals = 9;
       const adjustedAmount = amount * Math.pow(10, tokenDecimals);
-      console.log(`Adjusted burn amount: ${amount} EDLN = ${adjustedAmount} base units`);
+      console.log(
+        `Adjusted burn amount: ${amount} EDLN = ${adjustedAmount} base units`,
+      );
 
       const burnInstruction = createBurnCheckedInstruction(
         tokenAccount,
@@ -543,26 +638,32 @@ export class WalletService {
         adjustedAmount,
         tokenDecimals,
       );
-      
+
       const transaction = new Transaction().add(burnInstruction);
-      transaction.recentBlockhash = (await this.connection.getLatestBlockhash()).blockhash;
+      transaction.recentBlockhash = (
+        await this.connection.getLatestBlockhash()
+      ).blockhash;
       transaction.feePayer = userPublicKey;
       transaction.sign(userKeyPair);
-      
-      const blockhashWithExpiryBlockHeight = await this.connection.getLatestBlockhash();
+
+      const blockhashWithExpiryBlockHeight =
+        await this.connection.getLatestBlockhash();
       const txResponse = await transactionSenderAndConfirmationWaiter({
         connection: this.connection,
         serializedTransaction: transaction.serialize(),
         blockhashWithExpiryBlockHeight,
       });
-      
+
       if (!txResponse) {
         throw new Error('Transaction failed or expired');
       }
-      
-      await db.update(totalVolumes).set({
-        totalEdlnBurned: sql`${totalVolumes.totalEdlnBurned} + ${amount}`,
-      }).where(eq(totalVolumes.id, 1));
+
+      await db
+        .update(totalVolumes)
+        .set({
+          totalEdlnBurned: sql`${totalVolumes.totalEdlnBurned} + ${amount}`,
+        })
+        .where(eq(totalVolumes.id, 1));
 
       const signature = txResponse.transaction.signatures[0];
       console.log('Burn transaction confirmed with signature:', signature);
@@ -575,7 +676,9 @@ export class WalletService {
 
   async addEarnings(userId: string, data: { sol?: number; edln?: number }) {
     try {
-      console.log(`Adding earnings for user ${userId}: ${JSON.stringify(data)}`);
+      console.log(
+        `Adding earnings for user ${userId}: ${JSON.stringify(data)}`,
+      );
       const user = await this.authService.getUserById(userId);
       if (!user) {
         throw new Error('User not found');
@@ -583,16 +686,22 @@ export class WalletService {
       const solValue = data.sol ? Number(data.sol).toFixed(2) : '0.00';
       const edlnValue = data.edln ? Number(data.edln).toFixed(2) : '0.00';
 
-      const [result] = await db.insert(earning).values({
-        userId: userId,
-        sol: solValue,
-        edln: edlnValue,
-        createdAt: new Date()
-      }).returning();
+      const [result] = await db
+        .insert(earning)
+        .values({
+          userId: userId,
+          sol: solValue,
+          edln: edlnValue,
+          createdAt: new Date(),
+        })
+        .returning();
 
-      await db.update(userSchema).set({
-        totalEarnings: `${Number(user.totalEarnings) + Number(solValue)}`
-      }).where(eq(userSchema.id, userId));
+      await db
+        .update(userSchema)
+        .set({
+          totalEarnings: `${Number(user.totalEarnings) + Number(solValue)}`,
+        })
+        .where(eq(userSchema.id, userId));
 
       console.log(`Earnings added successfully for user ${userId}`, result);
 
@@ -601,16 +710,19 @@ export class WalletService {
           const html = this.getNewEarningsEmailTemplate(
             user.name,
             Number(solValue),
-            Number(edlnValue)
+            Number(edlnValue),
           );
           await this.resendService.sendEmail(
             user.email,
             '💰 New Earnings Available to Claim!',
-            html
+            html,
           );
           console.log(`Earnings notification email sent to ${user.email}`);
         } catch (emailError) {
-          console.error('Failed to send earnings notification email:', emailError.message);
+          console.error(
+            'Failed to send earnings notification email:',
+            emailError.message,
+          );
         }
       }
 
@@ -628,21 +740,24 @@ export class WalletService {
       if (!user) {
         throw new Error('User not found');
       }
-      
-      const userEarnings = await db.select().from(earning).where(eq(earning.userId, userId));
-      
+
+      const userEarnings = await db
+        .select()
+        .from(earning)
+        .where(eq(earning.userId, userId));
+
       let totalSol = 0;
       let totalEdln = 0;
-      
-      userEarnings.forEach(earn => {
+
+      userEarnings.forEach((earn) => {
         totalSol += Number(earn.sol);
         totalEdln += Number(earn.edln);
       });
-      
+
       return {
         sol: totalSol,
         edln: totalEdln,
-        hasEarnings: totalSol > 0 || totalEdln > 0
+        hasEarnings: totalSol > 0 || totalEdln > 0,
       };
     } catch (error) {
       console.error('Error getting user earnings:', error.message);
@@ -657,10 +772,11 @@ export class WalletService {
       if (!user) {
         throw new Error('User not found');
       }
-      
-      // Delete earnings FIRST to prevent race condition from multiple claims
-      const earnings = await db.delete(earning).where(eq(earning.userId, userId)).returning();
-      
+      const earnings = await db
+        .delete(earning)
+        .where(eq(earning.userId, userId))
+        .returning();
+
       if (!earnings.length) {
         console.log(`No earnings found for user ${userId}`);
         return { success: false, message: 'No earnings to claim' };
@@ -668,83 +784,116 @@ export class WalletService {
 
       let totalSol = 0;
       let totalEdln = 0;
-      
-      earnings.forEach(earn => {
+
+      earnings.forEach((earn) => {
         totalSol += Number(earn.sol);
         totalEdln += Number(earn.edln);
       });
 
       console.log(`Found earnings - SOL: ${totalSol}, EDLN: ${totalEdln}`);
 
-      if ((type === 'sol' && totalSol <= 0) || (type === 'edln' && totalEdln <= 0) || 
-          (type === 'all' && totalSol <= 0 && totalEdln <= 0)) {
-        // Restore earnings if nothing to claim for this type
+      if (
+        (type === 'sol' && totalSol <= 0) ||
+        (type === 'edln' && totalEdln <= 0) ||
+        (type === 'all' && totalSol <= 0 && totalEdln <= 0)
+      ) {
         for (const earn of earnings) {
           await db.insert(earning).values(earn);
         }
-        return { success: false, message: 'No earnings to claim for the selected type' };
+        return {
+          success: false,
+          message: 'No earnings to claim for the selected type',
+        };
       }
 
       const userPublicKey = new PublicKey(user.address as unknown as string);
-      
+
       const transactions: any = [];
 
       try {
         if ((type === 'sol' || type === 'all') && totalSol > 0) {
           const usdcTransaction = await this.transferUSDC(
-            userPublicKey, 
-            totalSol
+            userPublicKey,
+            totalSol,
           );
-          transactions.push({ type: 'usdc', amount: totalSol, tx: usdcTransaction });
+          transactions.push({
+            type: 'usdc',
+            amount: totalSol,
+            tx: usdcTransaction,
+          });
         }
 
         if ((type === 'edln' || type === 'all') && totalEdln > 0) {
           const edlnTransaction = await this.transferEDLN(
-            userPublicKey, 
-            totalEdln
+            userPublicKey,
+            totalEdln,
           );
-          transactions.push({ type: 'edln', amount: totalEdln, tx: edlnTransaction });
+          transactions.push({
+            type: 'edln',
+            amount: totalEdln,
+            tx: edlnTransaction,
+          });
         }
-        
+
         if (type === 'sol' && totalEdln > 0) {
           await this.addEarnings(userId, { edln: totalEdln });
         } else if (type === 'edln' && totalSol > 0) {
           await this.addEarnings(userId, { sol: totalSol });
         }
       } catch (transferError) {
-        console.error('Transfer failed, restoring earnings:', transferError.message);
+        console.error(
+          'Transfer failed, restoring earnings:',
+          transferError.message,
+        );
         for (const earn of earnings) {
           await db.insert(earning).values(earn);
         }
         throw transferError;
       }
-
-      const post = `
-      @${user.username} claimed ${totalSol} USDC on EduLearn
-      Putting their total earnings to ${Number(user.totalEarnings).toFixed(2)} USDC
-
-      Solscan link: https://solscan.io/tx/${transactions[0].tx}
-      Start learning and earning rewards on edulearn.fun
-      `
+      const post = [
+        `.@${user.username} just claimed ${totalSol} USDC on EduLearn 💰💚`,
+        `Total earnings: ${Number(user.totalEarnings).toFixed(2)} USDC`,
+        ``,
+        `Start learning & earning → edulearn.fun`,
+      ].join('\n');
 
       const html = this.getEarningsClaimEmailTemplate(
         user.name,
         totalSol,
         totalEdln,
         type,
-        transactions
+        transactions,
       );
 
-      await this.resendService.sendEmail(user.email, '💰 Earnings Claimed Successfully!', html);
+      await this.resendService.sendEmail(
+        user.email,
+        '💰 Earnings Claimed Successfully!',
+        html,
+      );
 
       await this.twitterService.postTweet(post);
       console.log('Successfully posted earnings to X');
-      console.log(`Successfully claimed earnings for user ${userId}`, transactions);
-      
+      console.log(
+        `Successfully claimed earnings for user ${userId}`,
+        transactions,
+      );
+
+      try {
+        await this.socialService.notifyFollowers(userId, {
+          type: 'earnings_claimed',
+          data: { amount: totalSol },
+        });
+      } catch (notifyError) {
+        console.error(
+          'Failed to notify followers about earnings claim:',
+          notifyError,
+        );
+      }
+
       return {
         success: true,
         message: 'Earnings claimed successfully',
-        transactions
+        transactions,
       };
     } catch (error) {
       console.error('Error claiming earnings:', error.message);
@@ -758,13 +907,15 @@ export class WalletService {
       if (!adminSecretKey) {
         throw new Error('Admin wallet secret key not configured');
       }
-      
+
       const adminKeypair = Keypair.fromSecretKey(
-        bs58.default.decode(adminSecretKey)
+        bs58.default.decode(adminSecretKey),
       );
 
       const lamports = amount * LAMPORTS_PER_SOL;
-      console.log(`Transferring ${lamports} lamports (${amount} SOL) from admin to ${toPubkey.toBase58()}`);
+      console.log(
+        `Transferring ${lamports} lamports (${amount} SOL) from admin to ${toPubkey.toBase58()}`,
+      );
 
       const transferInstruction = SystemProgram.transfer({
         fromPubkey: adminKeypair.publicKey,
@@ -773,13 +924,19 @@ export class WalletService {
       });
 
       const transaction = new Transaction().add(transferInstruction);
-      transaction.recentBlockhash = (await this.connection.getLatestBlockhash()).blockhash;
+      transaction.recentBlockhash = (
+        await this.connection.getLatestBlockhash()
+      ).blockhash;
       transaction.feePayer = adminKeypair.publicKey;
       transaction.sign(adminKeypair);
 
-      const txid = await sendAndConfirmTransaction(this.connection, transaction, [adminKeypair]);
+      const txid = await sendAndConfirmTransaction(
+        this.connection,
+        transaction,
+        [adminKeypair],
+      );
       console.log('SOL transfer successful with signature:', txid);
-      
+
       return txid;
     } catch (error) {
       console.error('Error transferring SOL:', error.message);
@@ -787,34 +944,34 @@ export class WalletService {
     }
   }
 
-  private async transferEDLN( toPubkey: PublicKey, amount: number) {
+  private async transferEDLN(toPubkey: PublicKey, amount: number) {
     try {
       const adminSecretKey = process.env.ADMIN_WALLET_SECRET_KEY;
       if (!adminSecretKey) {
         throw new Error('Admin wallet secret key not configured');
       }
-      
+
       const adminKeypair = Keypair.fromSecretKey(
-        bs58.default.decode(adminSecretKey)
+        bs58.default.decode(adminSecretKey),
       );
 
       const sourceTokenAccount = await getAssociatedTokenAddress(
         this.EDLN,
-        adminKeypair.publicKey
+        adminKeypair.publicKey,
       );
-      
+
       const destinationTokenAccount = await getOrCreateAssociatedTokenAccount(
         this.connection,
         adminKeypair,
         this.EDLN,
-        toPubkey
+        toPubkey,
       );
-      
+
       const tokenDecimals = 9;
       const adjustedAmount = amount * Math.pow(10, tokenDecimals);
-      
+
       console.log(
-        `Transferring ${adjustedAmount} EDLN tokens (${amount} EDLN) from admin to ${toPubkey.toBase58()}`
+        `Transferring ${adjustedAmount} EDLN tokens (${amount} EDLN) from admin to ${toPubkey.toBase58()}`,
       );
 
       const transferInstruction = createTransferCheckedInstruction(
@@ -823,17 +980,23 @@ export class WalletService {
         destinationTokenAccount.address,
         adminKeypair.publicKey,
         adjustedAmount,
-        tokenDecimals
+        tokenDecimals,
       );
 
       const transaction = new Transaction().add(transferInstruction);
-      transaction.recentBlockhash = (await this.connection.getLatestBlockhash()).blockhash;
+      transaction.recentBlockhash = (
+        await this.connection.getLatestBlockhash()
+      ).blockhash;
       transaction.feePayer = adminKeypair.publicKey;
       transaction.sign(adminKeypair);
 
-      const txid = await sendAndConfirmTransaction(this.connection, transaction, [adminKeypair]);
+      const txid = await sendAndConfirmTransaction(
+        this.connection,
+        transaction,
+        [adminKeypair],
+      );
       console.log('EDLN transfer successful with signature:', txid);
-      
+
       return txid;
     } catch (error) {
       console.error('Error transferring EDLN:', error.message);
@@ -847,35 +1010,38 @@ export class WalletService {
       if (!adminSecretKey) {
         throw new Error('Admin wallet secret key not configured');
       }
-      
+
       const adminKeypair = Keypair.fromSecretKey(
-        bs58.default.decode(adminSecretKey)
+        bs58.default.decode(adminSecretKey),
       );
       const adminWallet = new Wallet(adminKeypair);
 
       const axiosInstance = axios.create({
         timeout: 30000,
       });
-      
-      const jupiterApiEndpoints = [
-        'https://lite-api.jup.ag/swap/v1',
-      ];
-      
-      console.log(`Admin wallet swapping ${usdcAmount} USDC to EDLN (keeping in admin wallet)`);
-      
+
+      const jupiterApiEndpoints = ['https://lite-api.jup.ag/swap/v1'];
+
+      console.log(
+        `Admin wallet swapping ${usdcAmount} USDC to EDLN (keeping in admin wallet)`,
+      );
+
       const usdcDecimals = 6;
       const amountInSmallestUnit = usdcAmount * Math.pow(10, usdcDecimals);
-      
+
       let quoteResponse;
       let currentEndpointIndex = 0;
-      
-      while (!quoteResponse && currentEndpointIndex < jupiterApiEndpoints.length) {
+
+      while (
+        !quoteResponse &&
+        currentEndpointIndex < jupiterApiEndpoints.length
+      ) {
         const baseUrl = jupiterApiEndpoints[currentEndpointIndex];
         const quoteUrl = `${baseUrl}/quote?inputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v\
 &outputMint=CFw2KxMpWuxivoowkF8vRCrnMuDeg5VMHRR7zjE7pBLV\
 &amount=${amountInSmallestUnit}\
 &slippageBps=50`;
-        
+
         try {
           console.log(`Requesting quote from: ${quoteUrl}`);
           quoteResponse = await axiosInstance.get(quoteUrl);
@@ -885,18 +1051,18 @@ export class WalletService {
           currentEndpointIndex++;
         }
       }
-      
+
       if (!quoteResponse) {
         throw new Error('Failed to get quote from any Jupiter API endpoint');
       }
-      
+
       let swapTx;
       currentEndpointIndex = 0;
-      
+
       while (!swapTx && currentEndpointIndex < jupiterApiEndpoints.length) {
         const baseUrl = jupiterApiEndpoints[currentEndpointIndex];
         const swapUrl = `${baseUrl}/swap`;
-        
+
         try {
           console.log(`Requesting swap transaction from: ${swapUrl}`);
           swapTx = await axiosInstance.post(swapUrl, {
@@ -907,35 +1073,43 @@ export class WalletService {
             prioritizationFeeLamports: {
               priorityLevelWithMaxLamports: {
                 maxLamports: 1000000,
-                priorityLevel: "veryHigh"
-              }
-            }
+                priorityLevel: 'veryHigh',
+              },
+            },
           });
           console.log('Swap transaction received');
         } catch (error) {
-          console.warn(`Failed to get swap transaction from ${baseUrl}:`, error.message);
+          console.warn(
+            `Failed to get swap transaction from ${baseUrl}:`,
+            error.message,
+          );
           currentEndpointIndex++;
         }
       }
-      
+
       if (!swapTx) {
-        throw new Error('Failed to get swap transaction from any Jupiter API endpoint');
+        throw new Error(
+          'Failed to get swap transaction from any Jupiter API endpoint',
+        );
       }
 
       const { swapTransaction, simulationError } = swapTx.data;
-      
+
       if (simulationError) {
         console.warn('Simulation error detected:', simulationError);
-        throw new Error(`Transaction simulation failed: ${simulationError.message || 'Unknown simulation error'}`);
+        throw new Error(
+          `Transaction simulation failed: ${simulationError.message || 'Unknown simulation error'}`,
+        );
       }
-      
+
       const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
       const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
 
       transaction.sign([adminKeypair]);
 
-      const blockhashWithExpiryBlockHeight = await this.connection.getLatestBlockhash();
-      
+      const blockhashWithExpiryBlockHeight =
+        await this.connection.getLatestBlockhash();
+
       console.log('Sending admin USDC->EDLN swap transaction...');
       const txResponse = await transactionSenderAndConfirmationWaiter({
         connection: this.connection,
@@ -949,7 +1123,7 @@ export class WalletService {
 
       const txid = txResponse.transaction.signatures[0];
       console.log('Admin swap confirmed with signature:', txid);
-      
+
       return txid;
     } catch (error) {
       console.error('Error during admin USDC to EDLN swap:', error.message);
@@ -966,28 +1140,28 @@ export class WalletService {
       if (!adminSecretKey) {
         throw new Error('Admin wallet secret key not configured');
       }
-      
+
       const adminKeypair = Keypair.fromSecretKey(
-        bs58.default.decode(adminSecretKey)
+        bs58.default.decode(adminSecretKey),
       );
 
       const sourceTokenAccount = await getAssociatedTokenAddress(
         this.USDC,
-        adminKeypair.publicKey
+        adminKeypair.publicKey,
       );
-      
+
       const destinationTokenAccount = await getOrCreateAssociatedTokenAccount(
         this.connection,
         adminKeypair, // fee payer
         this.USDC,
-        toPubkey
+        toPubkey,
       );
-      
+
       const usdcDecimals = 6; // USDC has 6 decimals
       const adjustedAmount = amount * Math.pow(10, usdcDecimals);
-      
+
       console.log(
-        `Transferring ${adjustedAmount} USDC tokens (${amount} USDC) from admin to ${toPubkey.toBase58()}`
+        `Transferring ${adjustedAmount} USDC tokens (${amount} USDC) from admin to ${toPubkey.toBase58()}`,
       );
 
       const transferInstruction = createTransferCheckedInstruction(
@@ -996,11 +1170,12 @@ export class WalletService {
         destinationTokenAccount.address,
         adminKeypair.publicKey,
         adjustedAmount,
-        usdcDecimals
+        usdcDecimals,
       );
 
       const transaction = new Transaction().add(transferInstruction);
-      const blockhashWithExpiryBlockHeight = await this.connection.getLatestBlockhash();
+      const blockhashWithExpiryBlockHeight =
+        await this.connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhashWithExpiryBlockHeight.blockhash;
       transaction.feePayer = adminKeypair.publicKey;
       transaction.sign(adminKeypair);
@@ -1017,7 +1192,7 @@ export class WalletService {
 
       const txid = txResponse.transaction.signatures[0];
       console.log('USDC transfer successful with signature:', txid);
-      
+
       return txid;
     } catch (error) {
       console.error('Error transferring USDC:', error.message);
@@ -1031,19 +1206,19 @@ export class WalletService {
       if (!user) {
         throw new Error('User not found');
       }
-      
+
       if (!user.encryptedPrivateKey) {
         throw new Error('User does not have a private key');
       }
-      
+
       const decryptedPrivateKey = decrypt(user.encryptedPrivateKey);
       const secretKey = bs58.default.decode(decryptedPrivateKey);
       const keypair = Keypair.fromSecretKey(secretKey);
-      
+
       return {
         keypair,
         publicKey: keypair.publicKey,
-        privateKey: decryptedPrivateKey
+        privateKey: decryptedPrivateKey,
       };
     } catch (error) {
       console.error('Error decrypting private key:', error.message);
@@ -1052,13 +1227,16 @@ export class WalletService {
   }
 
   async initiateOnramp(userId: string) {
-    initializeSDK(Environment.Production)
+    initializeSDK(Environment.Production);
     const user = await this.authService.getUserById(userId);
     if (!user) {
       throw new Error('User not found');
     }
-    
-    const initiated = initiate(user.email, "365d7766-608e-4287-8b6e-cd89532441b1")
+
+    const initiated = initiate(
+      user.email,
+      '365d7766-608e-4287-8b6e-cd89532441b1',
+    );
     return {
       initiated: initiated,
       email: user.email,
@@ -1067,95 +1245,108 @@ export class WalletService {
   }
 
   async verifyOnramp(email: string, otp: string, deviceInfo: DeviceInfo) {
-    const verified = await verify(email, otp, deviceInfo, "365d7766-608e-4287-8b6e-cd89532441b1");
+    const verified = await verify(
+      email,
+      otp,
+      deviceInfo,
+      '365d7766-608e-4287-8b6e-cd89532441b1',
+    );
     if (!verified) {
       throw new Error('Failed to verify onramp');
     }
     return verified;
   }
- 
+
   async onrampFiatToSol(userId: string, amount: number, verifiedResponse: any) {
-    const verifiedResponseToken = verifiedResponse.token
-  const user = await this.authService.getUserById(userId);
-  if (!user) {
-    throw new Error('User not found');
+    const verifiedResponseToken = verifiedResponse.token;
+    const user = await this.authService.getUserById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const order = await createOnrampOrder(
+      {
+        fiatAmount: amount,
+        currency: 'NGN',
+        recipient: user.address as string,
+        mint: 'So11111111111111111111111111111111111111112',
+        chain: 'SOLANA',
+        webhookURL: 'https://api.edulearn.fun/wallet/onramp-webhook',
+      },
+      verifiedResponseToken,
+    );
+
+    return order;
   }
 
-  const order = await createOnrampOrder({
-    fiatAmount: amount,
-    currency: 'NGN',    
-    recipient: user.address as string,
-    mint: 'So11111111111111111111111111111111111111112',
-    chain: 'SOLANA',
-    webhookURL: 'https://api.edulearn.fun/wallet/onramp-webhook',
-  },
-  verifiedResponseToken,
-);
+  async onrampFiatToEdln(
+    userId: string,
+    amount: number,
+    verifiedResponse: any,
+  ) {
+    const verifiedResponseToken = verifiedResponse.token;
+    const user = await this.authService.getUserById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
 
-  return order;
+    const order = await createOnrampOrder(
+      {
+        fiatAmount: amount,
+        currency: 'NGN',
+        recipient: user.address as string,
+        mint: 'CFw2KxMpWuxivoowkF8vRCrnMuDeg5VMHRR7zjE7pBLV',
+        chain: 'SOLANA',
+        webhookURL: 'https://api.edulearn.fun/wallet/onramp-webhook',
+      },
+      verifiedResponseToken,
+    );
+
+    return order;
   }
-
-  async onrampFiatToEdln(userId: string, amount: number, verifiedResponse: any) {
-
-  const verifiedResponseToken = verifiedResponse.token
-  const user = await this.authService.getUserById(userId);
-  if (!user) {
-    throw new Error('User not found');
-  }
-
-  const order = await createOnrampOrder({
-    fiatAmount: amount,
-    currency: 'NGN',    
-    recipient: user.address as string,
-    mint: 'CFw2KxMpWuxivoowkF8vRCrnMuDeg5VMHRR7zjE7pBLV',
-    chain: 'SOLANA',
-    webhookURL: 'https://api.edulearn.fun/wallet/onramp-webhook',
-  },
-  verifiedResponseToken,
-);
-
-  return order;
-}
 
   processWebhookEvent(data: OnrampWebhookData): void {
     const recipientAddress = data.recipient || data.address;
-    
+
     if (!recipientAddress) {
       console.error('Webhook event missing recipient address:', data.id);
       return;
     }
-    
+
     if (!this.webhookEvents.has(recipientAddress)) {
       this.webhookEvents.set(recipientAddress, []);
     }
-    
+
     const events = this.webhookEvents.get(recipientAddress)!;
-    const existingIndex = events.findIndex(e => e.id === data.id);
-    
+    const existingIndex = events.findIndex((e) => e.id === data.id);
+
     if (existingIndex >= 0) {
       events[existingIndex] = data;
     } else {
       events.push(data);
     }
-    
+
     console.log(`Webhook event stored for address ${recipientAddress}:`, {
       id: data.id,
       status: data.status,
       amount: data.amount,
-      type: data.transactionType
+      type: data.transactionType,
     });
-    
-    setTimeout(() => {
-      const currentEvents = this.webhookEvents.get(recipientAddress);
-      if (currentEvents) {
-        const filtered = currentEvents.filter(e => e.id !== data.id);
-        if (filtered.length === 0) {
-          this.webhookEvents.delete(recipientAddress);
-        } else {
-          this.webhookEvents.set(recipientAddress, filtered);
+
+    setTimeout(
+      () => {
+        const currentEvents = this.webhookEvents.get(recipientAddress);
+        if (currentEvents) {
+          const filtered = currentEvents.filter((e) => e.id !== data.id);
+          if (filtered.length === 0) {
+            this.webhookEvents.delete(recipientAddress);
+          } else {
+            this.webhookEvents.set(recipientAddress, filtered);
+          }
         }
-      }
-    }, 5 * 60 * 1000);
+      },
+      5 * 60 * 1000,
+    );
   }
 
   getPendingWebhookEvents(address: string): OnrampWebhookData[] {
@@ -1165,7 +1356,7 @@ export class WalletService {
   clearWebhookEvent(address: string, eventId: string): void {
     const events = this.webhookEvents.get(address);
     if (events) {
-      const filtered = events.filter(e => e.id !== eventId);
+      const filtered = events.filter((e) => e.id !== eventId);
       if (filtered.length === 0) {
         this.webhookEvents.delete(address);
       } else {
@@ -1179,11 +1370,11 @@ export class WalletService {
     totalSol: number,
     totalEdln: number,
     type: 'sol' | 'edln' | 'all',
-    transactions: any[]
+    transactions: any[],
   ): string {
     const hasUsdc = (type === 'sol' || type === 'all') && totalSol > 0;
     const hasEdln = (type === 'edln' || type === 'all') && totalEdln > 0;
-    
+
     return `
 <!DOCTYPE html>
 <html lang="en">
@@ -1234,7 +1425,9 @@ export class WalletService {
                                     📊 Claim Summary
                                 </h3>
                                 
-                                ${hasUsdc ? `
+                                ${
+                                  hasUsdc
+                                    ? `
                                 <div style="background-color: #1A1A1A; border-radius: 12px; padding: 20px; margin-bottom: ${hasEdln ? '15px' : '0'}; border: 1px solid rgba(255, 255, 255, 0.08);">
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
                                         <div>
@@ -1246,9 +1439,13 @@ export class WalletService {
                                         <div style="font-size: 40px;">💵</div>
                                     </div>
                                 </div>
-                                ` : ''}
+                                `
+                                    : ''
+                                }
 
-                                ${hasEdln ? `
+                                ${
+                                  hasEdln
+                                    ? `
                                 <div style="background-color: #1A1A1A; border-radius: 12px; padding: 20px; border: 1px solid rgba(255, 255, 255, 0.08);">
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
                                         <div>
@@ -1260,19 +1457,25 @@ export class WalletService {
                                         <div style="font-size: 40px;">🪙</div>
                                     </div>
                                 </div>
-                                ` : ''}
+                                `
+                                    : ''
+                                }
                             </div>
                         </td>
                     </tr>
 
                     <!-- Transaction Details -->
-                    ${transactions.length > 0 ? `
+                    ${
+                      transactions.length > 0
+                        ? `
                     <tr>
                         <td style="padding: 20px 30px;">
                             <h3 style="margin: 0 0 15px 0; color: #FFFFFF; font-size: 18px; font-weight: 600;">
                                 🔗 Transaction Details
                             </h3>
-                            ${transactions.map(tx => `
+                            ${transactions
+                              .map(
+                                (tx) => `
                                 <div style="background-color: #1A1A1A; border-radius: 8px; padding: 15px; margin-bottom: 10px; border-left: 4px solid #00FF80; border: 1px solid rgba(255, 255, 255, 0.08);">
                                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                         <span style="font-weight: 600; color: #FFFFFF; text-transform: uppercase; font-size: 12px;">
@@ -1286,10 +1489,14 @@ export class WalletService {
                                         View on Solscan →
                                     </a>
                                 </div>
-                            `).join('')}
+                            `,
+                              )
+                              .join('')}
                         </td>
                     </tr>
-                    ` : ''}
+                    `
+                        : ''
+                    }
 
                     <!-- What's Next -->
                     <tr>
@@ -1355,11 +1562,11 @@ export class WalletService {
   private getNewEarningsEmailTemplate(
     name: string,
     solAmount: number,
-    edlnAmount: number
+    edlnAmount: number,
   ): string {
     const hasUsdc = solAmount > 0;
     const hasEdln = edlnAmount > 0;
-    
+
     return `
 <!DOCTYPE html>
 <html lang="en">
@@ -1405,7 +1612,9 @@ export class WalletService {
                   💵 Your New Earnings
                 </h3>
                 
-                ${hasUsdc ? `
+                ${
+                  hasUsdc
+                    ? `
                 <div style="background-color:#1A1A1A;border-radius:12px;padding:20px;margin-bottom:${hasEdln ? '15px' : '0'};border:1px solid rgba(255,255,255,0.08);">
                   <div style="display:flex;justify-content:space-between;align-items:center;">
                     <div>
@@ -1417,9 +1626,13 @@ export class WalletService {
                     <div style="font-size:40px;">💵</div>
                   </div>
                 </div>
-                ` : ''}
+                `
+                    : ''
+                }
 
-                ${hasEdln ? `
+                ${
+                  hasEdln
+                    ? `
                 <div style="background-color:#1A1A1A;border-radius:12px;padding:20px;border:1px solid rgba(255,255,255,0.08);">
                   <div style="display:flex;justify-content:space-between;align-items:center;">
                     <div>
@@ -1431,7 +1644,9 @@ export class WalletService {
                     <div style="font-size:40px;">🪙</div>
                   </div>
                 </div>
-                ` : ''}
+                `
+                    : ''
+                }
               </div>
             </td>
           </tr>

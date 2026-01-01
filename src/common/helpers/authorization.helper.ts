@@ -55,6 +55,29 @@ export function getAuthenticatedUserId(authenticatedUser: any): string {
   return userId;
 }
 
+export async function getDatabaseUserId(authenticatedUser: any): Promise<string> {
+  if (!authenticatedUser) {
+    throw new UnauthorizedException('Authentication required');
+  }
+
+  if (authenticatedUser.role === 'reviewer' || authenticatedUser.role === 'marketplace') {
+    throw new UnauthorizedException('This operation is not available for system users');
+  }
+
+  const email = authenticatedUser.email;
+  if (!email) {
+    throw new UnauthorizedException('Email not found in JWT token');
+  }
+
+  const users = await db.select().from(user).where(eq(user.email, email)).limit(1);
+  
+  if (!users.length) {
+    throw new UnauthorizedException('User not found in database');
+  }
+
+  return users[0].id;
+}
+
 export async function verifyUserEmail(authenticatedUser: any): Promise<string> {
   if (!authenticatedUser) {
     throw new UnauthorizedException('Authentication required');

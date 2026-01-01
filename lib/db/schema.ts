@@ -15,7 +15,7 @@ import {
 import { sql } from 'drizzle-orm';
 
 export const user = pgTable('user', {
-  id: uuid('id').primaryKey().unique().notNull(),
+  id: uuid('id').primaryKey().notNull(),
   address: text('address').unique(),
   xp: integer('xp').notNull().default(0),
   credits: numeric('credits', { precision: 10, scale: 2 })
@@ -93,7 +93,7 @@ export const userReward = pgTable(
 export type UserReward = InferSelectModel<typeof userReward>;
 
 export const chat = pgTable('chat', {
-  id: uuid('id').primaryKey().unique().notNull().defaultRandom(),
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
   createdAt: timestamp('createdAt').notNull(),
   title: text('title').notNull(),
   userId: uuid('userId')
@@ -311,3 +311,27 @@ export const feedback = pgTable("feedback", {
 });
 
 export type Feedback = InferSelectModel<typeof feedback>;
+
+export const userFollows = pgTable(
+  "user_follows",
+  {
+    id: uuid("id").notNull().defaultRandom().unique(),
+    followerId: uuid("followerId")
+      .notNull()
+      .references(() => user.id),
+    followingId: uuid("followingId")
+      .notNull()
+      .references(() => user.id),
+    emailNotifications: boolean("emailNotifications").default(true),
+    pushNotifications: boolean("pushNotifications").default(true),
+    inAppNotifications: boolean("inAppNotifications").default(true),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (table) => {
+    return {
+      pk: primaryKey({ columns: [table.followerId, table.followingId] }),
+    };
+  },
+);
+
+export type UserFollow = InferSelectModel<typeof userFollows>;

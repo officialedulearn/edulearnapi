@@ -4,10 +4,11 @@ import { Resend } from 'resend';
 @Injectable()
 export class ResendService {
     private readonly mascotMoods = {
-        welcome: 'happy',
+        welcome: 'proud',
         nftAward: 'celebrate',
         roadmapGenerated: 'proud',
         roadmapReminder: 'curious',
+        levelUp: 'celebrate',
     };
 
     private readonly mascotImageUrls: Record<string, string> = {
@@ -25,7 +26,7 @@ export class ResendService {
 
     async sendEmail(to: string, subject: string, html: string) {
         const { data, error } = await this.resend.emails.send({
-            from: 'dave@edulearn.fun <dave@edulearn.fun>',
+            from: 'eddy@edulearn.fun <eddy@edulearn.fun>',
             to: to,
             subject: subject,
             html: html,
@@ -57,6 +58,215 @@ export class ResendService {
         const html = this.getRoadmapReminderEmailTemplate(name, roadmapTopic, roadmapTitle, roadmapStepTitle, roadmapStepDescription, roadmapStepTime);
         return this.sendEmail(to, 'Roadmap Reminder 🔔', html);
     }
+    async sendLevelUpEmail(to: string, name: string, leveledUpUserName: string, newLevel: number, levelTitle: string, xpTotal: number) {
+        const html = this.getFollowerLevelUpEmailTemplate(name, leveledUpUserName, newLevel, levelTitle, xpTotal);
+        return this.sendEmail(to, `${leveledUpUserName} Just Leveled Up! 🎉`, html);
+    }
+
+    async sendNFTFollowingEmail(to: string, followerName: string, userName: string, nftTitle: string, nftDescription: string, imageUrl?: string) {
+        const html = this.getFollowerNFTEmailTemplate(followerName, userName, nftTitle, nftDescription, imageUrl);
+        return this.sendEmail(to, `${userName} Earned an NFT! 🏆`, html);
+    }
+
+    private getFollowerNFTEmailTemplate(followerName: string, userName: string, nftTitle: string, nftDescription: string, imageUrl?: string): string {
+        const mascotMood = this.mascotMoods.nftAward;
+        const mascotUrl = this.mascotImageUrls[mascotMood];
+
+        return `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Someone You Follow Earned an NFT</title>
+        </head>
+        <body style="margin:0;padding:0;background-color:#F9FBFC;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#2D3C52;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#F9FBFC;">
+            <tr>
+              <td align="center" style="padding:40px 20px;">
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="background-color:#FFFFFF;border-radius:16px;max-width:600px;border:1px solid #EDF3FC;">
+                  
+                  ${mascotUrl ? `
+                  <tr>
+                    <td style="padding:40px 30px 20px;text-align:center;">
+                      <img src="${mascotUrl}" alt="Eddie" style="width:120px;height:auto;display:block;margin:0 auto;" />
+                    </td>
+                  </tr>
+                  ` : ''}
+    
+                  <tr>
+                    <td style="padding:0 30px 30px;text-align:center;">
+                      <h1 style="margin:0;color:#2D3C52;font-size:28px;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                        NFT Achievement Alert 🏆
+                      </h1>
+                    </td>
+                  </tr>
+    
+                  <tr>
+                    <td style="padding:0 30px 30px;">
+                      <p style="margin:0 0 20px;color:#2D3C52;font-size:16px;line-height:24px;">
+                        Hey ${followerName},
+                      </p>
+                      <p style="margin:0;color:#61728C;font-size:15px;line-height:22px;">
+                        ${userName} just earned a new NFT certificate!
+                      </p>
+                    </td>
+                  </tr>
+    
+                  ${imageUrl ? `
+                  <tr>
+                    <td style="padding:0 30px 30px;">
+                      <div style="text-align:center;">
+                        <img src="${imageUrl}" alt="${nftTitle}" style="max-width:100%;height:auto;border-radius:12px;border:1px solid #EDF3FC;" />
+                      </div>
+                    </td>
+                  </tr>
+                  ` : ''}
+    
+                  <tr>
+                    <td style="padding:0 30px 30px;">
+                      <div style="background-color:#000;border-radius:16px;padding:24px;">
+                        <p style="margin:0 0 8px;color:#00FF80;font-size:14px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                          ${userName}
+                        </p>
+                        <h3 style="margin:0 0 12px;color:#E0E0E0;font-size:20px;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                          ${nftTitle}
+                        </h3>
+                        <p style="margin:0;color:#B3B3B3;font-size:14px;line-height:20px;">
+                          ${nftDescription}
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+    
+                  <tr>
+                    <td style="padding:0 30px 40px;text-align:center;">
+                      <a
+                        href="https://edulearn.fun"
+                        target="_blank"
+                        style="display:inline-block;background-color:#000;color:#00FF80;text-decoration:none;padding:16px 32px;border-radius:50px;font-weight:700;font-size:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
+                      >
+                        View Profile
+                      </a>
+                    </td>
+                  </tr>
+    
+                  <tr>
+                    <td style="padding:30px;text-align:center;border-top:1px solid #EDF3FC;">
+                      <p style="margin:0 0 8px;color:#61728C;font-size:13px;">
+                        Questions? <a href="mailto:dave@edulearn.fun" style="color:#00FF80;text-decoration:none;">dave@edulearn.fun</a>
+                      </p>
+                      <p style="margin:0;color:#9E9E9E;font-size:12px;">
+                        © 2025 EduLearn
+                      </p>
+                    </td>
+                  </tr>
+    
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>
+        `;
+    }
+
+    private getFollowerLevelUpEmailTemplate(followerName: string, leveledUpUserName: string, newLevel: number, levelTitle: string, xpTotal: number): string {
+      const mascotMood = this.mascotMoods.levelUp;
+      const mascotUrl = this.mascotImageUrls[mascotMood];
+    
+      return `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Someone You Follow Just Leveled Up</title>
+      </head>
+      <body style="margin:0;padding:0;background-color:#F9FBFC;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#2D3C52;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#F9FBFC;">
+          <tr>
+            <td align="center" style="padding:40px 20px;">
+              <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="background-color:#FFFFFF;border-radius:16px;max-width:600px;border:1px solid #EDF3FC;">
+                
+                ${mascotUrl ? `
+                <tr>
+                  <td style="padding:40px 30px 20px;text-align:center;">
+                    <img src="${mascotUrl}" alt="Eddie" style="width:120px;height:auto;display:block;margin:0 auto;" />
+                  </td>
+                </tr>
+                ` : ''}
+    
+                <tr>
+                  <td style="padding:0 30px 30px;text-align:center;">
+                    <h1 style="margin:0;color:#2D3C52;font-size:28px;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                      Level Up Alert 🚀
+                    </h1>
+                  </td>
+                </tr>
+    
+                <tr>
+                  <td style="padding:0 30px 30px;">
+                    <p style="margin:0 0 20px;color:#2D3C52;font-size:16px;line-height:24px;">
+                      Hey ${followerName},
+                    </p>
+                    <p style="margin:0;color:#61728C;font-size:15px;line-height:22px;">
+                      Someone you follow just hit a new milestone.
+                    </p>
+                  </td>
+                </tr>
+    
+                <tr>
+                  <td style="padding:0 30px 30px;">
+                    <div style="background-color:#000;border-radius:16px;padding:24px;">
+                      <p style="margin:0 0 8px;color:#00FF80;font-size:14px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                        ${leveledUpUserName}
+                      </p>
+                      <h3 style="margin:0 0 12px;color:#E0E0E0;font-size:20px;font-weight:700;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                        Reached Level ${newLevel}
+                      </h3>
+                      <p style="margin:0 0 8px;color:#B3B3B3;font-size:14px;line-height:20px;">
+                        ${levelTitle}
+                      </p>
+                      <p style="margin:0;color:#9E9E9E;font-size:13px;">
+                        Total XP: ${xpTotal}
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+    
+                <tr>
+                  <td style="padding:0 30px 40px;text-align:center;">
+                    <a
+                      href="https://edulearn.fun"
+                      target="_blank"
+                      style="display:inline-block;background-color:#000;color:#00FF80;text-decoration:none;padding:16px 32px;border-radius:50px;font-weight:700;font-size:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
+                    >
+                      View Profile
+                    </a>
+                  </td>
+                </tr>
+    
+                <tr>
+                  <td style="padding:30px;text-align:center;border-top:1px solid #EDF3FC;">
+                    <p style="margin:0 0 8px;color:#61728C;font-size:13px;">
+                      Questions? <a href="mailto:dave@edulearn.fun" style="color:#00FF80;text-decoration:none;">dave@edulearn.fun</a>
+                    </p>
+                    <p style="margin:0;color:#9E9E9E;font-size:12px;">
+                      © 2025 EduLearn
+                    </p>
+                  </td>
+                </tr>
+    
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+      `;
+    }
+    
 
     private getRoadmapReminderEmailTemplate(name: string, roadmapTopic: string, roadmapTitle: string, roadmapStepTitle: string, roadmapStepDescription: string, roadmapStepTime: number): string {
         const mascotMood = this.mascotMoods.roadmapReminder;
@@ -253,7 +463,7 @@ export class ResendService {
                     <td style="padding:0 30px 30px;">
                       <p style="margin:0 0 20px;color:#2D3C52;font-size:16px;line-height:24px;">Hey ${name},</p>
                       <p style="margin:0;color:#61728C;font-size:15px;line-height:22px;">
-                        Your account <strong style="color:#2D3C52;">@${username}</strong> is ready. Start exploring Web3 and AI learning.
+                        Your account <strong style="color:#2D3C52;">@${username}</strong> is ready. Start exploring Web3 learning.
                       </p>
                     </td>
                   </tr>

@@ -4,11 +4,12 @@ import { AuthService } from 'src/auth/auth.service';
 import { WalletService } from 'src/wallet/wallet.service';
 import { TwitterService } from 'src/twitter/twitter.service';
 import db from '../../drizzle';
-import { desc, and, eq, lt } from 'drizzle-orm';
+import { desc, and, eq, lt, gt } from 'drizzle-orm';
 import {  roadmap, roadMapStep, user } from '../../lib/db/schema';
 import { ExpoPushService } from 'src/common/services/expo-push.service';
 import { NotificationsService } from 'src/common/services/notifications.service';
 import { ResendService } from 'src/resend/resend.service';
+import { CardsService } from 'src/cards/cards.service';
 @Injectable()
 export class CronTasksService { 
   
@@ -20,8 +21,24 @@ export class CronTasksService {
         private twitterService: TwitterService,
         private expoPushService: ExpoPushService,
         private notificationsService: NotificationsService,
-        private resendService: ResendService
+        private resendService: ResendService,
+        private cardService: CardsService
     ) {
+    }
+
+    @Cron(CronExpression.EVERY_WEEKEND) 
+    async handleUserShoutout() {
+      const users = await db.select().from(user).where(gt(user.xp, 50))
+
+      const randomUser = users[Math.floor(Math.random() * users.length)]
+
+      const userStreakCard = await this.cardService.generateStreakCard({ userId: randomUser.id })
+
+      await this.twitterService.postTweet(`🔥 Shoutout to @${randomUser.username} for being a top user with ${randomUser.xp} XP! 🔥`, {
+        media: {
+          media_ids: [userStreakCard.toString('base64')]
+        }
+      })
     }
 
     @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)

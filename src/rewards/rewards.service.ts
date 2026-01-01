@@ -12,7 +12,15 @@ import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { create, mplCore } from '@metaplex-foundation/mpl-core';
 import * as bs58 from 'bs58';
 
-import { clusterApiUrl, Connection, Keypair, PublicKey, Transaction, sendAndConfirmTransaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import {
+  clusterApiUrl,
+  Connection,
+  Keypair,
+  PublicKey,
+  Transaction,
+  sendAndConfirmTransaction,
+  LAMPORTS_PER_SOL,
+} from '@solana/web3.js';
 import {
   createSignerFromKeypair,
   generateSigner,
@@ -20,16 +28,27 @@ import {
   publicKey,
 } from '@metaplex-foundation/umi';
 import { decrypt } from 'lib/crypto.util';
-import { createTransferCheckedInstruction, getAssociatedTokenAddress, getOrCreateAssociatedTokenAccount } from '@solana/spl-token';
+import {
+  createTransferCheckedInstruction,
+  getAssociatedTokenAddress,
+  getOrCreateAssociatedTokenAccount,
+} from '@solana/spl-token';
 import { ResendService } from '../resend/resend.service';
 import { TwitterService } from '../twitter/twitter.service';
 import { AuthService } from '../auth/auth.service';
+import { SocialService } from '../social/social.service';
 
 @Injectable()
 export class RewardsService {
-  private readonly connection = new Connection("https://solana-mainnet.g.alchemy.com/v2/pVe3T4LaDnJDqmmlBrkp_");
-  private readonly EDLN: PublicKey = new PublicKey("CFw2KxMpWuxivoowkF8vRCrnMuDeg5VMHRR7zjE7pBLV");
-  private readonly reciepient = new PublicKey("CPfwdgYWhKL9Lshsdm5TKxB7sC8tHyKuLWzRTZtKCR7p");
+  private readonly connection = new Connection(
+    'https://solana-mainnet.g.alchemy.com/v2/pVe3T4LaDnJDqmmlBrkp_',
+  );
+  private readonly EDLN: PublicKey = new PublicKey(
+    'CFw2KxMpWuxivoowkF8vRCrnMuDeg5VMHRR7zjE7pBLV',
+  );
+  private readonly reciepient = new PublicKey(
+    'CPfwdgYWhKL9Lshsdm5TKxB7sC8tHyKuLWzRTZtKCR7p',
+  );
   private readonly REQUIRED_SOL = 0.02;
   private readonly REQUIRED_EDLN = 1000;
 
@@ -37,11 +56,12 @@ export class RewardsService {
     private readonly resendService: ResendService,
     private readonly twitterService: TwitterService,
     @Inject(forwardRef(() => AuthService))
-    private readonly authService: AuthService
+    private readonly authService: AuthService,
+    @Inject(forwardRef(() => SocialService))
+    private readonly socialService: SocialService,
   ) {
     this.resendService = resendService;
   }
-
 
   async createReward(data: {
     type: 'certificate' | 'points';
@@ -50,8 +70,13 @@ export class RewardsService {
     imageUrl?: string;
   }): Promise<Reward> {
     try {
-      if (!data.type || (data.type !== 'certificate' && data.type !== 'points')) {
-        throw new Error('Invalid reward type. Must be either "certificate" or "points"');
+      if (
+        !data.type ||
+        (data.type !== 'certificate' && data.type !== 'points')
+      ) {
+        throw new Error(
+          'Invalid reward type. Must be either "certificate" or "points"',
+        );
       }
       if (!data.title || data.title.trim().length === 0) {
         throw new Error('Reward title is required and cannot be empty');
@@ -68,17 +93,23 @@ export class RewardsService {
 
       const [newReward] = await db.insert(reward).values(data).returning();
       if (!newReward) {
-        throw new Error('Failed to create reward. Database insertion returned no result');
+        throw new Error(
+          'Failed to create reward. Database insertion returned no result',
+        );
       }
       return newReward;
     } catch (error) {
       console.error('Failed to create reward:', error.message);
-      if (error.message.includes('Invalid reward type') || 
-          error.message.includes('required') || 
-          error.message.includes('cannot exceed')) {
+      if (
+        error.message.includes('Invalid reward type') ||
+        error.message.includes('required') ||
+        error.message.includes('cannot exceed')
+      ) {
         throw error;
       }
-      throw new Error(`Failed to create reward: ${error.message || 'Database error occurred'}`);
+      throw new Error(
+        `Failed to create reward: ${error.message || 'Database error occurred'}`,
+      );
     }
   }
 
@@ -88,7 +119,9 @@ export class RewardsService {
       return rewards;
     } catch (error) {
       console.error('Failed to get all rewards:', error.message);
-      throw new Error(`Failed to fetch rewards: ${error.message || 'Database connection error'}`);
+      throw new Error(
+        `Failed to fetch rewards: ${error.message || 'Database connection error'}`,
+      );
     }
   }
 
@@ -104,7 +137,9 @@ export class RewardsService {
       if (error.message.includes('Reward ID is required')) {
         throw error;
       }
-      throw new Error(`Failed to fetch reward: ${error.message || 'Database error occurred'}`);
+      throw new Error(
+        `Failed to fetch reward: ${error.message || 'Database error occurred'}`,
+      );
     }
   }
 
@@ -117,22 +152,33 @@ export class RewardsService {
         throw new Error('Reward ID is required');
       }
       if (data.type && data.type !== 'certificate' && data.type !== 'points') {
-        throw new Error('Invalid reward type. Must be either "certificate" or "points"');
+        throw new Error(
+          'Invalid reward type. Must be either "certificate" or "points"',
+        );
       }
-      if (data.title !== undefined && (!data.title || data.title.trim().length === 0)) {
+      if (
+        data.title !== undefined &&
+        (!data.title || data.title.trim().length === 0)
+      ) {
         throw new Error('Reward title cannot be empty');
       }
       if (data.title && data.title.length > 200) {
         throw new Error('Reward title cannot exceed 200 characters');
       }
-      if (data.description !== undefined && (!data.description || data.description.trim().length === 0)) {
+      if (
+        data.description !== undefined &&
+        (!data.description || data.description.trim().length === 0)
+      ) {
         throw new Error('Reward description cannot be empty');
       }
       if (data.description && data.description.length > 1000) {
         throw new Error('Reward description cannot exceed 1000 characters');
       }
 
-      const existingReward = await db.select().from(reward).where(eq(reward.id, id));
+      const existingReward = await db
+        .select()
+        .from(reward)
+        .where(eq(reward.id, id));
       if (!existingReward.length) {
         throw new Error(`Reward with id ${id} not found`);
       }
@@ -145,14 +191,18 @@ export class RewardsService {
       return updatedReward || null;
     } catch (error) {
       console.error(`Failed to update reward with id ${id}:`, error.message);
-      if (error.message.includes('Reward ID is required') || 
-          error.message.includes('Invalid reward type') || 
-          error.message.includes('cannot be empty') ||
-          error.message.includes('cannot exceed') ||
-          error.message.includes('not found')) {
+      if (
+        error.message.includes('Reward ID is required') ||
+        error.message.includes('Invalid reward type') ||
+        error.message.includes('cannot be empty') ||
+        error.message.includes('cannot exceed') ||
+        error.message.includes('not found')
+      ) {
         throw error;
       }
-      throw new Error(`Failed to update reward: ${error.message || 'Database error occurred'}`);
+      throw new Error(
+        `Failed to update reward: ${error.message || 'Database error occurred'}`,
+      );
     }
   }
 
@@ -162,7 +212,10 @@ export class RewardsService {
         throw new Error('Reward ID is required');
       }
 
-      const existingReward = await db.select().from(reward).where(eq(reward.id, id));
+      const existingReward = await db
+        .select()
+        .from(reward)
+        .where(eq(reward.id, id));
       if (!existingReward.length) {
         throw new Error(`Reward with id ${id} not found`);
       }
@@ -176,10 +229,15 @@ export class RewardsService {
       return result.length > 0;
     } catch (error) {
       console.error(`Failed to delete reward with id ${id}:`, error.message);
-      if (error.message.includes('Reward ID is required') || error.message.includes('not found')) {
+      if (
+        error.message.includes('Reward ID is required') ||
+        error.message.includes('not found')
+      ) {
         throw error;
       }
-      throw new Error(`Failed to delete reward: ${error.message || 'Database error occurred'}`);
+      throw new Error(
+        `Failed to delete reward: ${error.message || 'Database error occurred'}`,
+      );
     }
   }
 
@@ -200,7 +258,9 @@ export class RewardsService {
         .from(user)
         .where(eq(user.id, userId));
       if (!userExists.length) {
-        throw new Error(`User with id ${userId} not found. Please verify the user ID is correct`);
+        throw new Error(
+          `User with id ${userId} not found. Please verify the user ID is correct`,
+        );
       }
 
       const rewardExists = await db
@@ -208,7 +268,9 @@ export class RewardsService {
         .from(reward)
         .where(eq(reward.id, rewardId));
       if (!rewardExists.length) {
-        throw new Error(`Reward with id ${rewardId} not found. Please verify the reward ID is correct`);
+        throw new Error(
+          `Reward with id ${rewardId} not found. Please verify the reward ID is correct`,
+        );
       }
 
       const existingAward = await db
@@ -219,7 +281,9 @@ export class RewardsService {
         );
 
       if (existingAward.length) {
-        throw new Error(`User ${userExists[0].email} already has the reward "${rewardExists[0].title}". Cannot award the same reward twice`);
+        throw new Error(
+          `User ${userExists[0].email} already has the reward "${rewardExists[0].title}". Cannot award the same reward twice`,
+        );
       }
 
       const [newUserReward] = await db
@@ -232,49 +296,74 @@ export class RewardsService {
         .returning();
 
       if (!newUserReward) {
-        throw new Error('Failed to create user-reward relationship. Database insertion returned no result');
+        throw new Error(
+          'Failed to create user-reward relationship. Database insertion returned no result',
+        );
       }
 
-        const postText = `Congratulations to @${userExists[0].username} for earning the ${rewardExists[0].title} NFT certificate!
+      const postText = [
+        `Congratulations to @${userExists[0].username} for earning the ${rewardExists[0].title} NFT certificate! 🎉`,
+        ``,
+        `You can claim the NFT in the rewards tab of the web and mobile app`,
+      ].join('\n');
 
-        You can claim the NFT in the rewards tab of web and mobile app`;
-        
-              try {
-                if (rewardExists[0].imageUrl) {
-                  const mediaId = await this.twitterService.uploadMedia(rewardExists[0].imageUrl);
-                  await this.twitterService.postTweet(postText, {
-                    media: {
-                      media_ids: [mediaId]
-                    }
-                  });
-                } else {
-                  await this.twitterService.postTweet(postText);
-                }
-                console.log('Successfully posted to X');
-              } catch (twitterError) {
-                console.error('Failed to post to Twitter:', twitterError);
-              }
-        
-        
+      try {
+        if (rewardExists[0].imageUrl) {
+          const mediaId = await this.twitterService.uploadMedia(
+            rewardExists[0].imageUrl,
+          );
+          await this.twitterService.postTweet(postText, {
+            media: {
+              media_ids: [mediaId],
+            },
+          });
+        } else {
+          await this.twitterService.postTweet(postText);
+        }
+        console.log('Successfully posted to X');
+      } catch (twitterError) {
+        console.error('Failed to post to Twitter:', twitterError);
+      }
+
       await this.resendService.sendNFTAwardEmail(
         userExists[0].email,
         userExists[0].name,
         rewardExists[0].title,
         rewardExists[0].description,
-        rewardExists[0].imageUrl || undefined
+        rewardExists[0].imageUrl || undefined,
       );
+
+      try {
+        await this.socialService.notifyFollowers(userId, {
+          type: 'nft_earned',
+          data: {
+            nftTitle: rewardExists[0].title,
+            nftDescription: rewardExists[0].description,
+            imageUrl: rewardExists[0].imageUrl,
+          },
+        });
+      } catch (notifyError) {
+        console.error(
+          'Failed to notify followers about NFT award:',
+          notifyError,
+        );
+      }
 
       return newUserReward;
     } catch (error) {
       console.error(`Failed to award reward to user:`, error.message);
-      if (error.message.includes('User ID is required') || 
-          error.message.includes('Reward ID is required') ||
-          error.message.includes('not found') ||
-          error.message.includes('already has') ||
-          error.message.includes('Failed to create')) {
+      if (
+        error.message.includes('User ID is required') ||
+        error.message.includes('Reward ID is required') ||
+        error.message.includes('not found') ||
+        error.message.includes('already has') ||
+        error.message.includes('Failed to create')
+      ) {
         throw error;
       }
-      throw new Error(`Failed to award reward: ${error.message || 'Database error occurred'}`);
+      throw new Error(
+        `Failed to award reward: ${error.message || 'Database error occurred'}`,
+      );
     }
   }
 
@@ -292,15 +381,21 @@ export class RewardsService {
         .from(user)
         .where(eq(user.id, userId));
       if (!userExists.length) {
-        throw new Error(`User with id ${userId} not found. Please verify the user ID is correct`);
+        throw new Error(
+          `User with id ${userId} not found. Please verify the user ID is correct`,
+        );
       }
 
       if (!userExists[0].encryptedPrivateKey) {
-        throw new Error('User wallet not found. Please ensure the user has a valid wallet configured');
+        throw new Error(
+          'User wallet not found. Please ensure the user has a valid wallet configured',
+        );
       }
 
       if (!userExists[0].address) {
-        throw new Error('User wallet address not found. Please ensure the user has a valid wallet address');
+        throw new Error(
+          'User wallet address not found. Please ensure the user has a valid wallet address',
+        );
       }
 
       const rewardExists = await db
@@ -308,7 +403,9 @@ export class RewardsService {
         .from(reward)
         .where(eq(reward.id, rewardId));
       if (!rewardExists.length) {
-        throw new Error(`Reward with id ${rewardId} not found. Please verify the reward ID is correct`);
+        throw new Error(
+          `Reward with id ${rewardId} not found. Please verify the reward ID is correct`,
+        );
       }
 
       const userRewardCheck = await db
@@ -318,79 +415,108 @@ export class RewardsService {
           and(eq(userReward.userId, userId), eq(userReward.rewardId, rewardId)),
         );
       if (!userRewardCheck.length) {
-        throw new Error(`User has not been awarded the reward "${rewardExists[0].title}". You must be awarded a reward before you can claim it`);
+        throw new Error(
+          `User has not been awarded the reward "${rewardExists[0].title}". You must be awarded a reward before you can claim it`,
+        );
       }
 
       if (userRewardCheck[0].signature) {
-        throw new Error(`Reward "${rewardExists[0].title}" has already been claimed. NFT signature: ${userRewardCheck[0].signature}`);
+        throw new Error(
+          `Reward "${rewardExists[0].title}" has already been claimed. NFT signature: ${userRewardCheck[0].signature}`,
+        );
       }
 
       const adminSecretKey = process.env.ADMIN_WALLET_SECRET_KEY;
       if (!adminSecretKey) {
-        throw new Error('Admin wallet secret key not configured. Please contact support');
+        throw new Error(
+          'Admin wallet secret key not configured. Please contact support',
+        );
       }
 
       let adminKeypair: Keypair;
       try {
-        adminKeypair = Keypair.fromSecretKey(bs58.default.decode(adminSecretKey));
+        adminKeypair = Keypair.fromSecretKey(
+          bs58.default.decode(adminSecretKey),
+        );
       } catch (keyError) {
-        throw new Error('Invalid admin wallet secret key configuration. Please contact support');
+        throw new Error(
+          'Invalid admin wallet secret key configuration. Please contact support',
+        );
       }
-    
+
       let secretKey: string;
       let userKeypair: Keypair;
       try {
         secretKey = decrypt(userExists[0].encryptedPrivateKey);
         userKeypair = Keypair.fromSecretKey(bs58.default.decode(secretKey));
       } catch (decryptError) {
-        throw new Error('Failed to decrypt user wallet. Please contact support if this issue persists');
+        throw new Error(
+          'Failed to decrypt user wallet. Please contact support if this issue persists',
+        );
       }
 
       let userPublicKey: PublicKey;
       try {
         userPublicKey = new PublicKey(userExists[0].address as string);
       } catch (pubKeyError) {
-        throw new Error(`Invalid wallet address format: ${userExists[0].address}. Please contact support`);
+        throw new Error(
+          `Invalid wallet address format: ${userExists[0].address}. Please contact support`,
+        );
       }
 
       try {
         const solBalance = await this.connection.getBalance(userPublicKey);
         const solBalanceInSol = solBalance / LAMPORTS_PER_SOL;
-        
+
         if (solBalanceInSol < this.REQUIRED_SOL) {
           throw new Error(
-            `Insufficient SOL balance. You have ${solBalanceInSol.toFixed(4)} SOL but need at least ${this.REQUIRED_SOL} SOL for gas fees. Please add more SOL to your wallet and try again.`
+            `Insufficient SOL balance. You have ${solBalanceInSol.toFixed(4)} SOL but need at least ${this.REQUIRED_SOL} SOL for gas fees. Please add more SOL to your wallet and try again.`,
           );
         }
 
         let edlnBalance = 0;
         try {
-          const tokenAccounts = await this.connection.getParsedTokenAccountsByOwner(userPublicKey, {
-            mint: this.EDLN,
-          });
+          const tokenAccounts =
+            await this.connection.getParsedTokenAccountsByOwner(userPublicKey, {
+              mint: this.EDLN,
+            });
           if (tokenAccounts.value.length > 0) {
-            const amount = tokenAccounts.value[0].account.data.parsed.info.tokenAmount.amount;
-            const decimals = tokenAccounts.value[0].account.data.parsed.info.tokenAmount.decimals;
+            const amount =
+              tokenAccounts.value[0].account.data.parsed.info.tokenAmount
+                .amount;
+            const decimals =
+              tokenAccounts.value[0].account.data.parsed.info.tokenAmount
+                .decimals;
             edlnBalance = Number(amount) / Math.pow(10, decimals);
           }
         } catch (tokenError) {
-          console.log('Could not check EDLN balance, assuming 0:', tokenError.message);
+          console.log(
+            'Could not check EDLN balance, assuming 0:',
+            tokenError.message,
+          );
         }
 
         if (edlnBalance < this.REQUIRED_EDLN) {
           throw new Error(
-            `Insufficient EDLN balance. You have ${edlnBalance.toFixed(2)} EDLN but need at least ${this.REQUIRED_EDLN} EDLN for platform fees. Please add more EDLN tokens to your wallet and try again.`
+            `Insufficient EDLN balance. You have ${edlnBalance.toFixed(2)} EDLN but need at least ${this.REQUIRED_EDLN} EDLN for platform fees. Please add more EDLN tokens to your wallet and try again.`,
           );
         }
       } catch (balanceError) {
-        if (balanceError.message.includes('Insufficient SOL balance') || balanceError.message.includes('Insufficient EDLN balance')) {
+        if (
+          balanceError.message.includes('Insufficient SOL balance') ||
+          balanceError.message.includes('Insufficient EDLN balance')
+        ) {
           throw balanceError;
         }
-        throw new Error(`Failed to check wallet balance: ${balanceError.message || 'Network error occurred'}`);
+        throw new Error(
+          `Failed to check wallet balance: ${balanceError.message || 'Network error occurred'}`,
+        );
       }
 
       if (!rewardExists[0].ipfs) {
-        throw new Error(`Reward "${rewardExists[0].title}" does not have an IPFS URI configured. Cannot mint NFT without metadata URI`);
+        throw new Error(
+          `Reward "${rewardExists[0].title}" does not have an IPFS URI configured. Cannot mint NFT without metadata URI`,
+        );
       }
 
       let umi;
@@ -399,9 +525,9 @@ export class RewardsService {
       try {
         umi = createUmi(this.connection).use(mplCore());
         const umiKeypair = umi.eddsa.createKeypairFromSecretKey(
-          bs58.default.decode(secretKey)
+          bs58.default.decode(secretKey),
         );
-        
+
         const signer = createSignerFromKeypair(umi, umiKeypair);
         umi.use(keypairIdentity(signer));
 
@@ -411,19 +537,34 @@ export class RewardsService {
           asset: mint,
           name: rewardExists[0].title,
           uri: `${rewardExists[0].ipfs}`,
-          owner: publicKey(userExists[0].address as string)
+          owner: publicKey(userExists[0].address as string),
         }).sendAndConfirm(umi);
 
-        console.log('NFT Mint Signature:', bs58.default.encode(result.signature));
+        console.log(
+          'NFT Mint Signature:',
+          bs58.default.encode(result.signature),
+        );
       } catch (nftError) {
         console.error('Error minting NFT:', nftError.message);
-        if (nftError.message.includes('insufficient') || nftError.message.includes('Insufficient')) {
-          throw new Error(`Insufficient balance for NFT minting: ${nftError.message}. Please ensure you have enough SOL for gas fees`);
+        if (
+          nftError.message.includes('insufficient') ||
+          nftError.message.includes('Insufficient')
+        ) {
+          throw new Error(
+            `Insufficient balance for NFT minting: ${nftError.message}. Please ensure you have enough SOL for gas fees`,
+          );
         }
-        if (nftError.message.includes('network') || nftError.message.includes('timeout')) {
-          throw new Error(`Network error during NFT minting: ${nftError.message}. Please try again in a few moments`);
+        if (
+          nftError.message.includes('network') ||
+          nftError.message.includes('timeout')
+        ) {
+          throw new Error(
+            `Network error during NFT minting: ${nftError.message}. Please try again in a few moments`,
+          );
         }
-        throw new Error(`Failed to mint NFT: ${nftError.message || 'Unknown error occurred during NFT creation'}`);
+        throw new Error(
+          `Failed to mint NFT: ${nftError.message || 'Unknown error occurred during NFT creation'}`,
+        );
       }
 
       let userTokenAccount;
@@ -432,14 +573,14 @@ export class RewardsService {
       try {
         userTokenAccount = await getOrCreateAssociatedTokenAccount(
           this.connection,
-          adminKeypair, 
+          adminKeypair,
           this.EDLN,
-          userPublicKey
+          userPublicKey,
         );
 
         recipientTokenAccount = await getAssociatedTokenAddress(
           this.EDLN,
-          this.reciepient
+          this.reciepient,
         );
 
         const transferInstruction = createTransferCheckedInstruction(
@@ -447,72 +588,102 @@ export class RewardsService {
           this.EDLN,
           recipientTokenAccount,
           userPublicKey,
-          1_000_000_000_000, 
-          9
+          1_000_000_000_000,
+          9,
         );
 
         const transaction = new Transaction().add(transferInstruction);
-        transaction.recentBlockhash = (await this.connection.getLatestBlockhash()).blockhash;
-        transaction.feePayer = adminKeypair.publicKey; 
-        
+        transaction.recentBlockhash = (
+          await this.connection.getLatestBlockhash()
+        ).blockhash;
+        transaction.feePayer = adminKeypair.publicKey;
+
         transaction.sign(adminKeypair, userKeypair);
-        
-        txId = await sendAndConfirmTransaction(this.connection, transaction, [adminKeypair, userKeypair]);
+
+        txId = await sendAndConfirmTransaction(this.connection, transaction, [
+          adminKeypair,
+          userKeypair,
+        ]);
 
         console.log('Token Transfer Transaction ID:', txId);
       } catch (transferError) {
         console.error('Error transferring tokens:', transferError.message);
-        if (transferError.message.includes('insufficient') || transferError.message.includes('Insufficient')) {
-          throw new Error(`Insufficient balance for token transfer: ${transferError.message}. Please ensure you have enough EDLN tokens`);
+        if (
+          transferError.message.includes('insufficient') ||
+          transferError.message.includes('Insufficient')
+        ) {
+          throw new Error(
+            `Insufficient balance for token transfer: ${transferError.message}. Please ensure you have enough EDLN tokens`,
+          );
         }
-        if (transferError.message.includes('network') || transferError.message.includes('timeout')) {
-          throw new Error(`Network error during token transfer: ${transferError.message}. Please try again in a few moments`);
+        if (
+          transferError.message.includes('network') ||
+          transferError.message.includes('timeout')
+        ) {
+          throw new Error(
+            `Network error during token transfer: ${transferError.message}. Please try again in a few moments`,
+          );
         }
-        throw new Error(`Failed to transfer tokens: ${transferError.message || 'Unknown error occurred during token transfer'}`);
+        throw new Error(
+          `Failed to transfer tokens: ${transferError.message || 'Unknown error occurred during token transfer'}`,
+        );
       }
 
-     
       const html = this.getNFTClaimEmailTemplate(
         userExists[0].name,
         rewardExists[0].title,
         rewardExists[0].description,
-        rewardExists[0].imageUrl || ''
+        rewardExists[0].imageUrl || '',
       );
 
-      await this.resendService.sendEmail(userExists[0].email, '🎉 Congratulations! You Earned an NFT Certificate!', html);
-      
+      await this.resendService.sendEmail(
+        userExists[0].email,
+        '🎉 Congratulations! You Earned an NFT Certificate!',
+        html,
+      );
+
       try {
-        await db.update(userReward)
+        await db
+          .update(userReward)
           .set({
             signature: bs58.default.encode(result.signature),
-            lockTransactionId: txId
+            lockTransactionId: txId,
           })
           .where(
-            and(eq(userReward.userId, userId), eq(userReward.rewardId, rewardId)),
+            and(
+              eq(userReward.userId, userId),
+              eq(userReward.rewardId, rewardId),
+            ),
           );
       } catch (dbError) {
         console.error('Error updating user reward record:', dbError.message);
-        throw new Error(`Failed to update reward claim status: ${dbError.message || 'Database error occurred'}`);
+        throw new Error(
+          `Failed to update reward claim status: ${dbError.message || 'Database error occurred'}`,
+        );
       }
 
       return bs58.default.encode(result.signature);
     } catch (error) {
       console.error(`Failed to claim reward for user:`, error.message);
-      if (error.message.includes('User ID is required') ||
-          error.message.includes('Reward ID is required') ||
-          error.message.includes('not found') ||
-          error.message.includes('already been claimed') ||
-          error.message.includes('has not been awarded') ||
-          error.message.includes('Insufficient') ||
-          error.message.includes('Failed to decrypt') ||
-          error.message.includes('Invalid wallet') ||
-          error.message.includes('does not have an IPFS') ||
-          error.message.includes('Failed to mint') ||
-          error.message.includes('Failed to transfer') ||
-          error.message.includes('Failed to update')) {
+      if (
+        error.message.includes('User ID is required') ||
+        error.message.includes('Reward ID is required') ||
+        error.message.includes('not found') ||
+        error.message.includes('already been claimed') ||
+        error.message.includes('has not been awarded') ||
+        error.message.includes('Insufficient') ||
+        error.message.includes('Failed to decrypt') ||
+        error.message.includes('Invalid wallet') ||
+        error.message.includes('does not have an IPFS') ||
+        error.message.includes('Failed to mint') ||
+        error.message.includes('Failed to transfer') ||
+        error.message.includes('Failed to update')
+      ) {
         throw error;
       }
-      throw new Error(`Failed to claim reward: ${error.message || 'Unknown error occurred'}`);
+      throw new Error(
+        `Failed to claim reward: ${error.message || 'Unknown error occurred'}`,
+      );
     }
   }
 
@@ -539,7 +710,9 @@ export class RewardsService {
       if (error.message.includes('User ID is required')) {
         throw error;
       }
-      throw new Error(`Failed to fetch certificate count: ${error.message || 'Database error occurred'}`);
+      throw new Error(
+        `Failed to fetch certificate count: ${error.message || 'Database error occurred'}`,
+      );
     }
   }
 
@@ -559,7 +732,7 @@ export class RewardsService {
           createdAt: reward.createdAt,
           earnedAt: userReward.earnedAt,
           ipfs: reward.ipfs,
-          signature: userReward.signature
+          signature: userReward.signature,
         })
         .from(userReward)
         .innerJoin(reward, eq(userReward.rewardId, reward.id))
@@ -567,11 +740,16 @@ export class RewardsService {
 
       return results;
     } catch (error) {
-      console.error(`Failed to get rewards for user with id ${userId}:`, error.message);
+      console.error(
+        `Failed to get rewards for user with id ${userId}:`,
+        error.message,
+      );
       if (error.message.includes('User ID is required')) {
         throw error;
       }
-      throw new Error(`Failed to fetch user rewards: ${error.message || 'Database error occurred'}`);
+      throw new Error(
+        `Failed to fetch user rewards: ${error.message || 'Database error occurred'}`,
+      );
     }
   }
 
@@ -597,10 +775,15 @@ export class RewardsService {
       return result.length > 0;
     } catch (error) {
       console.error(`Failed to remove reward from user:`, error.message);
-      if (error.message.includes('User ID is required') || error.message.includes('Reward ID is required')) {
+      if (
+        error.message.includes('User ID is required') ||
+        error.message.includes('Reward ID is required')
+      ) {
         throw error;
       }
-      throw new Error(`Failed to remove reward from user: ${error.message || 'Database error occurred'}`);
+      throw new Error(
+        `Failed to remove reward from user: ${error.message || 'Database error occurred'}`,
+      );
     }
   }
 
@@ -614,9 +797,14 @@ export class RewardsService {
         throw new Error('Reward ID is required');
       }
 
-      const rewardExists = await db.select().from(reward).where(eq(reward.id, rewardId));
+      const rewardExists = await db
+        .select()
+        .from(reward)
+        .where(eq(reward.id, rewardId));
       if (!rewardExists.length) {
-        throw new Error(`Reward with id ${rewardId} not found. Please verify the reward ID is correct`);
+        throw new Error(
+          `Reward with id ${rewardId} not found. Please verify the reward ID is correct`,
+        );
       }
 
       const results = await db
@@ -633,15 +821,28 @@ export class RewardsService {
 
       return results;
     } catch (error) {
-      console.error(`Failed to get users with reward id ${rewardId}:`, error.message);
-      if (error.message.includes('Reward ID is required') || error.message.includes('not found')) {
+      console.error(
+        `Failed to get users with reward id ${rewardId}:`,
+        error.message,
+      );
+      if (
+        error.message.includes('Reward ID is required') ||
+        error.message.includes('not found')
+      ) {
         throw error;
       }
-      throw new Error(`Failed to fetch reward recipients: ${error.message || 'Database error occurred'}`);
+      throw new Error(
+        `Failed to fetch reward recipients: ${error.message || 'Database error occurred'}`,
+      );
     }
   }
 
-  private getNFTClaimEmailTemplate(name: string, title: string, description: string, imageUrl: string): string {
+  private getNFTClaimEmailTemplate(
+    name: string,
+    title: string,
+    description: string,
+    imageUrl: string,
+  ): string {
     return `
 <!DOCTYPE html>
 <html lang="en">
@@ -685,11 +886,15 @@ export class RewardsService {
                     <tr>
                         <td style="padding: 20px 30px;">
                             <div style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border-radius: 16px; padding: 25px; border: 2px solid #e2e8f0;">
-                                ${imageUrl ? `
+                                ${
+                                  imageUrl
+                                    ? `
                                 <div style="text-align: center; margin-bottom: 20px;">
                                     <img src="${imageUrl}" alt="${title}" style="max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);" />
                                 </div>
-                                ` : ''}
+                                `
+                                    : ''
+                                }
                                 <div style="text-align: center;">
                                     <h3 style="margin: 0 0 15px 0; color: #1a202c; font-size: 22px; font-weight: 700;">
                                         🏆 ${title}
