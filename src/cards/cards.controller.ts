@@ -55,4 +55,35 @@ export class CardsController {
     res.setHeader('Cache-Control', 'public, max-age=300');
     res.send(png);
   }
+
+  @Get('profile/:userId')
+  async profileSummary(
+    @Param('userId') userId: string,
+    @Query('theme') theme: 'light' | 'dark',
+    @Res() res: Response,
+  ) {
+    const png = await this.cardsService.generateProfileSummaryCard({ userId, theme });
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.send(png);
+  }
+
+  @Get('nft-mint/:userId')
+  async nftMint(
+    @Param('userId') userId: string,
+    @Query('theme') theme: 'light' | 'dark',
+    @Query('nftImageUrl') nftImageUrl: string,
+    @Query('nftTitle') nftTitle: string,
+    @Res() res: Response,
+  ) {
+    const png = await this.cardsService.generateNFTMintCard({ 
+      userId, 
+      theme, 
+      nftImageUrl, 
+      nftTitle 
+    });
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.send(png);
+  }
 }

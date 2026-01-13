@@ -4,8 +4,6 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as compression from 'compression';
 import helmet from 'helmet';
-import { ExpressAdapter } from '@nestjs/platform-express';
-import * as express from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {

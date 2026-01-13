@@ -20,6 +20,8 @@ export class CardsService implements OnModuleInit {
     streak: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/streak.png',
     earnings: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/Celebrate.png',
     level: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/proud.png',
+    profile: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/proud.png',
+    nftMint: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/proud.png',
   };
 
   private readonly eduLearnLogoUrl = 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/logo.png';
@@ -37,6 +39,8 @@ export class CardsService implements OnModuleInit {
         this.toDataUrl(this.mascotUrls.streak),
         this.toDataUrl(this.mascotUrls.earnings),
         this.toDataUrl(this.mascotUrls.level),
+        this.toDataUrl(this.mascotUrls.profile),
+        this.toDataUrl(this.mascotUrls.nftMint),
       ]);
       this.isWarmedUp = true;
       console.log('Image cache warmed up successfully');
@@ -1416,6 +1420,1000 @@ export class CardsService implements OnModuleInit {
     );
 
     const png = new Resvg(svg).render().asPng();
+    return Buffer.from(png);
+  }
+
+  async generateProfileSummaryCard(params: {
+    userId: string;
+    theme?: 'light' | 'dark';
+  }): Promise<Buffer> {
+    const startTime = Date.now();
+    console.log(`[ProfileSummaryCard] Starting generation for user ${params.userId}`);
+    
+    const [userData] = await Promise.all([
+      db.select().from(user).where(eq(user.id, params.userId)).limit(1),
+      this.loadFonts(),
+    ]);
+    console.log(`[ProfileSummaryCard] DB + Fonts loaded in ${Date.now() - startTime}ms`);
+    
+    if (!userData[0]) throw new Error('User not found');
+    
+    const u = userData[0];
+    const theme = this.getTheme(params?.theme ?? 'dark');
+    const highQualityAvatar = this.getHighQualityImageUrl(u.profilePictureURL);
+    
+    const imageStartTime = Date.now();
+    const [avatarDataUrl, mascotDataUrl, logoDataUrl] = await Promise.all([
+      this.toDataUrl(highQualityAvatar),
+      this.toDataUrl(this.mascotUrls.profile),
+      this.toDataUrl(this.eduLearnLogoUrl),
+    ]);
+    console.log(`[ProfileSummaryCard] Images loaded in ${Date.now() - imageStartTime}ms`);
+
+    const levelEmojis: Record<string, string> = {
+      novice: '🌱',
+      beginner: '📚',
+      intermediate: '🎯',
+      advanced: '🚀',
+      expert: '👑',
+    };
+
+    const levelNames: Record<string, string> = {
+      novice: 'Novice',
+      beginner: 'Beginner',
+      intermediate: 'Intermediate',
+      advanced: 'Advanced',
+      expert: 'Expert',
+    };
+
+    const earnings = parseFloat(u.totalEarnings || '0');
+
+    const svg = await satori(
+      {
+        type: 'div',
+        props: {
+          style: {
+            width: '1080px',
+            height: '1080px',
+            background: theme.background,
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '60px',
+            position: 'relative',
+          },
+          children: [
+            // Header with logo
+            {
+              type: 'div',
+              props: {
+                style: {
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '40px',
+                },
+                children: [
+                  {
+                    type: 'div',
+                    props: {
+                      style: {
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '16px',
+                      },
+                      children: [
+                        logoDataUrl && {
+                          type: 'img',
+                          props: {
+                            src: logoDataUrl,
+                            style: {
+                              width: '80px',
+                              height: '80px',
+                              objectFit: 'contain',
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                  {
+                    type: 'div',
+                    props: {
+                      style: {
+                        background: theme.success,
+                        color: theme.primaryForeground,
+                        padding: '12px 24px',
+                        borderRadius: '50px',
+                        fontFamily: 'Satoshi',
+                        fontSize: 20,
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                      },
+                      children: [
+                        {
+                          type: 'span',
+                          props: {
+                            children: levelEmojis[u.level] || '🌱',
+                            style: { fontSize: 24 },
+                          },
+                        },
+                        {
+                          type: 'span',
+                          props: {
+                            children: levelNames[u.level] || 'Novice',
+                          },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+            // Profile section with avatar and name
+            {
+              type: 'div',
+              props: {
+                style: {
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '32px',
+                  marginBottom: '40px',
+                  padding: '32px',
+                  background: theme.card,
+                  borderRadius: '24px',
+                  border: `2px solid ${theme.border}`,
+                },
+                children: [
+                  avatarDataUrl ? {
+                    type: 'img',
+                    props: {
+                      src: avatarDataUrl,
+                      style: {
+                        width: '140px',
+                        height: '140px',
+                        borderRadius: '50%',
+                        border: `5px solid ${theme.success}`,
+                        objectFit: 'cover',
+                      },
+                    },
+                  } : {
+                    type: 'div',
+                    props: {
+                      style: {
+                        width: '140px',
+                        height: '140px',
+                        borderRadius: '50%',
+                        background: theme.secondary,
+                        border: `5px solid ${theme.success}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 70,
+                      },
+                      children: '👤',
+                    },
+                  },
+                  {
+                    type: 'div',
+                    props: {
+                      style: {
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        flex: 1,
+                      },
+                      children: [
+                        {
+                          type: 'div',
+                          props: {
+                            children: u.name,
+                            style: {
+                              fontFamily: 'Satoshi',
+                              fontSize: 48,
+                              fontWeight: 700,
+                              color: theme.foreground,
+                            },
+                          },
+                        },
+                        {
+                          type: 'div',
+                          props: {
+                            children: `@${u.username}`,
+                            style: {
+                              fontFamily: 'Satoshi',
+                              fontSize: 28,
+                              color: theme.mutedForeground,
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                  mascotDataUrl ? {
+                    type: 'img',
+                    props: {
+                      src: mascotDataUrl,
+                      style: {
+                        width: '160px',
+                        height: '160px',
+                        objectFit: 'contain',
+                      },
+                    },
+                  } : null,
+                ],
+              },
+            },
+            // Stats grid
+            {
+              type: 'div',
+              props: {
+                style: {
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '20px',
+                  flex: 1,
+                },
+                children: [
+                  // Row 1 - XP and Streak
+                  {
+                    type: 'div',
+                    props: {
+                      style: {
+                        display: 'flex',
+                        gap: '20px',
+                      },
+                      children: [
+                        // XP Card
+                        {
+                          type: 'div',
+                          props: {
+                            style: {
+                              flex: 1,
+                              background: theme.card,
+                              border: `3px solid ${theme.success}`,
+                              borderRadius: '24px',
+                              padding: '32px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            },
+                            children: [
+                              {
+                                type: 'div',
+                                props: {
+                                  style: {
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px',
+                                    marginBottom: '16px',
+                                  },
+                                  children: [
+                                    {
+                                      type: 'span',
+                                      props: {
+                                        children: '⚡',
+                                        style: { fontSize: 40 },
+                                      },
+                                    },
+                                    {
+                                      type: 'span',
+                                      props: {
+                                        children: 'Total XP',
+                                        style: {
+                                          fontFamily: 'Satoshi',
+                                          fontSize: 24,
+                                          color: theme.mutedForeground,
+                                          fontWeight: 600,
+                                        },
+                                      },
+                                    },
+                                  ],
+                                },
+                              },
+                              {
+                                type: 'div',
+                                props: {
+                                  children: u.xp.toLocaleString(),
+                                  style: {
+                                    fontFamily: 'Satoshi',
+                                    fontSize: 72,
+                                    fontWeight: 900,
+                                    color: theme.success,
+                                    lineHeight: 1,
+                                  },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                        // Streak Card
+                        {
+                          type: 'div',
+                          props: {
+                            style: {
+                              flex: 1,
+                              background: theme.card,
+                              border: `3px solid ${theme.success}`,
+                              borderRadius: '24px',
+                              padding: '32px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            },
+                            children: [
+                              {
+                                type: 'div',
+                                props: {
+                                  style: {
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px',
+                                    marginBottom: '16px',
+                                  },
+                                  children: [
+                                    {
+                                      type: 'span',
+                                      props: {
+                                        children: '🔥',
+                                        style: { fontSize: 40 },
+                                      },
+                                    },
+                                    {
+                                      type: 'span',
+                                      props: {
+                                        children: 'Day Streak',
+                                        style: {
+                                          fontFamily: 'Satoshi',
+                                          fontSize: 24,
+                                          color: theme.mutedForeground,
+                                          fontWeight: 600,
+                                        },
+                                      },
+                                    },
+                                  ],
+                                },
+                              },
+                              {
+                                type: 'div',
+                                props: {
+                                  children: u.streak.toString(),
+                                  style: {
+                                    fontFamily: 'Satoshi',
+                                    fontSize: 72,
+                                    fontWeight: 900,
+                                    color: theme.success,
+                                    lineHeight: 1,
+                                  },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                      ],
+                    },
+                  },
+                  // Row 2 - Quizzes and Referrals
+                  {
+                    type: 'div',
+                    props: {
+                      style: {
+                        display: 'flex',
+                        gap: '20px',
+                      },
+                      children: [
+                        // Quizzes Card
+                        {
+                          type: 'div',
+                          props: {
+                            style: {
+                              flex: 1,
+                              background: theme.card,
+                              border: `3px solid ${theme.success}`,
+                              borderRadius: '24px',
+                              padding: '32px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            },
+                            children: [
+                              {
+                                type: 'div',
+                                props: {
+                                  style: {
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px',
+                                    marginBottom: '16px',
+                                  },
+                                  children: [
+                                    {
+                                      type: 'span',
+                                      props: {
+                                        children: '🧠',
+                                        style: { fontSize: 40 },
+                                      },
+                                    },
+                                    {
+                                      type: 'span',
+                                      props: {
+                                        children: 'Quizzes',
+                                        style: {
+                                          fontFamily: 'Satoshi',
+                                          fontSize: 24,
+                                          color: theme.mutedForeground,
+                                          fontWeight: 600,
+                                        },
+                                      },
+                                    },
+                                  ],
+                                },
+                              },
+                              {
+                                type: 'div',
+                                props: {
+                                  children: u.quizCompleted.toString(),
+                                  style: {
+                                    fontFamily: 'Satoshi',
+                                    fontSize: 72,
+                                    fontWeight: 900,
+                                    color: theme.success,
+                                    lineHeight: 1,
+                                  },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                        // Referrals Card
+                        {
+                          type: 'div',
+                          props: {
+                            style: {
+                              flex: 1,
+                              background: theme.card,
+                              border: `3px solid ${theme.success}`,
+                              borderRadius: '24px',
+                              padding: '32px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            },
+                            children: [
+                              {
+                                type: 'div',
+                                props: {
+                                  style: {
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px',
+                                    marginBottom: '16px',
+                                  },
+                                  children: [
+                                    {
+                                      type: 'span',
+                                      props: {
+                                        children: '👥',
+                                        style: { fontSize: 40 },
+                                      },
+                                    },
+                                    {
+                                      type: 'span',
+                                      props: {
+                                        children: 'Referrals',
+                                        style: {
+                                          fontFamily: 'Satoshi',
+                                          fontSize: 24,
+                                          color: theme.mutedForeground,
+                                          fontWeight: 600,
+                                        },
+                                      },
+                                    },
+                                  ],
+                                },
+                              },
+                              {
+                                type: 'div',
+                                props: {
+                                  children: (u.referralCount || 0).toString(),
+                                  style: {
+                                    fontFamily: 'Satoshi',
+                                    fontSize: 72,
+                                    fontWeight: 900,
+                                    color: theme.success,
+                                    lineHeight: 1,
+                                  },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                      ],
+                    },
+                  },
+                  // Row 3 - Total Earnings (full width)
+                  {
+                    type: 'div',
+                    props: {
+                      style: {
+                        background: theme.success,
+                        borderRadius: '24px',
+                        padding: '32px 48px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      },
+                      children: [
+                        {
+                          type: 'div',
+                          props: {
+                            style: {
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '16px',
+                            },
+                            children: [
+                              {
+                                type: 'span',
+                                props: {
+                                  children: '💰',
+                                  style: { fontSize: 48 },
+                                },
+                              },
+                              {
+                                type: 'span',
+                                props: {
+                                  children: 'Total Earned',
+                                  style: {
+                                    fontFamily: 'Satoshi',
+                                    fontSize: 32,
+                                    color: theme.primaryForeground,
+                                    fontWeight: 700,
+                                  },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                        {
+                          type: 'div',
+                          props: {
+                            children: `$${earnings.toFixed(2)}`,
+                            style: {
+                              fontFamily: 'Satoshi',
+                              fontSize: 64,
+                              fontWeight: 900,
+                              color: theme.primaryForeground,
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+      {
+        width: 1080,
+        height: 1080,
+        fonts: [
+          { name: 'Satoshi', data: this.regular!, weight: 400 },
+          { name: 'Satoshi', data: this.bold!, weight: 700 },
+        ],
+      },
+    );
+    
+    console.log(`[ProfileSummaryCard] SVG generated in ${Date.now() - startTime}ms`);
+
+    const renderStartTime = Date.now();
+    const png = new Resvg(svg).render().asPng();
+    console.log(`[ProfileSummaryCard] PNG rendered in ${Date.now() - renderStartTime}ms`);
+    console.log(`[ProfileSummaryCard] Total time: ${Date.now() - startTime}ms`);
+    return Buffer.from(png);
+  }
+
+  async generateNFTMintCard(params: {
+    userId: string;
+    nftImageUrl?: string;
+    nftTitle?: string;
+    theme?: 'light' | 'dark';
+  }): Promise<Buffer> {
+    const startTime = Date.now();
+    console.log(`[NFTMintCard] Starting generation for user ${params.userId}`);
+    
+    const [userData] = await Promise.all([
+      db.select().from(user).where(eq(user.id, params.userId)).limit(1),
+      this.loadFonts(),
+    ]);
+    console.log(`[NFTMintCard] DB + Fonts loaded in ${Date.now() - startTime}ms`);
+    
+    if (!userData[0]) throw new Error('User not found');
+    
+    const u = userData[0];
+    const theme = this.getTheme(params?.theme ?? 'dark');
+    const highQualityAvatar = this.getHighQualityImageUrl(u.profilePictureURL);
+    
+    const imageStartTime = Date.now();
+    const [avatarDataUrl, mascotDataUrl, logoDataUrl, nftDataUrl] = await Promise.all([
+      this.toDataUrl(highQualityAvatar),
+      this.toDataUrl(this.mascotUrls.profile),
+      this.toDataUrl(this.eduLearnLogoUrl),
+      this.toDataUrl(params.nftImageUrl),
+    ]);
+    console.log(`[NFTMintCard] Images loaded in ${Date.now() - imageStartTime}ms`);
+
+    const svg = await satori(
+      {
+        type: 'div',
+        props: {
+          style: {
+            width: '1080px',
+            height: '1080px',
+            background: theme.background,
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '60px',
+            position: 'relative',
+          },
+          children: [
+            // Header with logo
+            {
+              type: 'div',
+              props: {
+                style: {
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '50px',
+                },
+                children: [
+                  {
+                    type: 'div',
+                    props: {
+                      style: {
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '16px',
+                      },
+                      children: [
+                        logoDataUrl && {
+                          type: 'img',
+                          props: {
+                            src: logoDataUrl,
+                            style: {
+                              width: '100px',
+                              height: '100px',
+                              objectFit: 'contain',
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+            // Main content area
+            {
+              type: 'div',
+              props: {
+                style: {
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flex: 1,
+                  gap: '40px',
+                },
+                children: [
+                  // User info section
+                  {
+                    type: 'div',
+                    props: {
+                      style: {
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '20px',
+                        marginBottom: '10px',
+                      },
+                      children: [
+                        avatarDataUrl ? {
+                          type: 'img',
+                          props: {
+                            src: avatarDataUrl,
+                            style: {
+                              width: '80px',
+                              height: '80px',
+                              borderRadius: '50%',
+                              border: `4px solid ${theme.success}`,
+                              objectFit: 'cover',
+                            },
+                          },
+                        } : {
+                          type: 'div',
+                          props: {
+                            style: {
+                              width: '80px',
+                              height: '80px',
+                              borderRadius: '50%',
+                              background: theme.card,
+                              border: `4px solid ${theme.success}`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 40,
+                            },
+                            children: '👤',
+                          },
+                        },
+                        {
+                          type: 'div',
+                          props: {
+                            style: {
+                              display: 'flex',
+                              flexDirection: 'column',
+                            },
+                            children: [
+                              {
+                                type: 'div',
+                                props: {
+                                  children: u.name,
+                                  style: {
+                                    fontFamily: 'Satoshi',
+                                    fontSize: 32,
+                                    fontWeight: 700,
+                                    color: theme.foreground,
+                                  },
+                                },
+                              },
+                              {
+                                type: 'div',
+                                props: {
+                                  children: `@${u.username}`,
+                                  style: {
+                                    fontFamily: 'Satoshi',
+                                    fontSize: 20,
+                                    color: theme.mutedForeground,
+                                    marginTop: 4,
+                                  },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                      ],
+                    },
+                  },
+                  // Main message
+                  {
+                    type: 'div',
+                    props: {
+                      style: {
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '16px',
+                        textAlign: 'center',
+                      },
+                      children: [
+                        {
+                          type: 'h1',
+                          props: {
+                            children: 'Just Minted an NFT! 🎉',
+                            style: {
+                              fontFamily: 'Satoshi',
+                              fontSize: 56,
+                              fontWeight: 900,
+                              margin: 0,
+                              color: theme.foreground,
+                              lineHeight: 1.2,
+                            },
+                          },
+                        },
+                        params.nftTitle && {
+                          type: 'p',
+                          props: {
+                            children: params.nftTitle,
+                            style: {
+                              fontFamily: 'Satoshi',
+                              fontSize: 28,
+                              margin: 0,
+                              color: theme.success,
+                              fontWeight: 700,
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                  // NFT Display with Mascot
+                  {
+                    type: 'div',
+                    props: {
+                      style: {
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '30px',
+                      },
+                      children: [
+                        // NFT Card
+                        {
+                          type: 'div',
+                          props: {
+                            style: {
+                              width: '320px',
+                              height: '320px',
+                              borderRadius: '24px',
+                              background: theme.card,
+                              border: `4px solid ${theme.success}`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              overflow: 'hidden',
+                              boxShadow: `0 10px 40px rgba(0, 255, 128, 0.3)`,
+                            },
+                            children: nftDataUrl ? [
+                              {
+                                type: 'img',
+                                props: {
+                                  src: nftDataUrl,
+                                  style: {
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'cover',
+                                  },
+                                },
+                              },
+                            ] : [
+                              {
+                                type: 'div',
+                                props: {
+                                  style: {
+                                    fontSize: 140,
+                                    lineHeight: 1,
+                                  },
+                                  children: '🎨',
+                                },
+                              },
+                            ],
+                          },
+                        },
+                        // Proud Mascot
+                        mascotDataUrl && {
+                          type: 'img',
+                          props: {
+                            src: mascotDataUrl,
+                            style: {
+                              width: '320px',
+                              height: '320px',
+                              objectFit: 'contain',
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                  // Stats section
+                  {
+                    type: 'div',
+                    props: {
+                      style: {
+                        display: 'flex',
+                        gap: '16px',
+                        marginTop: '20px',
+                      },
+                      children: [
+                        {
+                          type: 'div',
+                          props: {
+                            style: {
+                              background: theme.card,
+                              border: `3px solid ${theme.success}`,
+                              borderRadius: '16px',
+                              padding: '20px 32px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                            },
+                            children: [
+                              {
+                                type: 'div',
+                                props: {
+                                  children: u.xp.toString(),
+                                  style: {
+                                    fontFamily: 'Satoshi',
+                                    fontSize: 44,
+                                    fontWeight: 900,
+                                    color: theme.success,
+                                  },
+                                },
+                              },
+                              {
+                                type: 'div',
+                                props: {
+                                  children: 'Total XP',
+                                  style: {
+                                    fontFamily: 'Satoshi',
+                                    fontSize: 16,
+                                    color: theme.mutedForeground,
+                                    marginTop: 6,
+                                    fontWeight: 700,
+                                  },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                        {
+                          type: 'div',
+                          props: {
+                            style: {
+                              background: theme.success,
+                              borderRadius: '16px',
+                              padding: '20px 32px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                            },
+                            children: [
+                              {
+                                type: 'div',
+                                props: {
+                                  children: '🏆',
+                                  style: {
+                                    fontSize: 44,
+                                  },
+                                },
+                              },
+                              {
+                                type: 'div',
+                                props: {
+                                  children: 'NFT Minted',
+                                  style: {
+                                    fontFamily: 'Satoshi',
+                                    fontSize: 16,
+                                    color: theme.primaryForeground,
+                                    marginTop: 6,
+                                    fontWeight: 700,
+                                  },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+      {
+        width: 1080,
+        height: 1080,
+        fonts: [
+          { name: 'Satoshi', data: this.regular!, weight: 400 },
+          { name: 'Satoshi', data: this.bold!, weight: 700 },
+        ],
+      },
+    );
+    console.log(`[NFTMintCard] SVG generated in ${Date.now() - startTime}ms`);
+
+    const renderStartTime = Date.now();
+    const png = new Resvg(svg).render().asPng();
+    console.log(`[NFTMintCard] PNG rendered in ${Date.now() - renderStartTime}ms`);
+    console.log(`[NFTMintCard] Total time: ${Date.now() - startTime}ms`);
     return Buffer.from(png);
   }
 }

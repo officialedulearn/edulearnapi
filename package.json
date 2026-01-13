@@ -22,7 +22,15 @@
     "seed:communities": "ts-node -r tsconfig-paths/register scripts/seed-communities.ts",
     "check:orphaned-users": "ts-node -r tsconfig-paths/register scripts/check-orphaned-users.ts",
     "cleanup:orphaned-users": "ts-node -r tsconfig-paths/register scripts/cleanup-orphaned-users.ts",
-    "updatepfps": "ts-node -r tsconfig-paths/register scripts/updatepfps.ts"
+    "updatepfps": "ts-node -r tsconfig-paths/register scripts/updatepfps.ts",
+    "migrate": "drizzle-kit push",
+    "migrate:legacy": "ts-node -r tsconfig-paths/register lib/db/migrate.ts",
+    "migrate:fix": "ts-node -r tsconfig-paths/register scripts/fix-migrations.ts",
+    "migrate:sync": "ts-node -r tsconfig-paths/register scripts/sync-drizzle-migrations.ts",
+    "migrate:check": "ts-node -r tsconfig-paths/register scripts/check-migrations.ts",
+    "migrate:clean": "ts-node -r tsconfig-paths/register scripts/clean-duplicate-migrations.ts",
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

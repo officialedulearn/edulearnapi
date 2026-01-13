@@ -311,7 +311,7 @@ export class CommunityController {
 
     return await this.communityService.getRoomMessages(
       communityId,
-      limit ? parseInt(limit) : 50,
+      limit ? parseInt(limit) : 20,
       offset ? parseInt(offset) : 0,
     );
   }
