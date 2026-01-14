@@ -86,4 +86,19 @@ export class CardsController {
     res.setHeader('Cache-Control', 'public, max-age=300');
     res.send(png);
   }
+
+  @Get('roadmap-progress/:roadmapId')
+  async roadmapProgress(
+    @Param('roadmapId') roadmapId: string,
+    @Query('theme') theme: 'light' | 'dark',
+    @Res() res: Response,
+  ) {
+    const png = await this.cardsService.generateRoadmapProgressCard({ 
+      roadmapId, 
+      theme,
+    });
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.send(png);
+  }
 }

@@ -46,6 +46,9 @@ export const user = pgTable('user', {
   totalEarnings: numeric('totalEarnings', { precision: 10, scale: 2 }).default('0.00'),
   expoPushToken: text("expoPushToken"),
   profilePictureURL: text("profilePictureURL"),
+  oauthProvider: text('oauth_provider'),
+  oauthProviderId: text('oauth_provider_id'),
+  hasCompletedProfile: boolean('has_completed_profile').default(true),
 });
 
 export type User = InferSelectModel<typeof user>;
@@ -335,3 +338,13 @@ export const userFollows = pgTable(
 );
 
 export type UserFollow = InferSelectModel<typeof userFollows>;
+
+export const contentAnalytics = pgTable("content_analytics", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  topic: text("topic").notNull(),
+  category: varchar("category", { length: 50 }).notNull(),
+  totalViews: integer("totalViews").default(0),
+  lastUpdated: timestamp("lastUpdated").notNull().defaultNow(),
+});
+
+export type ContentAnalytics = InferSelectModel<typeof contentAnalytics>;

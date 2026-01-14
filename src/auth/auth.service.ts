@@ -2,7 +2,7 @@ import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { eq, desc, ilike } from 'drizzle-orm';
 import db from '../../drizzle';
 import { user, type User, message, chat, xpActivity, userReward, earning, roadmap, premiumTransactions, roadMapStep } from '../../lib/db/schema';
-import { signUpDetails } from 'types/auth';
+import { signUpDetails, OAuthUserData, OAuthCallbackResult } from 'types/auth';
 import { generateReferralCode } from 'lib/constants';
 import { UUID } from 'crypto';
 import { ActivityService } from 'src/activity/activity.service';
@@ -844,6 +844,179 @@ export class AuthService {
       return true;
     } catch (error) {
       console.error('Failed to delete user data', error);
+      throw error;
+    }
+  }
+
+  async getUserByEmailOrProviderId(email: string, providerId: string): Promise<User | null> {
+    const byProviderId = await db
+      .select()
+      .from(user)
+      .where(eq(user.oauthProviderId, providerId))
+      .limit(1);
+    
+    if (byProviderId[0]) {
+      return byProviderId[0];
+    }
+    
+    const byEmail = await db
+      .select()
+      .from(user)
+      .where(eq(user.email, email))
+      .limit(1);
+    
+    return byEmail[0] || null;
+  }
+
+  async handleOAuthUser(data: OAuthUserData): Promise<OAuthCallbackResult> {
+    const existingUser = await this.getUserByEmailOrProviderId(data.email, data.providerId);
+    
+    if (existingUser) {
+      if (!existingUser.oauthProvider || !existingUser.oauthProviderId) {
+        await db
+          .update(user)
+          .set({
+            oauthProvider: data.provider,
+            oauthProviderId: data.providerId,
+            lastLoggedIn: new Date()
+          })
+          .where(eq(user.id, existingUser.id));
+        
+        const updatedUser = await this.getUserById(existingUser.id);
+        return { 
+          user: updatedUser, 
+          isNewUser: false, 
+          needsUsername: false 
+        };
+      }
+      
+      await db
+        .update(user)
+        .set({ lastLoggedIn: new Date() })
+        .where(eq(user.id, existingUser.id));
+      
+      return { 
+        user: existingUser, 
+        isNewUser: false, 
+        needsUsername: false 
+      };
+    }
+    
+    const tempUsername = this.generateTempUsername(data.email);
+    
+    const newUser = await this.createOAuthUser({
+      id: data.id,
+      name: data.name,
+      email: data.email,
+      username: tempUsername,
+      oauthProvider: data.provider,
+      oauthProviderId: data.providerId,
+      hasCompletedProfile: false
+    });
+    
+    return { user: newUser, isNewUser: true, needsUsername: true };
+  }
+
+  private generateTempUsername(email: string): string {
+    const emailPrefix = email.split('@')[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+    return `${emailPrefix}_${randomSuffix}`;
+  }
+
+  async createOAuthUser(data: signUpDetails): Promise<User | Error> {
+    try {
+      const userExists = await db
+        .select()
+        .from(user)
+        .where(eq(user.email, data.email));
+
+      if (userExists[0]) {
+        return new Error('User already exists');
+      }
+
+      const userWallet = await this.walletService.genereteWallet();
+      const referralCode = generateReferralCode();
+
+      await db.insert(user).values({
+        id: data.id as UUID,
+        name: data.name,
+        email: data.email,
+        referralCode: referralCode,
+        username: data.username,
+        address: userWallet.publicKey,
+        encryptedPrivateKey: userWallet.encryptedSecret,
+        oauthProvider: data.oauthProvider,
+        oauthProviderId: data.oauthProviderId,
+        hasCompletedProfile: data.hasCompletedProfile ?? false,
+      });
+
+      const [createdUser] = await db
+        .select()
+        .from(user)
+        .where(eq(user.email, data.email));
+
+      this.resendService.sendWelcomeEmail(
+        createdUser.email,
+        createdUser.name,
+        createdUser.username || '',
+        createdUser.referralCode || ''
+      ).catch((error) => {
+        console.error('Failed to send welcome email:', error);
+      });
+
+      return createdUser;
+    } catch (error) {
+      console.error('Failed to create OAuth user:', error);
+      throw error;
+    }
+  }
+
+  async updateUsername(userId: string, username: string): Promise<User | null> {
+    try {
+      const result = await db
+        .update(user)
+        .set({ 
+          username: username,
+          hasCompletedProfile: true 
+        })
+        .where(eq(user.id, userId))
+        .returning();
+
+      const updatedUser = result[0] ?? null;
+
+      if (updatedUser && username && username.trim() !== '') {
+        try {
+          const axios = require('axios');
+          const bearerToken = process.env.TWITTER_BEARER_TOKEN;
+          if (bearerToken) {
+            const response = await axios.get(
+              `https://api.twitter.com/2/users/by/username/${username}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${bearerToken}`,
+                },
+                params: {
+                  'user.fields': 'profile_image_url',
+                },
+              }
+            );
+
+            if (response.data?.data?.profile_image_url) {
+              const profilePictureURL = response.data.data.profile_image_url;
+              await db
+                .update(user)
+                .set({ profilePictureURL })
+                .where(eq(user.id, userId));
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch Twitter profile picture:', error.response?.data || error.message);
+        }
+      }
+
+      return updatedUser;
+    } catch (error) {
+      console.error('Failed to update username', error);
       throw error;
     }
   }

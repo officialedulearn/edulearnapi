@@ -3,11 +3,16 @@ import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import axios from 'axios';
 import db from '../../drizzle';
-import { user } from '../../lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { user, roadmap, roadMapStep } from '../../lib/db/schema';
+import { eq, asc } from 'drizzle-orm';
 import * as fs from 'fs';
 import * as path from 'path';
 import { decompress } from 'wawoff2';
+
+interface RoadmapProgress {
+  completed: number;
+  total: number;
+}
 
 @Injectable()
 export class CardsService implements OnModuleInit {
@@ -22,6 +27,7 @@ export class CardsService implements OnModuleInit {
     level: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/proud.png',
     profile: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/proud.png',
     nftMint: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/proud.png',
+    roadmap: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/proud.png',
   };
 
   private readonly eduLearnLogoUrl = 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/logo.png';
@@ -41,6 +47,7 @@ export class CardsService implements OnModuleInit {
         this.toDataUrl(this.mascotUrls.level),
         this.toDataUrl(this.mascotUrls.profile),
         this.toDataUrl(this.mascotUrls.nftMint),
+        this.toDataUrl(this.mascotUrls.roadmap),
       ]);
       this.isWarmedUp = true;
       console.log('Image cache warmed up successfully');
@@ -2414,6 +2421,379 @@ export class CardsService implements OnModuleInit {
     const png = new Resvg(svg).render().asPng();
     console.log(`[NFTMintCard] PNG rendered in ${Date.now() - renderStartTime}ms`);
     console.log(`[NFTMintCard] Total time: ${Date.now() - startTime}ms`);
+    return Buffer.from(png);
+  }
+
+  async generateRoadmapProgressCard(params: {
+    roadmapId: string;
+    theme?: 'light' | 'dark';
+  }): Promise<Buffer> {
+    const startTime = Date.now();
+    console.log(`[RoadmapProgressCard] Starting generation for roadmap ${params.roadmapId}`);
+    
+    const [roadmapData] = await db.select().from(roadmap).where(eq(roadmap.id, params.roadmapId)).limit(1);
+    if (!roadmapData) throw new Error('Roadmap not found');
+
+    const steps = await db.select().from(roadMapStep).where(eq(roadMapStep.roadmapId, params.roadmapId)).orderBy(asc(roadMapStep.createdAt));
+    
+    const totalSteps = steps.length;
+    const completedSteps = steps.filter(step => step.done === true).length;
+
+    const [userData] = await Promise.all([
+      db.select().from(user).where(eq(user.id, roadmapData.userId)).limit(1),
+      this.loadFonts(),
+    ]);
+    console.log(`[RoadmapProgressCard] DB + Fonts loaded in ${Date.now() - startTime}ms`);
+    
+    if (!userData[0]) throw new Error('User not found');
+    
+    const u = userData[0];
+    const theme = this.getTheme(params?.theme ?? 'dark');
+    const highQualityAvatar = this.getHighQualityImageUrl(u.profilePictureURL);
+    
+    const imageStartTime = Date.now();
+    const [avatarDataUrl, mascotDataUrl, logoDataUrl] = await Promise.all([
+      this.toDataUrl(highQualityAvatar),
+      this.toDataUrl(this.mascotUrls.roadmap),
+      this.toDataUrl(this.eduLearnLogoUrl),
+    ]);
+    console.log(`[RoadmapProgressCard] Images loaded in ${Date.now() - imageStartTime}ms`);
+
+    const progressPercentage = Math.round((completedSteps / totalSteps) * 100);
+
+    const svg = await satori(
+      {
+        type: 'div',
+        props: {
+          style: {
+            width: '1080px',
+            height: '1080px',
+            background: theme.background,
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '60px',
+            position: 'relative',
+          },
+          children: [
+            // Header with logo
+            {
+              type: 'div',
+              props: {
+                style: {
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '50px',
+                },
+                children: [
+                  {
+                    type: 'div',
+                    props: {
+                      style: {
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '16px',
+                      },
+                      children: [
+                        ...(logoDataUrl ? [{
+                          type: 'img',
+                          props: {
+                            src: logoDataUrl,
+                            style: {
+                              width: '100px',
+                              height: '100px',
+                              objectFit: 'contain',
+                            },
+                          },
+                        }] : []),
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+            // Main content area
+            {
+              type: 'div',
+              props: {
+                style: {
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flex: 1,
+                  padding: '0 40px',
+                },
+                children: [
+                  // Left side content
+                  {
+                    type: 'div',
+                    props: {
+                      style: {
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '32px',
+                        flex: 1,
+                      },
+                      children: [
+                        // User info section
+                        {
+                          type: 'div',
+                          props: {
+                            style: {
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '20px',
+                              marginBottom: '10px',
+                            },
+                            children: [
+                              avatarDataUrl ? {
+                                type: 'img',
+                                props: {
+                                  src: avatarDataUrl,
+                                  style: {
+                                    width: '80px',
+                                    height: '80px',
+                                    borderRadius: '50%',
+                                    border: `4px solid ${theme.success}`,
+                                    objectFit: 'cover',
+                                  },
+                                },
+                              } : {
+                                type: 'div',
+                                props: {
+                                  style: {
+                                    width: '80px',
+                                    height: '80px',
+                                    borderRadius: '50%',
+                                    background: theme.success,
+                                    border: `4px solid ${theme.success}`,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: 32,
+                                    fontFamily: 'Satoshi',
+                                    fontWeight: 700,
+                                    color: '#ffffff',
+                                  },
+                                  children: u.name?.charAt(0)?.toUpperCase() || 'U',
+                                },
+                              },
+                              {
+                                type: 'div',
+                                props: {
+                                  style: {
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                  },
+                                  children: [
+                                    {
+                                      type: 'div',
+                                      props: {
+                                        children: u.name,
+                                        style: {
+                                          fontFamily: 'Satoshi',
+                                          fontSize: 32,
+                                          fontWeight: 700,
+                                          color: theme.foreground,
+                                        },
+                                      },
+                                    },
+                                    {
+                                      type: 'div',
+                                      props: {
+                                        children: `@${u.username}`,
+                                        style: {
+                                          fontFamily: 'Satoshi',
+                                          fontSize: 20,
+                                          color: theme.mutedForeground,
+                                          marginTop: 4,
+                                        },
+                                      },
+                                    },
+                                  ],
+                                },
+                              },
+                            ],
+                          },
+                        },
+                        // Progress message
+                        {
+                          type: 'div',
+                          props: {
+                            style: {
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '16px',
+                            },
+                            children: [
+                              {
+                                type: 'p',
+                                props: {
+                                  children: 'Learning Progress',
+                                  style: {
+                                    fontFamily: 'Satoshi',
+                                    fontSize: 24,
+                                    margin: 0,
+                                    color: theme.mutedForeground,
+                                    fontWeight: 500,
+                                  },
+                                },
+                              },
+                              {
+                                type: 'h1',
+                                props: {
+                                  children: `${completedSteps}/${totalSteps}`,
+                                  style: {
+                                    fontFamily: 'Satoshi',
+                                    fontSize: 120,
+                                    fontWeight: 900,
+                                    margin: 0,
+                                    color: theme.success,
+                                    lineHeight: 1,
+                                    letterSpacing: '-4px',
+                                  },
+                                },
+                              },
+                              {
+                                type: 'p',
+                                props: {
+                                  children: 'steps completed',
+                                  style: {
+                                    fontFamily: 'Satoshi',
+                                    fontSize: 32,
+                                    margin: 0,
+                                    color: theme.foreground,
+                                    fontWeight: 700,
+                                    lineHeight: 1.2,
+                                  },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                        // Roadmap title card
+                        {
+                          type: 'div',
+                          props: {
+                            style: {
+                              background: theme.card,
+                              border: `3px solid ${theme.border}`,
+                              borderRadius: '20px',
+                              padding: '24px 28px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '12px',
+                            },
+                            children: [
+                              {
+                                type: 'div',
+                                props: {
+                                  children: 'Roadmap',
+                                  style: {
+                                    fontFamily: 'Satoshi',
+                                    fontSize: 18,
+                                    color: theme.mutedForeground,
+                                    fontWeight: 600,
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '2px',
+                                  },
+                                },
+                              },
+                              {
+                                type: 'div',
+                                props: {
+                                  children: roadmapData.title,
+                                  style: {
+                                    fontFamily: 'Satoshi',
+                                    fontSize: 28,
+                                    fontWeight: 700,
+                                    color: theme.foreground,
+                                    lineHeight: 1.3,
+                                  },
+                                },
+                              },
+                              // Progress bar
+                              {
+                                type: 'div',
+                                props: {
+                                  style: {
+                                    width: '100%',
+                                    height: '12px',
+                                    background: theme.ring,
+                                    borderRadius: '6px',
+                                    overflow: 'hidden',
+                                    marginTop: '8px',
+                                    display: 'flex',
+                                  },
+                                  children: [
+                                    {
+                                      type: 'div',
+                                      props: {
+                                        style: {
+                                          width: `${progressPercentage}%`,
+                                          height: '100%',
+                                          background: theme.success,
+                                          borderRadius: '6px',
+                                        },
+                                      },
+                                    },
+                                  ],
+                                },
+                              },
+                              {
+                                type: 'div',
+                                props: {
+                                  children: `${progressPercentage}% Complete`,
+                                  style: {
+                                    fontFamily: 'Satoshi',
+                                    fontSize: 20,
+                                    fontWeight: 700,
+                                    color: theme.success,
+                                    marginTop: 4,
+                                  },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                      ],
+                    },
+                  },
+                  // Mascot on the right
+                  ...(mascotDataUrl ? [{
+                    type: 'img',
+                    props: {
+                      src: mascotDataUrl,
+                      style: {
+                        width: '380px',
+                        height: '380px',
+                        objectFit: 'contain',
+                        marginRight: '-20px',
+                      },
+                    },
+                  }] : []),
+                ],
+              },
+            },
+          ],
+        },
+      },
+      {
+        width: 1080,
+        height: 1080,
+        fonts: [
+          { name: 'Satoshi', data: this.regular!, weight: 400 },
+          { name: 'Satoshi', data: this.bold!, weight: 700 },
+        ],
+      },
+    );
+    console.log(`[RoadmapProgressCard] SVG generated in ${Date.now() - startTime}ms`);
+
+    const renderStartTime = Date.now();
+    const png = new Resvg(svg).render().asPng();
+    console.log(`[RoadmapProgressCard] PNG rendered in ${Date.now() - renderStartTime}ms`);
+    console.log(`[RoadmapProgressCard] Total time: ${Date.now() - startTime}ms`);
     return Buffer.from(png);
   }
 }

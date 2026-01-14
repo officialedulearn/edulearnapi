@@ -28,6 +28,31 @@ export class AdminController {
     return await this.adminService.getActivityTrends(daysNum);
   }
 
+  @Get('analytics/engagement')
+  async getEngagementMetrics() {
+    return await this.adminService.getEngagementMetrics();
+  }
+
+  @Get('analytics/retention')
+  async getRetentionMetrics() {
+    return await this.adminService.getRetentionMetrics();
+  }
+
+  @Get('analytics/content')
+  async getContentAnalytics() {
+    return await this.adminService.getContentAnalytics();
+  }
+
+  @Get('analytics/revenue')
+  async getRevenueMetrics() {
+    return await this.adminService.getRevenueMetrics();
+  }
+
+  @Get('health')
+  async getHealth() {
+    return await this.adminService.getHealthStatus();
+  }
+
   @Get('users')
   async getAllUsers() {
     return await this.adminService.getAllUsersForAdmin();

@@ -274,6 +274,20 @@
       "when": 1768235986973,
       "tag": "0038_special_slyde",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1768400230549,
+      "tag": "0039_cloudy_spitfire",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1768408468474,
+      "tag": "0040_colossal_juggernaut",
+      "breakpoints": true
     }
   ]
 }

@@ -287,6 +287,189 @@ export class AdminService {
       }).from(user).orderBy(desc(user.lastLoggedIn))
     );
   }
+
+  async getEngagementMetrics() {
+    const now = new Date();
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const [users, activities] = await this.retryQuery(() =>
+      Promise.all([
+        db.select().from(user),
+        db.select().from(xpActivity),
+      ])
+    );
+
+    const dau = users.filter(u => new Date(u.lastLoggedIn) >= oneDayAgo).length;
+    const wau = users.filter(u => new Date(u.lastLoggedIn) >= sevenDaysAgo).length;
+    const mau = users.filter(u => new Date(u.lastLoggedIn) >= thirtyDaysAgo).length;
+
+    const featureUsage = {
+      quiz: activities.filter(a => a.type === 'quiz').length,
+      chat: activities.filter(a => a.type === 'chat').length,
+      streak: activities.filter(a => a.type === 'streak').length,
+    };
+
+    return {
+      dau,
+      wau,
+      mau,
+      featureUsage,
+      totalUsers: users.length,
+      activeRate: users.length > 0 ? ((mau / users.length) * 100).toFixed(1) : '0',
+    };
+  }
+
+  async getRetentionMetrics() {
+    const users = await this.retryQuery(() => db.select().from(user));
+    const activities = await this.retryQuery(() => db.select().from(xpActivity));
+
+    const weeklySignups = new Map<string, string[]>();
+
+    users.forEach(u => {
+      const signupDate = new Date(u.lastLoggedIn);
+      const weekKey = this.getWeekKey(signupDate);
+      if (!weeklySignups.has(weekKey)) {
+        weeklySignups.set(weekKey, []);
+      }
+      weeklySignups.get(weekKey)!.push(u.id);
+    });
+
+    const retentionData: { cohort: string; totalUsers: number; retained: number; retentionRate: string }[] = [];
+    const sortedWeeks = Array.from(weeklySignups.keys()).sort().slice(-8);
+
+    for (const weekKey of sortedWeeks) {
+      const userIds = weeklySignups.get(weekKey) || [];
+      const cohortStart = this.getDateFromWeekKey(weekKey);
+      const oneWeekLater = new Date(cohortStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+      const activeUserIds = new Set(
+        activities
+          .filter(a => new Date(a.createdAt) >= oneWeekLater)
+          .map(a => a.userId)
+      );
+
+      const retained = userIds.filter(id => activeUserIds.has(id)).length;
+
+      retentionData.push({
+        cohort: weekKey,
+        totalUsers: userIds.length,
+        retained,
+        retentionRate: userIds.length > 0 ? ((retained / userIds.length) * 100).toFixed(1) : '0',
+      });
+    }
+
+    return retentionData;
+  }
+
+  private getWeekKey(date: Date): string {
+    const year = date.getFullYear();
+    const weekNum = this.getWeekNumber(date);
+    return `${year}-W${weekNum.toString().padStart(2, '0')}`;
+  }
+
+  private getWeekNumber(date: Date): number {
+    const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
+    const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000;
+    return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+  }
+
+  private getDateFromWeekKey(weekKey: string): Date {
+    const [yearStr, weekStr] = weekKey.split('-W');
+    const year = parseInt(yearStr);
+    const week = parseInt(weekStr);
+    const jan1 = new Date(year, 0, 1);
+    const daysOffset = (week - 1) * 7 - jan1.getDay();
+    return new Date(year, 0, 1 + daysOffset);
+  }
+
+  async getContentAnalytics() {
+    const [chats, users] = await this.retryQuery(() =>
+      Promise.all([
+        db.select().from(chat),
+        db.select().from(user),
+      ])
+    );
+
+    const topicCounts = new Map<string, number>();
+    chats.forEach(c => {
+      const topic = this.extractSimpleTopic(c.title);
+      topicCounts.set(topic, (topicCounts.get(topic) || 0) + 1);
+    });
+
+    const topTopics = Array.from(topicCounts.entries())
+      .map(([topic, count]) => ({ topic, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    const totalQuizzes = users.reduce((sum, u) => sum + u.quizCompleted, 0);
+    const avgQuizPerUser = users.length > 0 ? (totalQuizzes / users.length).toFixed(1) : '0';
+
+    return {
+      topTopics,
+      totalChats: chats.length,
+      totalQuizzes,
+      avgQuizPerUser,
+    };
+  }
+
+  private extractSimpleTopic(title: string): string {
+    const keywords = ['javascript', 'python', 'react', 'solana', 'web3', 'typescript', 'blockchain', 'crypto', 'defi', 'nft', 'rust', 'nextjs', 'nodejs'];
+    const lower = title.toLowerCase();
+
+    for (const keyword of keywords) {
+      if (lower.includes(keyword)) return keyword;
+    }
+
+    const words = title.split(/\s+/).filter(w => w.length > 3);
+    return words[0]?.toLowerCase() || 'other';
+  }
+
+  async getRevenueMetrics() {
+    const [users, volumes] = await this.retryQuery(() =>
+      Promise.all([
+        db.select().from(user),
+        db.select().from(totalVolumes).limit(1),
+      ])
+    );
+
+    const premiumUsers = users.filter(u => u.isPremium).length;
+    const totalRevenue = volumes[0]?.totalRevenue || '0.00';
+    const conversionRate = users.length > 0 ? ((premiumUsers / users.length) * 100).toFixed(1) : '0';
+    const arpu = users.length > 0 ? (parseFloat(totalRevenue) / users.length).toFixed(2) : '0.00';
+    const arppu = premiumUsers > 0 ? (parseFloat(totalRevenue) / premiumUsers).toFixed(2) : '0.00';
+
+    const totalReferrals = users.reduce((sum, u) => sum + (u.referralCount || 0), 0);
+    const usersWithReferrals = users.filter(u => (u.referralCount || 0) > 0).length;
+
+    return {
+      totalRevenue,
+      premiumUsers,
+      conversionRate,
+      arpu,
+      arppu,
+      totalReferrals,
+      usersWithReferrals,
+    };
+  }
+
+  async getHealthStatus() {
+    try {
+      await db.select().from(user).limit(1);
+      return {
+        status: 'healthy',
+        database: { connected: true },
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      return {
+        status: 'down',
+        database: { connected: false },
+        timestamp: new Date().toISOString(),
+      };
+    }
+  }
 }
 
 

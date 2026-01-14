@@ -43,7 +43,6 @@ async function checkTableExists(tableName: string): Promise<boolean> {
 
 async function getMigrationStatus(): Promise<number[]> {
   try {
-    // Ensure the migrations table exists
     await db.execute(sql`
       CREATE SCHEMA IF NOT EXISTS drizzle;
     `);

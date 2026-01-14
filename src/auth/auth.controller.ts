@@ -229,4 +229,56 @@ export class AuthController {
       throw new BadRequestException('Failed to initiate user deletion');
     }
   }
+
+  @Post('oauth/callback')
+  async handleOAuthCallback(@Body() body: {
+    supabaseUserId: string;
+    email: string;
+    name: string;
+    provider: 'google' | 'apple';
+    providerId: string;
+  }) {
+    if (!body.supabaseUserId || !body.email || !body.provider || !body.providerId) {
+      throw new BadRequestException('Missing required OAuth fields');
+    }
+
+    const result = await this.authService.handleOAuthUser({
+      id: body.supabaseUserId,
+      email: body.email,
+      name: body.name || '',
+      provider: body.provider,
+      providerId: body.providerId
+    });
+    
+    return {
+      ...result,
+      message: result.isNewUser 
+        ? 'Account created successfully' 
+        : 'Logged in successfully'
+    };
+  }
+
+  @Put('complete-profile')
+  @UseGuards(FlexibleAuthGuard)
+  async completeProfile(@Request() req, @Body() body: { userId: string; username: string }) {
+    if (!body.userId || !body.username) {
+      throw new BadRequestException('User ID and username are required');
+    }
+
+    await verifyUserAuthorization(req.user, body.userId, 'completing profile');
+
+    const availability = await this.authService.checkUserAvailability(undefined, body.username);
+    
+    if (!availability.usernameAvailable) {
+      throw new BadRequestException('Username already taken');
+    }
+    
+    const updatedUser = await this.authService.updateUsername(body.userId, body.username);
+    
+    if (!updatedUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    return { success: true, user: updatedUser };
+  }
 }

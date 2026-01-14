@@ -20,20 +20,17 @@ async function markAllMigrationsApplied() {
   try {
     console.log('🔧 Marking all existing migrations as applied...\n');
 
-    // Read the migration journal
     const journalPath = path.join(__dirname, '../lib/db/migrations/meta/_journal.json');
     const journal = JSON.parse(fs.readFileSync(journalPath, 'utf-8'));
 
     console.log(`Found ${journal.entries.length} migrations in journal\n`);
 
-    // Get current migrations from database
     const currentMigrations = await db.execute(sql`
       SELECT id, hash FROM drizzle.__drizzle_migrations ORDER BY id;
     `) as any[];
 
     console.log(`Currently ${currentMigrations.length} migrations recorded in database\n`);
 
-    // Mark each migration as applied
     let addedCount = 0;
     for (const entry of journal.entries) {
       const exists = currentMigrations.some((m: any) => m.id === entry.idx);
@@ -48,7 +45,6 @@ async function markAllMigrationsApplied() {
         console.log(`✓ Marked migration ${entry.idx} (${entry.tag}) as applied`);
         addedCount++;
       } else {
-        // Update hash if different
         const currentHash = currentMigrations.find((m: any) => m.id === entry.idx)?.hash;
         if (currentHash !== entry.tag) {
           await db.execute(sql`
