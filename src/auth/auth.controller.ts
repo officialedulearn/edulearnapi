@@ -18,6 +18,7 @@ import { ApiKeyGuard } from './guards/api-key.guard';
 import { FlexibleAuthGuard } from './guards/flexible-auth.guard';
 import { getAuthenticatedUserId, verifyUserAuthorization } from '../common/helpers/authorization.helper';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { UserResponse } from './auth.service';
 
 @Controller('auth')
 export class AuthController {
@@ -37,20 +38,20 @@ export class AuthController {
 
   @Post('signup')
   async signUp(@Body() data: signUpDetails) {
-    const result = await this.authService.createUser(data);
+    const result = await this.authService.createUser(data) as unknown as UserResponse;
     if (result instanceof Error) {
       throw new BadRequestException(result.message);
     }
-    return result;
+    return result as UserResponse;
   }
   @Get('email/:email')
   @UseGuards(FlexibleAuthGuard)
-  async getUserByEmail(@Param('email') email: string) {
-    const user = await this.authService.getUserByEmail(email);
+  async getUserByEmail(@Param('email') email: string): Promise<UserResponse> {
+    const user = await this.authService.getUserByEmail(email) as UserResponse;
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    return user;
+    return user as UserResponse;
   }
 
   @Get('id/:id')

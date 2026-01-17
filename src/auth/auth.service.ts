@@ -16,7 +16,7 @@ import { CommunityService } from 'src/community/community.service';
 import { update } from '@metaplex-foundation/mpl-core';
 import { SocialService } from 'src/social/social.service';
 
-interface UserResponse extends User {
+export interface UserResponse extends User {
   quizLimit: number;
 }
 
