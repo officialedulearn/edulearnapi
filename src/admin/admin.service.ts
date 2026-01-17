@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { sql, eq, gte, lte, and, desc, count } from 'drizzle-orm';
 import db from '../../drizzle';
-import { user, xpActivity, reward, userReward, premiumTransactions, totalVolumes, chat } from '../../lib/db/schema';
+import { user, xpActivity, reward, userReward, premiumTransactions, totalVolumes, chat, community, community_members } from '../../lib/db/schema';
 import { NotificationsService } from '../common/services/notifications.service';
 import { ResendService } from '../resend/resend.service';
 import { ExpoPushService } from '../common/services/expo-push.service';
@@ -469,6 +469,103 @@ export class AdminService {
         timestamp: new Date().toISOString(),
       };
     }
+  }
+
+  async createCommunityWithAdmin(data: {
+    title: string;
+    inviteCode: string;
+    visibility?: 'public' | 'private';
+    imageUrl?: string;
+    adminEmail: string;
+  }) {
+    const adminUser = await this.retryQuery(() =>
+      db.select({ id: user.id, email: user.email, username: user.username })
+        .from(user)
+        .where(eq(user.username, data.adminEmail))
+        .limit(1)
+    );
+
+    if (!adminUser.length) {
+      throw new Error(`User with username ${data.adminEmail} not found`);
+    }
+
+    const [newCommunity] = await db
+      .insert(community)
+      .values({
+        title: data.title,
+        inviteCode: data.inviteCode,
+        visibility: data.visibility || 'public',
+        imageUrl: data.imageUrl,
+      })
+      .returning();
+
+    await db.insert(community_members).values({
+      userId: adminUser[0].id,
+      communityId: newCommunity.id,
+      role: 'mod',
+    });
+
+    this.logger.log(`Created community "${data.title}" with admin ${data.adminEmail}`);
+
+    return {
+      community: newCommunity,
+      admin: {
+        id: adminUser[0].id,
+        username: adminUser[0].username,
+        email: adminUser[0].email,
+      },
+    };
+  }
+
+  async getAllCommunities() {
+    return await this.retryQuery(() =>
+      db.select({
+        id: community.id,
+        title: community.title,
+        inviteCode: community.inviteCode,
+        visibility: community.visibility,
+        imageUrl: community.imageUrl,
+        createdAt: community.createdAt,
+      }).from(community).orderBy(desc(community.createdAt))
+    );
+  }
+
+  async getCommunityWithMembers(communityId: string) {
+    const communityData = await this.retryQuery(() =>
+      db.select().from(community).where(eq(community.id, communityId)).limit(1)
+    );
+
+    if (!communityData.length) {
+      return null;
+    }
+
+    const members = await this.retryQuery(() =>
+      db.select({
+        id: community_members.id,
+        role: community_members.role,
+        user: {
+          id: user.id,
+          username: user.username,
+          name: user.name,
+          email: user.email,
+        },
+      })
+      .from(community_members)
+      .innerJoin(user, eq(community_members.userId, user.id))
+      .where(eq(community_members.communityId, communityId))
+    );
+
+    return {
+      ...communityData[0],
+      members,
+    };
+  }
+
+  async deleteCommunity(communityId: string) {
+    await db.delete(community_members).where(eq(community_members.communityId, communityId));
+    await db.delete(community).where(eq(community.id, communityId));
+    this.logger.log(`Deleted community ${communityId}`);
+    return { success: true };
   }
 }
 

@@ -1,11 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import db from '../../drizzle';
-import { user } from '../../lib/db/schema';
+import { user, userReward } from '../../lib/db/schema';
+import { RewardsService } from '../rewards/rewards.service';
 
 @Injectable()
 export class SubscriptionService {
   private readonly logger = new Logger(SubscriptionService.name);
+
+  constructor(
+    @Inject(forwardRef(() => RewardsService))
+    private readonly rewardsService: RewardsService,
+  ) {}
 
   async updateUserPremiumStatus(
     appUserId: string,
@@ -84,5 +90,42 @@ export class SubscriptionService {
   async handleProductChange(appUserId: string, expirationDate?: string) {
     this.logger.log(`Handling PRODUCT_CHANGE for user ${appUserId}`);
     await this.updateUserPremiumStatus(appUserId, true, expirationDate);
+  }
+
+  async handleBadgeClaim(appUserId: string, productId: string, webhookPayload: any) {
+    try {
+      this.logger.log(`🎯 Processing badge claim for user ${appUserId}, product: ${productId}`);
+      
+      const users = await db.select().from(user).where(eq(user.id, appUserId));
+      if (users.length === 0) {
+        this.logger.error(`User ${appUserId} not found for badge claim`);
+        throw new Error(`User not found: ${appUserId}`);
+      }
+
+      const unclaimedRewards = await db
+        .select()
+        .from(userReward)
+        .where(eq(userReward.userId, appUserId));
+      
+      const nextUnclaimedReward = unclaimedRewards.find(reward => !reward.signature);
+
+      if (!nextUnclaimedReward) {
+        this.logger.warn(`No unclaimed rewards found for user ${appUserId}`);
+        return { success: false, message: 'No unclaimed rewards found' };
+      }
+
+      this.logger.log(`🎨 Minting NFT for reward ${nextUnclaimedReward.rewardId} to user ${appUserId}`);
+      
+      const result = await this.rewardsService.claimRewardAdmin(
+        appUserId,
+        nextUnclaimedReward.rewardId
+      );
+
+      this.logger.log(`✅ Badge successfully claimed: ${JSON.stringify(result)}`);
+      return { success: true, signature: result.signature, rewardId: nextUnclaimedReward.rewardId };
+    } catch (error) {
+      this.logger.error(`❌ Failed to process badge claim for user ${appUserId}:`, error.stack);
+      throw error;
+    }
   }
 }

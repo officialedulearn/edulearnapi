@@ -16,6 +16,10 @@ import { CommunityService } from 'src/community/community.service';
 import { update } from '@metaplex-foundation/mpl-core';
 import { SocialService } from 'src/social/social.service';
 
+interface UserResponse extends User {
+  quizLimit: number;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -31,7 +35,7 @@ export class AuthService {
     @Inject(forwardRef(() => SocialService))
     private socialService: SocialService,
   ) {}
-  async createUser(data: signUpDetails): Promise<User | Error> {
+  async createUser(data: signUpDetails): Promise<UserResponse | Error> {
     try {
       console.log('Creating user in database with data:', data);
       const userExists = await db
@@ -172,7 +176,8 @@ export class AuthService {
         referralCode: createdUser.referralCode,
         lastLoggedIn: createdUser.lastLoggedIn,
         profilePictureURL: createdUser.profilePictureURL,
-      } as User;
+        quizLimit: createdUser.quizLimits,
+      } as UserResponse;
     } catch (error) {
       console.error('❌ Failed to create user in database:', error);
       console.error('Error details:', {
@@ -213,7 +218,7 @@ export class AuthService {
     }
   }
 
-  async getUserByEmail(email: string): Promise<User | null> {
+  async getUserByEmail(email: string): Promise<UserResponse | null> {
     try {
       const result = await db.select().from(user).where(eq(user.email, email));
 
@@ -234,8 +239,9 @@ export class AuthService {
         referralCode: result[0]?.referralCode,
         lastLoggedIn: result[0]?.lastLoggedIn,
         profilePictureURL: result[0]?.profilePictureURL,
+        quizLimit: result[0]?.quizLimits,
       }
-      return userObject as User || null;
+      return userObject as UserResponse || null;
     } catch (error) {
       console.error('Failed to get user by email');
       throw error;
@@ -245,7 +251,12 @@ export class AuthService {
   async getUserById(id: string): Promise<User | null> {
     try {
       const result = await db.select().from(user).where(eq(user.id, id));
-      return result[0] ?? null;
+      if (!result[0]) return null;
+      
+      return {
+        ...result[0],
+        quizLimit: result[0].quizLimits,
+      } as any;
     } catch (error) {
       console.error('Failed to get user by ID');
       throw error;
@@ -297,7 +308,12 @@ export class AuthService {
   async getUserByAddress(address: string): Promise<User | null> {
     try {
       const result = await db.select().from(user).where(eq(user.address, address));
-      return result[0] ?? null;
+      if (!result[0]) return null;
+      
+      return {
+        ...result[0],
+        quizLimit: result[0].quizLimits,
+      } as any;
     } catch (error) {
       console.error('Failed to get user by address');
       throw error;
@@ -337,7 +353,12 @@ export class AuthService {
         });
       }
 
-      return updatedUser;
+      if (!updatedUser) return null;
+      
+      return {
+        ...updatedUser,
+        quizLimit: updatedUser.quizLimits,
+      } as any;
     } catch (error) {
       console.error('Failed to edit user');
       throw error;
@@ -695,7 +716,12 @@ export class AuthService {
         .where(eq(user.email, email))
         .returning();
 
-      return result[0] ?? null;
+      if (!result[0]) return null;
+      
+      return {
+        ...result[0],
+        quizLimit: result[0].quizLimits,
+      } as any;
     } catch (error) {
       console.error('Failed to verify user', error);
       throw error;
@@ -763,7 +789,10 @@ export class AuthService {
         throw new Error(`User with referral code ${referralCode} not found`);
       }
       
-      return affiliate[0];
+      return {
+        ...affiliate[0],
+        quizLimit: affiliate[0].quizLimits,
+      } as any;
     } catch (error) {
       console.error('Failed to get user by referral code', error);
       throw error;
@@ -856,7 +885,10 @@ export class AuthService {
       .limit(1);
     
     if (byProviderId[0]) {
-      return byProviderId[0];
+      return {
+        ...byProviderId[0],
+        quizLimit: byProviderId[0].quizLimits,
+      } as any;
     }
     
     const byEmail = await db
@@ -865,7 +897,12 @@ export class AuthService {
       .where(eq(user.email, email))
       .limit(1);
     
-    return byEmail[0] || null;
+    if (!byEmail[0]) return null;
+    
+    return {
+      ...byEmail[0],
+      quizLimit: byEmail[0].quizLimits,
+    } as any;
   }
 
   async handleOAuthUser(data: OAuthUserData): Promise<OAuthCallbackResult> {
@@ -964,7 +1001,10 @@ export class AuthService {
         console.error('Failed to send welcome email:', error);
       });
 
-      return createdUser;
+      return {
+        ...createdUser,
+        quizLimit: createdUser.quizLimits,
+      } as any;
     } catch (error) {
       console.error('Failed to create OAuth user:', error);
       throw error;
@@ -1014,7 +1054,12 @@ export class AuthService {
         }
       }
 
-      return updatedUser;
+      if (!updatedUser) return null;
+      
+      return {
+        ...updatedUser,
+        quizLimit: updatedUser.quizLimits,
+      } as any;
     } catch (error) {
       console.error('Failed to update username', error);
       throw error;

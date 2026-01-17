@@ -29,6 +29,35 @@ export class RewardsController {
     }
   }
 
+  @Post('claim/admin')
+  async claimRewardAdmin(
+    @Request() req,
+    @Body() data: { userId: string; rewardId: string }
+  ) {
+    console.log('📥 Received /rewards/claim/admin request:', {
+      userId: data.userId,
+      rewardId: data.rewardId,
+      userEmail: req.user?.email,
+      userRole: req.user?.role,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (!data.userId || !data.rewardId) {
+      throw new BadRequestException('User ID and reward ID are required');
+    }
+    
+    await verifyUserAuthorization(req.user, data.userId, 'claiming reward');
+    
+    try {
+      const signature = await this.rewardsService.claimRewardAdmin(data.userId, data.rewardId);
+      console.log('✅ Badge claimed successfully (admin-paid):', { userId: data.userId, rewardId: data.rewardId });
+      return { success: true, signature, message: 'Badge claimed successfully' };
+    } catch (error) {
+      console.error('❌ Error claiming badge (admin-paid):', error.message);
+      const errorMessage = error?.message || 'Failed to claim badge';
+      throw new BadRequestException(errorMessage);
+    }
+  }
   @Get()
   async getAllRewards() {
     try {
@@ -123,6 +152,27 @@ export class RewardsController {
     } catch (error) {
       console.error('Error fetching reward recipients:', error.message);
       const errorMessage = error?.message || 'Failed to fetch reward recipients';
+      throw new BadRequestException(errorMessage);
+    }
+  }
+
+  @Get('claim-status/:userId/:rewardId')
+  async getClaimStatus(
+    @Request() req,
+    @Param('userId') userId: string,
+    @Param('rewardId') rewardId: string
+  ) {
+    if (!userId || !rewardId) {
+      throw new BadRequestException('User ID and Reward ID are required');
+    }
+
+    await verifyUserViewAuthorization(req.user, userId);
+    
+    try {
+      return await this.rewardsService.getClaimStatus(userId, rewardId);
+    } catch (error) {
+      console.error('Error fetching claim status:', error.message);
+      const errorMessage = error?.message || 'Failed to fetch claim status';
       throw new BadRequestException(errorMessage);
     }
   }

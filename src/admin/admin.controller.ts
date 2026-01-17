@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Query, Param, UseGuards, BadRequestException, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { AdminApiKeyGuard } from '../auth/guards/admin-api-key.guard';
 
@@ -102,6 +102,48 @@ export class AdminController {
       throw new BadRequestException('Subject and HTML content are required');
     }
     return await this.adminService.sendEmailToUsers(body.emails, body.subject, body.htmlContent);
+  }
+
+  @Get('communities')
+  async getAllCommunities() {
+    return await this.adminService.getAllCommunities();
+  }
+
+  @Get('communities/:communityId')
+  async getCommunityById(@Param('communityId') communityId: string) {
+    const community = await this.adminService.getCommunityWithMembers(communityId);
+    if (!community) {
+      throw new NotFoundException(`Community with id ${communityId} not found`);
+    }
+    return community;
+  }
+
+  @Post('communities')
+  async createCommunity(
+    @Body() body: { 
+      title: string; 
+      inviteCode: string; 
+      visibility?: 'public' | 'private'; 
+      imageUrl?: string;
+      adminEmail: string;
+    },
+  ) {
+    if (!body.title || !body.inviteCode) {
+      throw new BadRequestException('Title and invite code are required');
+    }
+    if (!body.adminEmail) {
+      throw new BadRequestException('Admin email/username is required');
+    }
+    try {
+      return await this.adminService.createCommunityWithAdmin(body);
+    } catch (error: any) {
+      throw new BadRequestException(error.message || 'Failed to create community');
+    }
+  }
+
+  @Delete('communities/:communityId')
+  async deleteCommunity(@Param('communityId') communityId: string) {
+    return await this.adminService.deleteCommunity(communityId);
   }
 }
 

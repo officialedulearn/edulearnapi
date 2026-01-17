@@ -22,6 +22,8 @@ interface RevenueCatWebhookEvent {
     expiration_at_ms?: number;
     store?: string;
     environment?: string;
+    entitlement_ids?: string[];
+    presented_offering_id?: string;
   };
 }
 
@@ -68,10 +70,18 @@ export class SubscriptionController {
       this.logger.log('Webhook authorization successful');
 
       this.logger.log(
-        `Received RevenueCat webhook: ${payload.event.type} for user ${payload.event.app_user_id}`,
+        `Received RevenueCat webhook: ${payload.event.type} for user ${payload.event.app_user_id}, product: ${payload.event.product_id}`,
       );
 
-      const { type, app_user_id, expiration_at_ms } = payload.event;
+      const { type, app_user_id, expiration_at_ms, product_id } = payload.event;
+
+      const isBadgeClaim = product_id === 'rc_badge_claim1';
+      
+      if (isBadgeClaim) {
+        this.logger.log(`Badge claim purchase detected for user ${app_user_id}, product: ${product_id}`);
+        await this.subscriptionService.handleBadgeClaim(app_user_id, product_id as string, payload);
+        return { received: true, type: 'badge_claim' };
+      }
 
       const expirationDate = expiration_at_ms
         ? new Date(expiration_at_ms).toISOString()
@@ -112,6 +122,7 @@ export class SubscriptionController {
           break;
 
         case 'NON_RENEWING_PURCHASE':
+          this.logger.log(`NON_RENEWING_PURCHASE for non-badge product: ${product_id}`);
           await this.subscriptionService.handleInitialPurchase(
             app_user_id,
             expirationDate,
