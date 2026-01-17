@@ -600,19 +600,17 @@ export class RewardsService {
           name: rewardExists[0].title,
           uri: `${rewardExists[0].ipfs}`,
           owner: publicKey(userExists[0].address as string),
-        }).send(umi);
+        }).sendAndConfirm(umi, { confirm: { commitment: 'confirmed' } });
 
         signatureBytes = result.signature instanceof Uint8Array 
           ? result.signature 
           : new Uint8Array(result.signature);
         
         console.log(
-          'NFT Mint Signature (sending):',
+          'NFT Mint Signature:',
           bs58.default.encode(signatureBytes),
         );
-
-        await this.confirmTransactionWithPolling(signatureBytes);
-        console.log('NFT Mint confirmed on-chain');
+        console.log('✅ NFT Mint confirmed on-chain');
       } catch (nftError) {
         console.error('Error minting NFT:', nftError.message);
         if (
@@ -882,18 +880,16 @@ export class RewardsService {
           name: rewardExists[0].title,
           uri: `${rewardExists[0].ipfs}`,
           owner: publicKey(userExists[0].address as string),
-        }).send(umi);
+        }).sendAndConfirm(umi, { confirm: { commitment: 'confirmed' } });
 
         signatureBytes = result.signature instanceof Uint8Array 
           ? result.signature 
           : new Uint8Array(result.signature);
         
         console.log(
-          'NFT Mint Signature (Admin paid, sending):',
+          'NFT Mint Signature (Admin paid):',
           bs58.default.encode(signatureBytes),
         );
-
-        await this.confirmTransactionWithPolling(signatureBytes);
         console.log('✅ NFT Mint confirmed on-chain (Admin paid)');
       } catch (nftError) {
         console.error('Error minting NFT:', nftError.message);

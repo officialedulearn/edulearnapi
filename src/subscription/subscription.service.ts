@@ -94,7 +94,7 @@ export class SubscriptionService {
 
   async handleBadgeClaim(appUserId: string, productId: string, webhookPayload: any) {
     try {
-      this.logger.log(`🎯 Processing badge claim for user ${appUserId}, product: ${productId}`);
+      this.logger.log(`🎯 Processing badge claim for user ${appUserId}, product: ${productId}, event type: ${webhookPayload?.event?.type}`);
       
       const users = await db.select().from(user).where(eq(user.id, appUserId));
       if (users.length === 0) {
@@ -110,7 +110,7 @@ export class SubscriptionService {
       const nextUnclaimedReward = unclaimedRewards.find(reward => !reward.signature);
 
       if (!nextUnclaimedReward) {
-        this.logger.warn(`No unclaimed rewards found for user ${appUserId}`);
+        this.logger.warn(`⚠️ No unclaimed rewards found for user ${appUserId} - may be duplicate webhook or all rewards already claimed`);
         return { success: false, message: 'No unclaimed rewards found' };
       }
 
@@ -124,6 +124,10 @@ export class SubscriptionService {
       this.logger.log(`✅ Badge successfully claimed: ${JSON.stringify(result)}`);
       return { success: true, signature: result.signature, rewardId: nextUnclaimedReward.rewardId };
     } catch (error) {
+      if (error.message?.includes('already been claimed')) {
+        this.logger.warn(`⚠️ Badge already claimed for user ${appUserId} - likely duplicate webhook`);
+        return { success: false, message: 'Badge already claimed' };
+      }
       this.logger.error(`❌ Failed to process badge claim for user ${appUserId}:`, error.stack);
       throw error;
     }
