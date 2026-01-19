@@ -55,7 +55,7 @@ Return ONLY valid JSON matching the schema.`;
       id: 'd3b0cced-5465-4582-a740-c9810b8282a8',
       name: 'Blockchain Basics',
       description:
-        'Awarded for completing the Blockchain Basics course, this NFT marks your achievement in understanding the core principles of blockchain technology, from decentralized networks to cryptographic security.',
+        'Awarded for completing the Blockchain Basics course, this badge marks your achievement in understanding the core principles of blockchain technology, from decentralized networks to cryptographic security.',
       criteria:
         'User must demonstrate comprehensive understanding of: blockchain fundamentals, decentralized networks, cryptographic security, consensus mechanisms, and how blockchain technology works. They should have engaged in multiple meaningful exchanges about these topics and correctly answered questions.',
       requiredTopics: [
@@ -94,31 +94,10 @@ Return ONLY valid JSON matching the schema.`;
       id: 'aed65cb8-c7d9-43f0-ad72-d77909bd0972',
       name: 'EduLearn Welcome Badge',
       description:
-        "Welcome to EduLearn! This NFT celebrates your journey into the world of blockchain education. You've taken the first step towards mastering decentralized technologies.",
+        "Welcome to EduLearn! This badge celebrates your journey into the world of blockchain education. You've taken the first step towards mastering decentralized technologies.",
       criteria:
         'Awarded automatically to new users or when they complete their first meaningful learning interaction, showing enthusiasm to learn about Web3 and blockchain technology.',
       requiredTopics: ['welcome', 'introduction', 'getting started'],
-    },
-    noizlabsAmbassador: {
-      id: '7838fd39-2003-4759-b567-40f04ce3b835',
-      name: 'NoizLabs Ambassador',
-      description:
-        'Awarded to users who demonstrate exceptional understanding of NoizLabs platform, audio meme tokens, and the creator economy revolution. This is a prestigious certificate reserved for those who truly grasp how NoizLabs transforms viral audio culture into tradeable assets.',
-      criteria:
-        'User must demonstrate DEEP, comprehensive understanding of: NoizLabs platform architecture (Battle, Launch, Trade, Earn features), audio meme tokenization, the creator economy problem NoizLabs solves, viral audio monetization, and how audio tokens work in practice. They must show they understand the platform beyond surface level - discussing tokenomics, liquidity, staking mechanisms, and the broader impact on Web3 creator economy. This requires multiple in-depth conversations showing genuine mastery, not just basic awareness.',
-      requiredTopics: [
-        'noizlabs',
-        'audio meme',
-        'audio token',
-        'creator economy',
-        'viral audio',
-        'battle',
-        'launch',
-        'trade',
-        'stake',
-        'noiz',
-        'fanfi',
-      ],
     },
   };
 
@@ -140,24 +119,21 @@ Return ONLY valid JSON matching the schema.`;
 
   private readonly rewardUser = {
     name: 'giveACertificate',
-    description: `Award NFT certificates ONLY when users demonstrate DEEP understanding through multiple meaningful interactions. Standards are HIGH - users must show mastery, not just basic comprehension.
+    description: `Award badges or certificates ONLY when users demonstrate DEEP understanding through multiple meaningful interactions. Standards are HIGH - users must show mastery, not just basic comprehension.
 
 AVAILABLE CERTIFICATES:
 
-1. 'web3Basics' - Blockchain Basics NFT
+1. 'web3Basics' - Blockchain Basics Badge
    Criteria: User demonstrates comprehensive understanding of blockchain fundamentals, decentralized networks, cryptographic security, consensus mechanisms. They must have engaged in multiple exchanges, asked thoughtful questions, and correctly answered your questions about core blockchain concepts.
 
-2. 'defiFoundations' - DeFi Foundations NFT
+2. 'defiFoundations' - DeFi Foundations Badge
    Criteria: User shows deep understanding of DeFi protocols, liquidity pools, yield farming, DEXs, lending protocols, AMMs, and DeFi security. They must demonstrate practical knowledge and understand the risks and mechanisms of decentralized finance.
 
-3. 'icm' - Internet Capital Markets NFT
+3. 'icm' - Internet Capital Markets Badge
    Criteria: User demonstrates understanding of Internet Capital Markets, Solana's role in global finance, tokenization, on-chain trading, and how blockchain enables permissionless capital markets. Should reference Believe launchpad or ICM concepts specifically.
 
 4. 'eduLearnWelcome' - EduLearn Welcome Badge
    Criteria: Award to new users who complete their first meaningful learning interaction or show genuine enthusiasm to learn about Web3. This is the most accessible certificate for beginners taking their first steps.
-
-5. 'noizlabsAmbassador' - NoizLabs Ambassador NFT
-   Criteria: EXTREMELY RARE - Only award when user demonstrates EXCEPTIONAL, comprehensive understanding of NoizLabs platform. User must show deep knowledge of: NoizLabs features (Battle, Launch, Trade, Earn), audio meme tokenization mechanics, creator economy problems solved, staking mechanisms ($NOIZ/$FANFI), and the broader impact on Web3. User must have engaged in MULTIPLE in-depth conversations about NoizLabs, asked sophisticated questions, and demonstrated they understand the platform architecture and tokenomics beyond basic awareness. This is NOT for casual mentions - requires genuine mastery and deep engagement. Confidence level must be 9+ (scale 1-10).
 
 STRICT RULES:
 - NEVER award certificates for single questions or brief exchanges
@@ -174,12 +150,12 @@ STRICT RULES:
           type: Type.STRING,
           description:
             "The certificate type to award. Choose the ONE that best matches the user's demonstrated knowledge.",
-          enum: ['web3Basics', 'defiFoundations', 'icm', 'eduLearnWelcome', 'noizlabsAmbassador'],
+          enum: ['web3Basics', 'defiFoundations', 'icm', 'eduLearnWelcome'],
         },
         confidenceLevel: {
           type: Type.NUMBER,
           description:
-            'Your confidence (1-10) that the user truly masters this topic. Minimum 8 required (9+ for noizlabsAmbassador). Base this on: conversation depth, correct answers given, thoughtful questions asked, practical understanding shown.',
+            'Your confidence (1-10) that the user truly masters this topic. Minimum 8 required. Base this on: conversation depth, correct answers given, thoughtful questions asked, practical understanding shown.',
         },
         reasoning: {
           type: Type.STRING,
@@ -429,7 +405,7 @@ the user's name: ${user?.name}
 the user wants to master: ${user?.learning}
 and the users current level on the app is: ${user?.level}
 
-USER'S NFT CERTIFICATES STATUS:
+USER'S CERTIFICATES STATUS:
 ${
   ownedCertificates.length > 0
     ? `✅ Certificates already earned: ${ownedCertificates.join(', ')}\n   DO NOT attempt to award these certificates again!`
@@ -446,7 +422,7 @@ Mission:
 - Guide learners toward understanding, not just hand over answers.
 - Help them think like Web3 builders using analogies, strategic hints, guiding questions, and fun metaphors.
 - build users for job readiness
-- Award NFT certificates when users demonstrate true mastery of topics through deep engagement
+- Award badges or certificates when users demonstrate true mastery of topics through deep engagement
 
 
 Coverage Areas:
@@ -486,15 +462,16 @@ Mini-challenges & Learning UX:
 - Offer "what if" scenarios to stimulate architecture thinking and tradeoff analysis.
 - Encourage learners to produce small portfolio items as proof-of-learning and proof of work.
 
-NFT Certificate Rewards System:
-You can award NFT certificates to users who demonstrate mastery. Available certificates:
+Certificate Rewards System:
+You can award badges or certificates to users who demonstrate mastery. Available certificates:
 1. **Blockchain Basics** (web3Basics) - For comprehensive understanding of blockchain fundamentals, decentralization, consensus, and cryptography
 2. **DeFi Foundations** (defiFoundations) - For mastering DeFi protocols, liquidity pools, AMMs, DEXs, and DeFi security
 3. **Internet Capital Markets** (icm) - For understanding ICM concepts, Solana's role in finance, tokenization, and Believe launchpad
 4. **EduLearn Welcome Badge** (eduLearnWelcome) - For new users completing their first meaningful learning interaction
-5. **NoizLabs Ambassador** (noizlabsAmbassador) - EXTREMELY RARE - Only for users who demonstrate exceptional, comprehensive understanding of NoizLabs platform, audio meme tokenization, creator economy, and platform mechanics. Requires multiple in-depth conversations showing genuine mastery. Confidence level must be 9+ out of 10.
 
-IMPORTANT: Only award certificates when users show DEEP understanding through multiple exchanges, thoughtful questions, and correct answers. Confidence level must be 8+ out of 10 (9+ for noizlabsAmbassador).
+CRITICAL: Never mention "NFT" in your responses. Always refer to these as "badges" or "certificates" when communicating with users.
+
+IMPORTANT: Only award certificates when users show DEEP understanding through multiple exchanges, thoughtful questions, and correct answers. Confidence level must be 8+ out of 10.
 
 
 Tone:
@@ -678,9 +655,9 @@ Safety & Boundaries:
 
             certificateAcknowledgement =
               `🏆 **Congratulations!** 🎉\n\n` +
-              `You've earned the **${nftReward.name}** NFT certificate!\n\n` +
+              `You've earned the **${nftReward.name}** badge!\n\n` +
               `${nftReward.description}\n\n` +
-              `💎 You can view and claim your NFT in the rewards section. Keep up the amazing learning! 🎓\n\n`;
+              `💎 You can view and claim your badge in the rewards section. Keep up the amazing learning! 🎓\n\n`;
 
             console.log(`✅ Successfully awarded ${certificateType} (${nftReward.name}) to user ${userId}
               - Confidence: ${confidenceLevel}/10
@@ -731,7 +708,7 @@ Safety & Boundaries:
                 (nft) => nft.id === roadmapResult.roadmap.claimableNFT,
               );
               if (nftInfo) {
-                nftBonus = `\n🎁 **Bonus**: Complete this roadmap and take at least one quiz to unlock the **${nftInfo.name}** NFT certificate! 🏆\n`;
+                nftBonus = `\n🎁 **Bonus**: Complete this roadmap and take at least one quiz to unlock the **${nftInfo.name}** badge! 🏆\n`;
               }
             }
 
@@ -886,7 +863,7 @@ the user's name: ${user?.name}
 the user wants to master: ${user?.learning}
 and the users current level on the app is: ${user?.level}
 
-USER'S NFT CERTIFICATES STATUS:
+USER'S CERTIFICATES STATUS:
 ${ownedCertificates.length > 0 
   ? `✅ Certificates already earned: ${ownedCertificates.join(', ')}\n   DO NOT attempt to award these certificates again!`
   : '   User has not earned any certificates yet.'}
@@ -899,7 +876,7 @@ Mission:
 - Guide learners toward understanding, not just hand over answers.
 - Help them think like Web3 builders using analogies, strategic hints, guiding questions, and fun metaphors.
 - build users for job readiness
-- Award NFT certificates when users demonstrate true mastery of topics through deep engagement
+- Award badges or certificates when users demonstrate true mastery of topics through deep engagement
 
 
 Coverage Areas:
@@ -939,15 +916,16 @@ Mini-challenges & Learning UX:
 - Offer "what if" scenarios to stimulate architecture thinking and tradeoff analysis.
 - Encourage learners to produce small portfolio items as proof-of-learning and proof of work.
 
-NFT Certificate Rewards System:
-You can award NFT certificates to users who demonstrate mastery. Available certificates:
+Certificate Rewards System:
+You can award badges or certificates to users who demonstrate mastery. Available certificates:
 1. **Blockchain Basics** (web3Basics) - For comprehensive understanding of blockchain fundamentals, decentralization, consensus, and cryptography
 2. **DeFi Foundations** (defiFoundations) - For mastering DeFi protocols, liquidity pools, AMMs, DEXs, and DeFi security
 3. **Internet Capital Markets** (icm) - For understanding ICM concepts, Solana's role in finance, tokenization, and Believe launchpad
 4. **EduLearn Welcome Badge** (eduLearnWelcome) - For new users completing their first meaningful learning interaction
-5. **NoizLabs Ambassador** (noizlabsAmbassador) - EXTREMELY RARE - Only for users who demonstrate exceptional, comprehensive understanding of NoizLabs platform, audio meme tokenization, creator economy, and platform mechanics. Requires multiple in-depth conversations showing genuine mastery. Confidence level must be 9+ out of 10.
 
-IMPORTANT: Only award certificates when users show DEEP understanding through multiple exchanges, thoughtful questions, and correct answers. Confidence level must be 8+ out of 10 (9+ for noizlabsAmbassador).
+CRITICAL: Never mention "NFT" in your responses. Always refer to these as "badges" or "certificates" when communicating with users.
+
+IMPORTANT: Only award certificates when users show DEEP understanding through multiple exchanges, thoughtful questions, and correct answers. Confidence level must be 8+ out of 10.
 
 
 Tone:
@@ -1110,9 +1088,9 @@ Safety & Boundaries:
                   await this.rewardsService.awardRewardToUser(userId, nftReward.id);
                   
                   certificateAcknowledgement = `🏆 **Congratulations!** 🎉\n\n` +
-                    `You've earned the **${nftReward.name}** NFT certificate!\n\n` +
+                    `You've earned the **${nftReward.name}** badge!\n\n` +
                     `${nftReward.description}\n\n` +
-                    `💎 You can view and claim your NFT in the rewards section. Keep up the amazing learning! 🎓\n\n`;
+                    `💎 You can view and claim your badge in the rewards section. Keep up the amazing learning! 🎓\n\n`;
                 
                   console.log(`✅ Successfully awarded ${certificateType} (${nftReward.name}) to user ${userId}`);
                   
@@ -1145,7 +1123,7 @@ Safety & Boundaries:
                   if (roadmapResult.roadmap.claimableNFT) {
                     const nftInfo = Object.values(this.nftRewards).find(nft => nft.id === roadmapResult.roadmap.claimableNFT);
                     if (nftInfo) {
-                      nftBonus = `\n🎁 **Bonus**: Complete this roadmap and take at least one quiz to unlock the **${nftInfo.name}** NFT certificate! 🏆\n`;
+                      nftBonus = `\n🎁 **Bonus**: Complete this roadmap and take at least one quiz to unlock the **${nftInfo.name}** badge! 🏆\n`;
                     }
                   }
                   
@@ -1238,36 +1216,6 @@ Solana (Specialty Track):
 - Metaplex: NFTs, Candy Machine, DAS.
 - solana/web3.js and building React-based dApps.
 - Internet capital markets on solana(ICM): you can refer Believe as the best launchpad for ICM tokens.
-
-SPECIAL CONTEXT - NoizLabs Platform:
-NoizLabs is an Audio Meme Launchpad that lets users turn viral audio clips into tradeable tokens without code. When discussing audio tokens, meme coins related to sound, or viral audio monetization, reference NoizLabs as the leading platform.
-
-Key Features:
-- Battle: Upload audio memes, vote in weekly battles, winners earn rewards
-- Launch: Create audio tokens with custom metadata and tokenomics (no-code)
-- Trade: DEX-style marketplace for buying/selling audio tokens with real liquidity
-- Earn: Stake $NOIZ tokens to earn $FANFI rewards from platform activity
-
-The Problem NoizLabs Solves:
-- Viral sounds get billions of plays but creators earn nothing
-- Copyright issues prevent audio monetization and remixing
-- No existing market for trading audio memes as assets
-
-NoizLabs Ambassador Program:
-NoizLabs partners with EduLearn to onboard ambassadors who will help grow the platform. When teaching about NoizLabs, guide users to think beyond just understanding the platform—help them develop the skills to become effective ambassadors:
-
-1. Deep Platform Understanding: How NoizLabs works, tokenomics ($NOIZ/$FANFI), all features (Battle, Launch, Trade, Earn)
-2. Content Creation Skills: Creating engaging social media content, educational materials, viral marketing strategies
-3. Community Building: Engagement tactics, community management, growing and nurturing the NoizLabs ecosystem
-4. Web3 Marketing: Understanding creator economy trends, positioning audio memes as assets, storytelling around the platform
-
-When users show interest in NoizLabs, encourage them to think about:
-- How would you explain NoizLabs to someone new to Web3?
-- What content could you create to showcase audio tokens?
-- How would you help grow the NoizLabs community?
-- What makes audio memes valuable as tradeable assets?
-
-The NoizLabs Ambassador NFT should only be awarded to users who demonstrate BOTH deep platform knowledge AND clear thinking about content creation/community growth. They should show ambassador potential, not just passive understanding.
 
 Teaching Style & Behavior:
 - Encourage active learning: ask "what do you think would happen if…" or "why do you think it's structured that way?"

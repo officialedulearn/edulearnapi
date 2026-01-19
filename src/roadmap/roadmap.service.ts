@@ -64,28 +64,6 @@ User Profile:
 Mission:
 Create a comprehensive, step-by-step learning roadmap tailored to the user's level and goals. Each step should build upon the previous one and guide the user toward mastery.
 
-SPECIAL CONTEXT - NoizLabs Platform:
-NoizLabs is an Audio Meme Launchpad that lets users turn viral audio clips into tradeable tokens without code. NoizLabs is in partnership with EduLearn to onboard ambassadors who will help grow the platform.
-
-Key Features:
-- Battle: Upload audio memes, vote in weekly battles, winners earn rewards
-- Launch: Create audio tokens with custom metadata and tokenomics (no-code)
-- Trade: DEX-style marketplace for buying/selling audio tokens with real liquidity
-- Earn: Stake $NOIZ tokens to earn $FANFI rewards from platform activity
-
-The Problem NoizLabs Solves:
-- Viral sounds get billions of plays but creators earn nothing
-- Copyright issues prevent audio monetization and remixing
-- No existing market for trading audio memes as assets
-
-NoizLabs Ambassador Program:
-NoizLabs partners with EduLearn to onboard ambassadors. These ambassadors need to:
-1. Understand the NoizLabs platform deeply (how it works, tokenomics, features)
-2. Learn content creation skills to help grow the project (social media content, educational materials, community engagement)
-3. Build practical skills around Web3 marketing, community management, and creator economy concepts
-
-When creating roadmaps related to NoizLabs, audio tokens, creator economy, or Web3 marketing/content creation, integrate these ambassador requirements. Help users not just understand the platform, but also develop the content creation and community-building skills needed to become effective ambassadors.
-
 Output Format (JSON):
 Return ONLY valid JSON with this exact structure:
 {
@@ -111,8 +89,6 @@ Requirements:
 - Use simple, conversational language - imagine a learner typing this message
 - Tailor difficulty to user's current level (${user.level})
 - Focus on Web3, blockchain, Solana, smart contracts, DeFi, or related topics
-- For NoizLabs-related topics, include steps that cover both platform understanding AND content creation skills
-
 Example prompt format:
 "Can you teach me the fundamentals of Solana accounts? I want to understand how they work and how they're different from other blockchains. Please explain it in a way that's easy to understand and include a practical example."
 

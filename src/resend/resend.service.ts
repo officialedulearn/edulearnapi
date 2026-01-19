@@ -68,6 +68,18 @@ export class ResendService {
         return this.sendEmail(to, `${userName} Earned an NFT! 🏆`, html);
     }
 
+    async addResendContact(email: string, name: string) {
+      const contact = await this.resend.contacts.create({
+        email: email,
+        firstName: name,
+        lastName: '',
+        unsubscribed: false,
+        audienceId: 'b9e37a5c-482b-4c5b-b1d5-990fea1f7ac5',
+      })
+
+      
+    }
+
     private getFollowerNFTEmailTemplate(followerName: string, userName: string, nftTitle: string, nftDescription: string, imageUrl?: string): string {
         const mascotMood = this.mascotMoods.nftAward;
         const mascotUrl = this.mascotImageUrls[mascotMood];
