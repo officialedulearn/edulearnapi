@@ -79,8 +79,8 @@ export class SubscriptionController {
       
       if (isBadgeClaim) {
         this.logger.log(`Badge claim purchase detected for user ${app_user_id}, product: ${product_id}`);
-        await this.subscriptionService.handleBadgeClaim(app_user_id, product_id as string, payload);
-        return { received: true, type: 'badge_claim' };
+        const result = await this.subscriptionService.handleBadgeClaim(app_user_id, product_id as string, payload);
+        return { received: true, type: 'badge_claim', ...result };
       }
 
       const expirationDate = expiration_at_ms

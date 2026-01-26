@@ -606,12 +606,10 @@ export class RewardsService {
           ? result.signature 
           : new Uint8Array(result.signature);
         
-        await this.confirmTransactionWithPolling(signatureBytes);
+        const signatureBase58 = bs58.default.encode(signatureBytes);
+        await this.confirmTransactionWithPolling(signatureBase58);
         
-        console.log(
-          'NFT Mint Signature:',
-          bs58.default.encode(signatureBytes),
-        );
+        console.log('NFT Mint Signature:', signatureBase58);
         console.log('✅ NFT Mint confirmed on-chain');
       } catch (nftError) {
         console.error('Error minting NFT:', nftError.message);
@@ -888,12 +886,10 @@ export class RewardsService {
           ? result.signature 
           : new Uint8Array(result.signature);
         
-        await this.confirmTransactionWithPolling(signatureBytes);
+        const signatureBase58 = bs58.default.encode(signatureBytes);
+        await this.confirmTransactionWithPolling(signatureBase58);
         
-        console.log(
-          'Badge Mint Signature (Admin paid):',
-          bs58.default.encode(signatureBytes),
-        );
+        console.log('Badge Mint Signature (Admin paid):', signatureBase58);
         console.log('✅ Badge Mint confirmed on-chain (Admin paid)');
       } catch (nftError) {
         console.error('Error minting Badge:', nftError.message);
