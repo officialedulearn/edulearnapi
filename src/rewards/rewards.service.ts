@@ -607,10 +607,13 @@ export class RewardsService {
           : new Uint8Array(result.signature);
         
         const signatureBase58 = bs58.default.encode(signatureBytes);
-        await this.confirmTransactionWithPolling(signatureBase58);
-        
         console.log('NFT Mint Signature:', signatureBase58);
-        console.log('✅ NFT Mint confirmed on-chain');
+        
+        this.confirmTransactionWithPolling(signatureBase58).catch(err => {
+          console.warn('Background NFT confirmation check failed (non-critical):', err.message);
+        });
+        
+        console.log('✅ NFT Mint sent on-chain');
       } catch (nftError) {
         console.error('Error minting NFT:', nftError.message);
         if (
@@ -887,10 +890,7 @@ export class RewardsService {
           : new Uint8Array(result.signature);
         
         const signatureBase58 = bs58.default.encode(signatureBytes);
-        await this.confirmTransactionWithPolling(signatureBase58);
-        
         console.log('Badge Mint Signature (Admin paid):', signatureBase58);
-        console.log('✅ Badge Mint confirmed on-chain (Admin paid)');
       } catch (nftError) {
         console.error('Error minting Badge:', nftError.message);
         if (
@@ -926,6 +926,12 @@ export class RewardsService {
               eq(userReward.rewardId, rewardId),
             ),
           );
+        
+        this.confirmTransactionWithPolling(bs58.default.encode(signatureBytes)).catch(err => {
+          console.warn('Background confirmation check failed (non-critical):', err.message);
+        });
+        
+        console.log('✅ Badge Mint confirmed on-chain (Admin paid)');
       } catch (dbError) {
         console.error('Error updating user reward record:', dbError.message);
         throw new Error(
