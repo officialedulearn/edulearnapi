@@ -365,7 +365,7 @@ export class RewardsService {
       const postText = [
         `Congratulations to @${userExists[0].username} for earning the ${rewardExists[0].title} NFT certificate! 🎉`,
         ``,
-        `You can claim the NFT in the rewards tab of the web and mobile app`,
+        `You can claim the Badge in the rewards tab of the web and mobile app`,
       ].join('\n');
 
       try {
@@ -600,11 +600,13 @@ export class RewardsService {
           name: rewardExists[0].title,
           uri: `${rewardExists[0].ipfs}`,
           owner: publicKey(userExists[0].address as string),
-        }).sendAndConfirm(umi, { confirm: { commitment: 'confirmed' } });
+        }).send(umi);
 
         signatureBytes = result.signature instanceof Uint8Array 
           ? result.signature 
           : new Uint8Array(result.signature);
+        
+        await this.confirmTransactionWithPolling(signatureBytes);
         
         console.log(
           'NFT Mint Signature:',
@@ -803,7 +805,7 @@ export class RewardsService {
   
       if (userRewardCheck[0].signature) {
         throw new Error(
-          `Reward "${rewardExists[0].title}" has already been claimed. NFT signature: ${userRewardCheck[0].signature}`,
+          `Reward "${rewardExists[0].title}" has already been claimed. Badge signature: ${userRewardCheck[0].signature}`,
         );
       }
   
@@ -856,7 +858,7 @@ export class RewardsService {
   
       if (!rewardExists[0].ipfs) {
         throw new Error(
-          `Reward "${rewardExists[0].title}" does not have an IPFS URI configured. Cannot mint NFT without metadata URI`,
+          `Reward "${rewardExists[0].title}" does not have an IPFS URI configured. Cannot mint Badge without metadata URI`,
         );
       }
   
@@ -880,25 +882,27 @@ export class RewardsService {
           name: rewardExists[0].title,
           uri: `${rewardExists[0].ipfs}`,
           owner: publicKey(userExists[0].address as string),
-        }).sendAndConfirm(umi, { confirm: { commitment: 'confirmed' } });
+        }).send(umi);
 
         signatureBytes = result.signature instanceof Uint8Array 
           ? result.signature 
           : new Uint8Array(result.signature);
         
+        await this.confirmTransactionWithPolling(signatureBytes);
+        
         console.log(
-          'NFT Mint Signature (Admin paid):',
+          'Badge Mint Signature (Admin paid):',
           bs58.default.encode(signatureBytes),
         );
-        console.log('✅ NFT Mint confirmed on-chain (Admin paid)');
+        console.log('✅ Badge Mint confirmed on-chain (Admin paid)');
       } catch (nftError) {
-        console.error('Error minting NFT:', nftError.message);
+        console.error('Error minting Badge:', nftError.message);
         if (
           nftError.message.includes('insufficient') ||
           nftError.message.includes('Insufficient')
         ) {
           throw new Error(
-            `Admin wallet has insufficient balance for NFT minting: ${nftError.message}. Please ensure the admin wallet has enough SOL for gas fees`,
+            `Admin wallet has insufficient balance for Badge minting: ${nftError.message}. Please ensure the admin wallet has enough SOL for gas fees`,
           );
         }
         if (
@@ -906,11 +910,11 @@ export class RewardsService {
           nftError.message.includes('timeout')
         ) {
           throw new Error(
-            `Network error during NFT minting: ${nftError.message}. Please try again in a few moments`,
+            `Network error during Badge minting: ${nftError.message}. Please try again in a few moments`,
           );
         }
         throw new Error(
-          `Failed to mint NFT: ${nftError.message || 'Unknown error occurred during NFT creation'}`,
+          `Failed to mint Badge: ${nftError.message || 'Unknown error occurred during Badge creation'}`,
         );
       }
   
@@ -942,7 +946,7 @@ export class RewardsService {
   
       this.resendService.sendEmail(
         userExists[0].email,
-        '🎉 Congratulations! You Received an NFT Certificate!',
+        '🎉 Congratulations! You Received an Badge Certificate!',
         html,
       ).catch(emailError => {
         console.error('Failed to send NFT claim email (non-blocking):', emailError.message);
@@ -950,7 +954,7 @@ export class RewardsService {
   
       return {
         signature: bs58.default.encode(signatureBytes),
-        message: 'NFT successfully claimed and sent to user wallet (gas paid by admin)',
+        message: 'Badge successfully claimed and sent to user wallet (gas paid by admin)',
       };
     } catch (error) {
       console.error(`Failed to claim reward for user (admin):`, error.message);
@@ -964,7 +968,7 @@ export class RewardsService {
         error.message.includes('insufficient') ||
         error.message.includes('Invalid wallet') ||
         error.message.includes('does not have an IPFS') ||
-        error.message.includes('Failed to mint') ||
+        error.message.includes('Failed to mint Badge') ||
         error.message.includes('Failed to transfer') ||
         error.message.includes('Failed to update')
       ) {

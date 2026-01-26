@@ -1525,12 +1525,12 @@ Return ONLY valid JSON with no additional text.
         );
       }
 
-      const formattedMessages = messages.map((msg) => ({
-        role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [
-          { text: typeof msg.content === 'string' ? msg.content : msg.content },
-        ],
-      }));
+      const MAX_MESSAGES_FOR_QUIZ = 50;
+      const recentMessages = messages.slice(-MAX_MESSAGES_FOR_QUIZ);
+      
+      const conversationContext = recentMessages
+        .map((msg) => `${msg.role}: ${typeof msg.content === 'string' ? msg.content : msg.content}`)
+        .join('\n\n');
 
       let result;
       let attempts = 0;
@@ -1541,7 +1541,7 @@ Return ONLY valid JSON with no additional text.
           result = await Promise.race([
             this.genAI.models.generateContent({
               model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
-              contents: `Our conversation: ${JSON.stringify(formattedMessages)}`,
+              contents: conversationContext,
               config: {
                 temperature: 0.1,
                 maxOutputTokens: 5000,
@@ -1590,7 +1590,7 @@ Return ONLY valid JSON with no additional text.
                       'Request timeout - AI service took too long to respond',
                     ),
                   ),
-                20000,
+                90000,
               ),
             ),
           ]);

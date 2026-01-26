@@ -76,8 +76,6 @@ export class ResendService {
         unsubscribed: false,
         audienceId: 'b9e37a5c-482b-4c5b-b1d5-990fea1f7ac5',
       })
-
-      
     }
 
     private getFollowerNFTEmailTemplate(followerName: string, userName: string, nftTitle: string, nftDescription: string, imageUrl?: string): string {

@@ -15,6 +15,7 @@ import { RoadmapService } from 'src/roadmap/roadmap.service';
 import { CommunityService } from 'src/community/community.service';
 import { update } from '@metaplex-foundation/mpl-core';
 import { SocialService } from 'src/social/social.service';
+import resend from 'resend';
 
 export interface UserResponse extends User {
   quizLimit: number;
@@ -149,6 +150,10 @@ export class AuthService {
           console.error('Failed to fetch Twitter profile picture:', error.response?.data || error.message);
         }
       }
+      
+      this.resendService.addResendContact(createdUser.email, createdUser.name).catch((error) => {
+        console.error('Failed to add resend contact:', error);
+      });
 
       this.resendService.sendWelcomeEmail(
         createdUser.email,
