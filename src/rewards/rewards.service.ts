@@ -914,11 +914,13 @@ export class RewardsService {
         );
       }
   
+      const signatureBase58 = bs58.default.encode(signatureBytes);
+      
       try {
         await db
           .update(userReward)
           .set({
-            signature: bs58.default.encode(signatureBytes),
+            signature: signatureBase58,
           })
           .where(
             and(
@@ -927,11 +929,13 @@ export class RewardsService {
             ),
           );
         
-        this.confirmTransactionWithPolling(bs58.default.encode(signatureBytes)).catch(err => {
-          console.warn('Background confirmation check failed (non-critical):', err.message);
-        });
+        setTimeout(() => {
+          this.confirmTransactionWithPolling(signatureBase58).catch(err => {
+            console.warn('Background confirmation check failed (non-critical):', err.message);
+          });
+        }, 2000);
         
-        console.log('✅ Badge Mint confirmed on-chain (Admin paid)');
+        console.log('✅ Badge Mint sent on-chain (Admin paid)');
       } catch (dbError) {
         console.error('Error updating user reward record:', dbError.message);
         throw new Error(
@@ -955,8 +959,8 @@ export class RewardsService {
       });
   
       return {
-        signature: bs58.default.encode(signatureBytes),
-        message: 'Badge successfully claimed and sent to user wallet (gas paid by admin)',
+        signature: signatureBase58,
+        message: 'Badge successfully claimed and sent to user wallet',
       };
     } catch (error) {
       console.error(`Failed to claim reward for user (admin):`, error.message);
@@ -1235,24 +1239,6 @@ export class RewardsService {
                                         ${description}
                                     </p>
                                 </div>
-                            </div>
-                        </td>
-                    </tr>
-
-                    <!-- Important Information -->
-                    <tr>
-                        <td style="padding: 20px 30px;">
-                            <div style="background-color: #fff5f5; border-left: 4px solid #fc8181; border-radius: 8px; padding: 20px;">
-                                <h4 style="margin: 0 0 10px 0; color: #c53030; font-size: 16px; font-weight: 600; display: flex; align-items: center;">
-                                    ⚠️ Important Requirements
-                                </h4>
-                                <p style="margin: 0; color: #742a2a; font-size: 14px; line-height: 1.6;">
-                                    To claim your NFT on the blockchain, please ensure you have:
-                                </p>
-                                <ul style="margin: 10px 0 0 0; padding-left: 20px; color: #742a2a; font-size: 14px; line-height: 1.8;">
-                                    <li><strong>$0.7 in SOL</strong> for gas fees</li>
-                                    <li><strong>1000 $EDLN</strong> for platform fees</li>
-                                </ul>
                             </div>
                         </td>
                     </tr>

@@ -46,7 +46,7 @@ export class ResendService {
 
     async sendNFTAwardEmail(to: string, name: string, nftTitle: string, nftDescription: string, imageUrl?: string) {
         const html = this.getNFTAwardEmailTemplate(name, nftTitle, nftDescription, imageUrl);
-        return this.sendEmail(to, 'You Earned an NFT Certificate!', html);
+        return this.sendEmail(to, 'You Earned an Badge Certificate!', html);
     }
 
     async sendRoadmapGeneratedEmail(to: string, name: string, roadmapTitle: string) {

@@ -721,7 +721,7 @@ Safety & Boundaries:
               `You can start your first step by using the roadmap feature in the app! Each step includes interactive lessons tailored to your learning style.\n\n`;
 
             console.log(
-              `Created roadmap ${roadmapResult.roadmap.id} for user ${userId}, topic: ${topic}${roadmapResult.roadmap.claimableNFT ? ` with claimable NFT: ${roadmapResult.roadmap.claimableNFT}` : ''}`,
+              `Created roadmap ${roadmapResult.roadmap.id} for user ${userId}, topic: ${topic}${roadmapResult.roadmap.claimableNFT ? ` with claimable Badge: ${roadmapResult.roadmap.claimableNFT}` : ''}`,
             );
           } catch (error) {
             console.error(
