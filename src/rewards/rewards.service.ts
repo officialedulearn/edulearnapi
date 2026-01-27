@@ -599,24 +599,25 @@ export class RewardsService {
 
         mint = generateSigner(umi);
 
-        result = await create(umi, {
+        const tx = create(umi, {
           asset: mint,
           name: rewardExists[0].title,
           uri: `${rewardExists[0].ipfs}`,
           owner: publicKey(userExists[0].address as string),
-        }).send(umi);
-
+        });
+        
+        result = await tx.send(umi);
+        
         signatureBytes = result.signature instanceof Uint8Array 
           ? result.signature 
-          : new Uint8Array(result.signature);
+          : new Uint8Array(Object.values(result.signature));
+        
+        if (!signatureBytes || signatureBytes.length === 0) {
+          throw new Error('Failed to get transaction signature from result');
+        }
         
         const signatureBase58 = bs58.default.encode(signatureBytes);
         console.log('NFT Mint Signature:', signatureBase58);
-        
-        this.confirmTransactionWithPolling(signatureBase58).catch(err => {
-          console.warn('Background NFT confirmation check failed (non-critical):', err.message);
-        });
-        
         console.log('✅ NFT Mint sent on-chain');
       } catch (nftError) {
         console.error('Error minting NFT:', nftError.message);
@@ -882,16 +883,27 @@ export class RewardsService {
   
         mint = generateSigner(umi);
   
-        result = await create(umi, {
+        const tx = create(umi, {
           asset: mint,
           name: rewardExists[0].title,
           uri: `${rewardExists[0].ipfs}`,
           owner: publicKey(userExists[0].address as string),
-        }).send(umi);
-
+        });
+        
+        result = await tx.send(umi);
+        
+        console.log('Result type:', typeof result);
+        console.log('Result signature type:', typeof result.signature);
+        console.log('Result signature:', result.signature);
+        console.log('Result keys:', Object.keys(result));
+        
         signatureBytes = result.signature instanceof Uint8Array 
           ? result.signature 
-          : new Uint8Array(result.signature);
+          : new Uint8Array(Object.values(result.signature));
+        
+        if (!signatureBytes || signatureBytes.length === 0) {
+          throw new Error('Failed to get transaction signature from result');
+        }
         
         const signatureBase58 = bs58.default.encode(signatureBytes);
         console.log('Badge Mint Signature (Admin paid):', signatureBase58);
@@ -933,11 +945,6 @@ export class RewardsService {
             ),
           );
         
-        setTimeout(() => {
-          this.confirmTransactionWithPolling(signatureBase58).catch(err => {
-            console.warn('Background confirmation check failed (non-critical):', err.message);
-          });
-        }, 2000);
         
         console.log('✅ Badge Mint sent on-chain (Admin paid)');
       } catch (dbError) {
