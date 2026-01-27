@@ -80,6 +80,10 @@ export class RewardsService {
     } else {
       throw new Error(`Invalid signature type: expected Uint8Array or string, got ${typeof signature}`);
     }
+    console.log('Signature:', signatureBase58);
+    if (signatureBase58.length < 87 || signatureBase58.length > 88) {
+      throw new Error(`Invalid signature length: ${signatureBase58.length} (expected 87-88 chars). Signature: ${signatureBase58.substring(0, 20)}...`);
+    }
     
     for (let i = 0; i < maxRetries; i++) {
       try {
