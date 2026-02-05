@@ -62,7 +62,7 @@ export class RewardsController {
   @Post()
   @UseGuards(AdminApiKeyGuard)
   async createReward(
-    @Body() data: { type: string; title: string; description: string; imageUrl?: string; ipfs?: string }
+    @Body() data: { type: "certificate" | "points"; title: string; description: string; imageUrl?: string; ipfs?: string }
   ) {
     if (!data.type || !data.title || !data.description) {
       throw new BadRequestException('Type, title, and description are required');
