@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, BadRequestException, NotFoundException, Request } from '@nestjs/common';
 import { RewardsService } from './rewards.service';
 import { FlexibleAuthGuard } from '../auth/guards/flexible-auth.guard';
+import { AdminApiKeyGuard } from '../auth/guards/admin-api-key.guard';
 import { verifyUserAuthorization, verifyUserViewAuthorization } from '../common/helpers/authorization.helper';
 
 @Controller('rewards')
@@ -58,6 +59,24 @@ export class RewardsController {
       throw new BadRequestException(errorMessage);
     }
   }
+  @Post()
+  @UseGuards(AdminApiKeyGuard)
+  async createReward(
+    @Body() data: { type: string; title: string; description: string; imageUrl?: string; ipfs?: string }
+  ) {
+    if (!data.type || !data.title || !data.description) {
+      throw new BadRequestException('Type, title, and description are required');
+    }
+    
+    try {
+      return await this.rewardsService.createReward(data);
+    } catch (error) {
+      console.error('Error creating reward:', error.message);
+      const errorMessage = error?.message || 'Failed to create reward';
+      throw new BadRequestException(errorMessage);
+    }
+  }
+
   @Get()
   async getAllRewards() {
     try {
@@ -137,6 +156,29 @@ export class RewardsController {
     } catch (error) {
       console.error('Error fetching certificate count:', error.message);
       const errorMessage = error?.message || 'Failed to fetch user certificate count';
+      throw new BadRequestException(errorMessage);
+    }
+  }
+
+  @Delete(':id')
+  @UseGuards(AdminApiKeyGuard)
+  async deleteReward(@Param('id') id: string) {
+    if (!id) {
+      throw new BadRequestException('Reward ID is required');
+    }
+    
+    try {
+      const result = await this.rewardsService.deleteReward(id);
+      if (!result) {
+        throw new NotFoundException(`Reward with id ${id} not found`);
+      }
+      return { success: true, message: 'Reward deleted successfully' };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      console.error('Error deleting reward:', error.message);
+      const errorMessage = error?.message || 'Failed to delete reward';
       throw new BadRequestException(errorMessage);
     }
   }

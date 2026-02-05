@@ -2214,7 +2214,7 @@ export class CardsService implements OnModuleInit {
                         {
                           type: 'h1',
                           props: {
-                            children: 'Just Minted an NFT! 🎉',
+                            children: 'Just Claimed a Badge! 🎉',
                             style: {
                               fontFamily: 'Satoshi',
                               fontSize: 56,
@@ -2384,7 +2384,7 @@ export class CardsService implements OnModuleInit {
                               {
                                 type: 'div',
                                 props: {
-                                  children: 'NFT Minted',
+                                  children: 'Badge Claimed',
                                   style: {
                                     fontFamily: 'Satoshi',
                                     fontSize: 16,
