@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Query, Param, UseGuards, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Query, Param, UseGuards, BadRequestException, NotFoundException, Put } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { AdminApiKeyGuard } from '../auth/guards/admin-api-key.guard';
 
@@ -71,6 +71,17 @@ export class AdminController {
   @Get('feedback')
   async getFeedback() {
     return await this.adminService.getAllFeedback();
+  }
+
+  @Put('feedback/:id/status')
+  async updateFeedbackStatus(
+    @Param('id') id: string,
+    @Body() body: { status: 'pending' | 'reviewed' | 'resolved' },
+  ) {
+    if (!body.status) {
+      throw new BadRequestException('Status is required');
+    }
+    return await this.adminService.updateFeedbackStatus(id, body.status as 'pending' | 'reviewed' | 'resolved');
   }
 
   @Post('notifications/send')

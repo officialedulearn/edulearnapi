@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { sql, eq, gte, lte, and, desc, count } from 'drizzle-orm';
 import db from '../../drizzle';
 import { user, xpActivity, reward, userReward, premiumTransactions, totalVolumes, chat, community, community_members, feedback } from '../../lib/db/schema';
@@ -572,6 +572,13 @@ export class AdminService {
     return await this.retryQuery(() =>
       db.select().from(feedback).orderBy(desc(feedback.createdAt))
     );
+  }
+  async updateFeedbackStatus(id: string, status: 'pending' | 'reviewed' | 'resolved') {
+    const updatedFeedback = await db.update(feedback).set({ status }).where(eq(feedback.id, id)).returning();
+    if (!updatedFeedback.length) {
+      throw new NotFoundException(`Feedback with id ${id} not found`);
+    }
+    return updatedFeedback[0];
   }
 }
 
