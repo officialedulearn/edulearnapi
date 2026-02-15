@@ -68,6 +68,11 @@ export class AdminController {
     return await this.adminService.broadcastNotification(body.title, body.content);
   }
 
+  @Get('feedback')
+  async getFeedback() {
+    return await this.adminService.getAllFeedback();
+  }
+
   @Post('notifications/send')
   async sendNotificationToUsers(
     @Body() body: { userIds: string[]; title: string; content: string },
@@ -145,6 +150,8 @@ export class AdminController {
   async deleteCommunity(@Param('communityId') communityId: string) {
     return await this.adminService.deleteCommunity(communityId);
   }
+
+
 }
 
 

@@ -60,4 +60,18 @@ export class RoadmapController {
         await verifyUserAuthorization(req.user, userId, 'starting roadmap step');
         return await this.roadmapService.startRoadmapStep(stepId, userId, this.aiService);
     }
+
+    @Post('step/:stepId/edit')
+    async editRoadmapStep(
+        @Request() req,
+        @Param('stepId') stepId: string,
+        @Body() body: { userId: string; prompt: string; title: string; description: string; time: number }
+    ) {
+        const { userId, prompt, title, description, time } = body;
+        if (!userId) {
+            throw new NotFoundException('User ID is required');
+        }
+        await verifyUserAuthorization(req.user, userId, 'editing roadmap step');
+        return await this.roadmapService.editRoadmapStep(stepId, prompt, title, description, time);
+    }
 }

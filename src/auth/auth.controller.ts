@@ -11,6 +11,7 @@ import {
   NotFoundException,
   UseGuards,
   Request,
+  HttpCode,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { signUpDetails } from 'types/auth';
@@ -24,6 +25,7 @@ import { UserResponse } from './auth.service';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @HttpCode(200)
   @Post('check-availability')
   async checkAvailability(@Body() body: { email?: string; username?: string }) {
     const { email, username } = body;

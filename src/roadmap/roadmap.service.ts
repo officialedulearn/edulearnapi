@@ -310,6 +310,32 @@ CRITICAL JSON RULES:
         };
     }
 
+    async editRoadmapStep(stepId: string, prompt: string, title: string, description: string, time: number) {
+        const step = await db.update(roadMapStep).set({ prompt, title, description, time }).where(eq(roadMapStep.id, stepId)).returning();
+        if (!step || step.length === 0) {
+            throw new NotFoundException('Roadmap step not found');
+        }
+        return step[0];
+    }
+
+    async editMultipleRoadmapSteps(roadmapId: string, stepsToEdit: Array<{ stepId: string; prompt: string; title: string; description: string; time: number }>) {
+        const updatedSteps = await Promise.all(
+            stepsToEdit.map(async (stepData) => {
+                const step = await db.update(roadMapStep)
+                    .set({ 
+                        prompt: stepData.prompt, 
+                        title: stepData.title, 
+                        description: stepData.description, 
+                        time: stepData.time 
+                    })
+                    .where(and(eq(roadMapStep.id, stepData.stepId), eq(roadMapStep.roadmapId, roadmapId)))
+                    .returning();
+                return step[0];
+            })
+        );
+        return updatedSteps.filter(step => step !== null && step !== undefined);
+    }
+
     private extractAndCleanJSON(response: string): string | null {
         let jsonStr = response.trim();
         

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { sql, eq, gte, lte, and, desc, count } from 'drizzle-orm';
 import db from '../../drizzle';
-import { user, xpActivity, reward, userReward, premiumTransactions, totalVolumes, chat, community, community_members } from '../../lib/db/schema';
+import { user, xpActivity, reward, userReward, premiumTransactions, totalVolumes, chat, community, community_members, feedback } from '../../lib/db/schema';
 import { NotificationsService } from '../common/services/notifications.service';
 import { ResendService } from '../resend/resend.service';
 import { ExpoPushService } from '../common/services/expo-push.service';
@@ -566,6 +566,12 @@ export class AdminService {
     await db.delete(community).where(eq(community.id, communityId));
     this.logger.log(`Deleted community ${communityId}`);
     return { success: true };
+  }
+
+  async getAllFeedback() {
+    return await this.retryQuery(() =>
+      db.select().from(feedback).orderBy(desc(feedback.createdAt))
+    );
   }
 }
 

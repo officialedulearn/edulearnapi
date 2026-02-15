@@ -348,3 +348,19 @@ export const contentAnalytics = pgTable("content_analytics", {
 });
 
 export type ContentAnalytics = InferSelectModel<typeof contentAnalytics>;
+
+export const publicQuiz = pgTable('public_quiz', {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  title: text('title').notNull(),
+  description: text('description'),
+  questions: json('questions').notNull(),
+  createdBy: uuid('createdBy')
+    .notNull()
+    .references(() => user.id),
+  sourceChatId: uuid('sourceChatId').references(() => chat.id),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  viewCount: integer('viewCount').notNull().default(0),
+  attemptCount: integer('attemptCount').notNull().default(0),
+});
+
+export type PublicQuiz = InferSelectModel<typeof publicQuiz>;

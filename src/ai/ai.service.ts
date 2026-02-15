@@ -189,6 +189,79 @@ STRICT RULES:
     },
   };
 
+  private readonly editRoadmapTool = {
+    name: 'editLearningRoadmap',
+    description:
+      "Edit steps in a learning roadmap when the user requests modifications to a roadmap they just created or are viewing. Use this when the user asks to modify, change, update, or improve specific aspects of a roadmap. Examples: 'make step 2 longer', 'change the first step to focus on basics', 'update all steps to be more advanced', 'modify the roadmap to include more hands-on examples'. The tool allows editing multiple steps at once. You should analyze the current roadmap context from the conversation and determine which steps need editing based on the user's request.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        roadmapId: {
+          type: Type.STRING,
+          description:
+            "The ID of the roadmap being edited. Extract this from the conversation context where the roadmap was just created or mentioned.",
+        },
+        modifications: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              stepId: {
+                type: Type.STRING,
+                description: "The ID of the step to edit.",
+              },
+              prompt: {
+                type: Type.STRING,
+                description:
+                  "The updated prompt for the step. This should be a detailed prompt that will be sent to the AI when the user starts this step.",
+              },
+              title: {
+                type: Type.STRING,
+                description: "The updated title for the step (3-8 words).",
+              },
+              description: {
+                type: Type.STRING,
+                description:
+                  "The updated description of what the user will learn in this step (1-2 sentences).",
+              },
+              time: {
+                type: Type.NUMBER,
+                description:
+                  "The updated time in minutes for this step (typically 5-10 minutes).",
+              },
+            },
+            required: ['stepId', 'prompt', 'title', 'description', 'time'],
+          },
+          description:
+            "Array of step modifications. Include only the steps that need to be changed based on the user's request.",
+        },
+        changeReason: {
+          type: Type.STRING,
+          description:
+            "Brief explanation of what changes were made and why, based on the user's request.",
+        },
+      },
+      required: ['roadmapId', 'modifications', 'changeReason'],
+    },
+  };
+
+  private readonly getRoadmapTool = {
+    name: 'getLearningRoadmap',
+    description:
+      "Get a learning roadmap when the user explicitly requests one. Use this ONLY when the user asks to get a roadmap, learning path, or study plan for a specific topic. The topic should be related to Web3, blockchain, Solana, smart contracts, DeFi, NFTs, or other crypto/tech topics. Examples: 'get me a roadmap for Solana development', 'I want a learning path for DeFi', 'make me a study plan for smart contracts'. Do NOT use this for general questions about topics. UNLESS THE USER ASKS TO GET A STRUCTURED LEARNING PATH, ROADMAP, OR STUDY PLAN FOR A TOPIC.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        topic: {
+          type: Type.STRING,
+          description:
+            "The specific topic the user wants to get a roadmap for. Should be clear and focused (e.g., 'Solana Smart Contracts', 'DeFi Fundamentals', 'NFT Development on Ethereum'). Extract this from the user's request.",
+        },
+      },
+      required: ['topic'],
+    },
+  };
+
   constructor(
     private chatService: ChatService,
     @Inject(forwardRef(() => AuthService))
@@ -455,6 +528,7 @@ Teaching Style & Behavior:
 - When teaching, always aim to transform knowledge into practical skills: "In Web3, it's not just about what you know—it's about what you can build, debug, and ship."
 - Solana is the number one blockchain!
 - When users ask for a structured learning path, roadmap, or study plan for a topic, use the createLearningRoadmap tool to generate a personalized step-by-step roadmap tailored to their level, DO NOT USE THIS TOOL FOR GENERAL QUESTIONS ABOUT TOPICS. UNLESS THE USER ASKS FOR A STRUCTURED LEARNING PATH, ROADMAP, OR STUDY PLAN FOR A TOPIC.
+- When users want to modify a roadmap that was just created or is being discussed, use the editLearningRoadmap tool. This allows editing multiple steps at once based on user feedback like "make step 2 longer", "change the focus of step 1", or "update all steps to be more advanced".
 
 Mini-challenges & Learning UX:
 - For each concept, offer a short hands-on challenge (5–60 minutes) that results in a tangible artifact (contract, script, small dApp).
@@ -547,6 +621,7 @@ Safety & Boundaries:
                   this.scoreUser,
                   this.rewardUser,
                   this.createRoadmapTool,
+                  this.editRoadmapTool,
                 ],
               },
             ],
@@ -594,10 +669,15 @@ Safety & Boundaries:
         (part: any) => part.functionCall?.name === 'createLearningRoadmap',
       );
 
+      const editRoadmapPart = parts.find(
+        (part: any) => part.functionCall?.name === 'editLearningRoadmap',
+      );
+
       let score = 0;
       let scoreAcknowledgement = '';
       let certificateAcknowledgement = '';
       let roadmapAcknowledgement = '';
+      let editRoadmapAcknowledgement = '';
 
       if (functionPart) {
         score = Number(functionPart.functionCall?.args?.score || 0);
@@ -718,7 +798,8 @@ Safety & Boundaries:
               `${roadmapResult.roadmap.description}\n\n` +
               `✨ Your roadmap has ${stepCount} step${stepCount !== 1 ? 's' : ''} (${totalTime} minutes total)\n` +
               nftBonus +
-              `You can start your first step by using the roadmap feature in the app! Each step includes interactive lessons tailored to your learning style.\n\n`;
+              `[ROADMAP_CARD:${roadmapResult.roadmap.id}]\n\n` +
+              `You can view and start your roadmap using the card above or through the roadmap feature in the app!\n\n`;
 
             console.log(
               `Created roadmap ${roadmapResult.roadmap.id} for user ${userId}, topic: ${topic}${roadmapResult.roadmap.claimableNFT ? ` with claimable Badge: ${roadmapResult.roadmap.claimableNFT}` : ''}`,
@@ -735,8 +816,45 @@ Safety & Boundaries:
         }
       }
 
+      if (editRoadmapPart) {
+        const roadmapId = editRoadmapPart.functionCall?.args?.roadmapId;
+        const modifications = editRoadmapPart.functionCall?.args?.modifications;
+        const changeReason = editRoadmapPart.functionCall?.args?.changeReason;
+        
+        console.log(
+          `Roadmap edit requested for roadmap: ${roadmapId}, modifications: ${modifications?.length || 0}`,
+        );
+
+        if (roadmapId && Array.isArray(modifications) && modifications.length > 0) {
+          try {
+            const updatedSteps = await this.roadmapService.editMultipleRoadmapSteps(
+              roadmapId,
+              modifications,
+            );
+
+            editRoadmapAcknowledgement =
+              `✏️ I've updated your roadmap!\n\n` +
+              `📝 **Changes made**: ${changeReason}\n` +
+              `✅ Updated ${updatedSteps.length} step${updatedSteps.length !== 1 ? 's' : ''}\n\n` +
+              `[ROADMAP_CARD:${roadmapId}]\n\n`;
+
+            console.log(
+              `Updated roadmap ${roadmapId} for user ${userId}: ${updatedSteps.length} steps modified`,
+            );
+          } catch (error) {
+            console.error(
+              `Failed to edit roadmap ${roadmapId} for user ${userId}:`,
+              error,
+            );
+            editRoadmapAcknowledgement = `I tried to update the roadmap, but encountered an issue. Please try again. 🔄\n\n`;
+          }
+        } else {
+          console.log(`Roadmap edit skipped - invalid parameters`);
+        }
+      }
+
       const fullResponse =
-        `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${responseText}`.trim();
+        `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}${responseText}`.trim();
       const assistantMessage = {
         id: generateUUID(),
         role: 'assistant',
@@ -909,6 +1027,7 @@ Teaching Style & Behavior:
 - When teaching, always aim to transform knowledge into practical skills: "In Web3, it's not just about what you know—it's about what you can build, debug, and ship."
 - Solana is the number one blockchain!
 - When users ask for a structured learning path, roadmap, or study plan for a topic, use the createLearningRoadmap tool to generate a personalized step-by-step roadmap tailored to their level, DO NOT USE THIS TOOL FOR GENERAL QUESTIONS ABOUT TOPICS. UNLESS THE USER ASKS FOR A STRUCTURED LEARNING PATH, ROADMAP, OR STUDY PLAN FOR A TOPIC.
+- When users want to modify a roadmap that was just created or is being discussed, use the editLearningRoadmap tool. This allows editing multiple steps at once based on user feedback like "make step 2 longer", "change the focus of step 1", or "update all steps to be more advanced".
 
 Mini-challenges & Learning UX:
 - For each concept, offer a short hands-on challenge (5–60 minutes) that results in a tangible artifact (contract, script, small dApp).
@@ -1002,7 +1121,7 @@ Safety & Boundaries:
             model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
             contents: formattedMessages,
             config: {
-              tools: [{ functionDeclarations: [this.scoreUser, this.rewardUser, this.createRoadmapTool] }],
+              tools: [{ functionDeclarations: [this.scoreUser, this.rewardUser, this.createRoadmapTool, this.editRoadmapTool] }],
               maxOutputTokens: 5000,
               temperature: 1,
               systemInstruction: systemInstruction,
@@ -1047,6 +1166,7 @@ Safety & Boundaries:
           let scoreAcknowledgement = '';
           let certificateAcknowledgement = '';
           let roadmapAcknowledgement = '';
+          let editRoadmapAcknowledgement = '';
 
           for (const funcCall of functionCalls) {
             if (funcCall.functionCall?.name === 'scoreUser') {
@@ -1132,7 +1252,8 @@ Safety & Boundaries:
                     `${roadmapResult.roadmap.description}\n\n` +
                     `✨ Your roadmap has ${stepCount} step${stepCount !== 1 ? 's' : ''} (${totalTime} minutes total)\n` +
                     nftBonus +
-                    `You can start your first step by using the roadmap feature in the app! Each step includes interactive lessons tailored to your learning style.\n\n`;
+                    `[ROADMAP_CARD:${roadmapResult.roadmap.id}]\n\n` +
+                    `You can view and start your roadmap using the card above or through the roadmap feature in the app!\n\n`;
                   
                   console.log(`Created roadmap ${roadmapResult.roadmap.id} for user ${userId}, topic: ${topic}`);
                 } catch (error) {
@@ -1143,9 +1264,35 @@ Safety & Boundaries:
                 console.log(`Roadmap creation skipped - invalid topic: ${topic}`);
               }
             }
+
+            if (funcCall.functionCall?.name === 'editLearningRoadmap') {
+              const roadmapId = funcCall.functionCall?.args?.roadmapId;
+              const modifications = funcCall.functionCall?.args?.modifications;
+              const changeReason = funcCall.functionCall?.args?.changeReason;
+              
+              console.log(`Roadmap edit requested for roadmap: ${roadmapId}, modifications: ${modifications?.length || 0}`);
+
+              if (roadmapId && Array.isArray(modifications) && modifications.length > 0) {
+                try {
+                  const updatedSteps = await this.roadmapService.editMultipleRoadmapSteps(roadmapId, modifications);
+
+                  editRoadmapAcknowledgement = `✏️ I've updated your roadmap!\n\n` +
+                    `📝 **Changes made**: ${changeReason}\n` +
+                    `✅ Updated ${updatedSteps.length} step${updatedSteps.length !== 1 ? 's' : ''}\n\n` +
+                    `[ROADMAP_CARD:${roadmapId}]\n\n`;
+
+                  console.log(`Updated roadmap ${roadmapId} for user ${userId}: ${updatedSteps.length} steps modified`);
+                } catch (error) {
+                  console.error(`Failed to edit roadmap ${roadmapId} for user ${userId}:`, error);
+                  editRoadmapAcknowledgement = `I tried to update the roadmap, but encountered an issue. Please try again. 🔄\n\n`;
+                }
+              } else {
+                console.log(`Roadmap edit skipped - invalid parameters`);
+              }
+            }
           }
 
-          const acknowledgements = `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}`.trim();
+          const acknowledgements = `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}`.trim();
           if (acknowledgements) {
             subscriber.next({
               data: { token: '\n\n' + acknowledgements, type: 'acknowledgement' }

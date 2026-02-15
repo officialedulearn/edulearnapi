@@ -23,6 +23,7 @@ import { AdminModule } from './admin/admin.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { SocialModule } from './social/social.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { QuizzesModule } from './quizzes/quizzes.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     FeedbackModule,
     SocialModule,
     NotificationsModule,
+    QuizzesModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisService],
