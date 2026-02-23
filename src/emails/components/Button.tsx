@@ -6,6 +6,8 @@ interface ButtonProps {
   children: React.ReactNode;
 }
 
+const fontStack = "'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
 export const Button = ({ href, children }: ButtonProps) => {
   return (
     <EmailButton
@@ -20,7 +22,7 @@ export const Button = ({ href, children }: ButtonProps) => {
         fontSize: '16px',
         display: 'inline-block',
         textAlign: 'center',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        fontFamily: fontStack,
       }}
     >
       {children}

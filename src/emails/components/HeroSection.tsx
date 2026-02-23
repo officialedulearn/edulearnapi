@@ -10,6 +10,8 @@ interface HeroSectionProps {
   ctaLink: string;
 }
 
+const fontStack = "'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
 export const HeroSection = ({ mascotUrl, headline, subheadline, ctaText, ctaLink }: HeroSectionProps) => {
   return (
     <Section
@@ -30,22 +32,22 @@ export const HeroSection = ({ mascotUrl, headline, subheadline, ctaText, ctaLink
       />
       <Heading
         style={{
-          color: '#FFFFFF',
+          color: '#2D3C52',
           fontSize: '32px',
           fontWeight: '700',
           margin: '0 0 16px 0',
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          fontFamily: fontStack,
         }}
       >
         {headline}
       </Heading>
       <Text
         style={{
-          color: '#B3B3B3',
+          color: '#61728C',
           fontSize: '18px',
           lineHeight: '28px',
           margin: '0 0 32px 0',
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          fontFamily: fontStack,
         }}
       >
         {subheadline}

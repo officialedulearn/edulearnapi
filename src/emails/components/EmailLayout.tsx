@@ -19,13 +19,20 @@ interface EmailLayoutProps {
 export const EmailLayout = ({ children, previewText }: EmailLayoutProps) => {
   const logoUrl = 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/logo.png';
 
+  const fontStack = "'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif';
+
   return (
     <Html>
-      <Head />
+      <Head>
+        <link
+          href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </Head>
       <Body
         style={{
-          backgroundColor: '#0D0D0D',
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          backgroundColor: '#F9FBFC',
+          fontFamily: fontStack,
           margin: 0,
           padding: 0,
         }}
@@ -59,7 +66,7 @@ export const EmailLayout = ({ children, previewText }: EmailLayoutProps) => {
 
           <Hr
             style={{
-              borderColor: '#2E3033',
+              borderColor: '#EDF3FC',
               margin: '32px 0',
             }}
           />
@@ -76,15 +83,17 @@ export const EmailLayout = ({ children, previewText }: EmailLayoutProps) => {
                 fontSize: '16px',
                 fontWeight: '600',
                 margin: '0 0 16px 0',
+                fontFamily: fontStack,
               }}
             >
               Keep learning, keep earning!
             </Text>
             <Text
               style={{
-                color: '#B3B3B3',
+                color: '#61728C',
                 fontSize: '14px',
                 margin: '0 0 8px 0',
+                fontFamily: fontStack,
               }}
             >
               Questions? Contact us at{' '}
@@ -100,24 +109,26 @@ export const EmailLayout = ({ children, previewText }: EmailLayoutProps) => {
             </Text>
             <Text
               style={{
-                color: '#B3B3B3',
+                color: '#61728C',
                 fontSize: '12px',
                 margin: '16px 0 0 0',
+                fontFamily: fontStack,
               }}
             >
               © {new Date().getFullYear()} EduLearn. All rights reserved.
             </Text>
             <Text
               style={{
-                color: '#B3B3B3',
+                color: '#61728C',
                 fontSize: '12px',
                 margin: '8px 0 0 0',
+                fontFamily: fontStack,
               }}
             >
               <Link
                 href="https://edulearn.fun/unsubscribe"
                 style={{
-                  color: '#B3B3B3',
+                  color: '#61728C',
                   textDecoration: 'underline',
                 }}
               >

@@ -9,12 +9,14 @@ interface FeatureCardProps {
   ctaLink?: string;
 }
 
+const fontStack = "'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
 export const FeatureCard = ({ icon, title, description, ctaText, ctaLink }: FeatureCardProps) => {
   return (
     <Section
       style={{
-        backgroundColor: '#131313',
-        border: '1px solid #2E3033',
+        backgroundColor: '#FFFFFF',
+        border: '1px solid #EDF3FC',
         borderRadius: '12px',
         padding: '24px',
         marginBottom: '16px',
@@ -33,22 +35,22 @@ export const FeatureCard = ({ icon, title, description, ctaText, ctaLink }: Feat
       )}
       <Text
         style={{
-          color: '#FFFFFF',
+          color: '#2D3C52',
           fontSize: '20px',
           fontWeight: '600',
           margin: '0 0 12px 0',
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          fontFamily: fontStack,
         }}
       >
         {title}
       </Text>
       <Text
         style={{
-          color: '#B3B3B3',
+          color: '#61728C',
           fontSize: '16px',
           lineHeight: '24px',
           margin: '0',
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          fontFamily: fontStack,
         }}
       >
         {description}
@@ -63,7 +65,7 @@ export const FeatureCard = ({ icon, title, description, ctaText, ctaLink }: Feat
             marginTop: '12px',
             display: 'inline-block',
             textDecoration: 'none',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            fontFamily: fontStack,
           }}
         >
           {ctaText} →

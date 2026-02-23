@@ -29,12 +29,12 @@ export const V25AnnouncementEmail = ({ name = 'Learner' }: V25AnnouncementEmailP
       >
         <Text
           style={{
-            color: '#FFFFFF',
+            color: '#2D3C52',
             fontSize: '24px',
             fontWeight: '600',
             textAlign: 'center',
             margin: '0 0 32px 0',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            fontFamily: "'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
           }}
         >
           What's New in v2.5
@@ -67,12 +67,12 @@ export const V25AnnouncementEmail = ({ name = 'Learner' }: V25AnnouncementEmailP
 
         <Text
           style={{
-            color: '#B3B3B3',
+            color: '#61728C',
             fontSize: '16px',
             lineHeight: '24px',
             textAlign: 'center',
             margin: '32px 0 0 0',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            fontFamily: "'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
           }}
         >
           Hi {name}! We've been working hard to make EduLearn more engaging and rewarding for you. 
@@ -82,12 +82,12 @@ export const V25AnnouncementEmail = ({ name = 'Learner' }: V25AnnouncementEmailP
 
         <Text
           style={{
-            color: '#B3B3B3',
+            color: '#61728C',
             fontSize: '16px',
             lineHeight: '24px',
             textAlign: 'center',
             margin: '16px 0 0 0',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            fontFamily: "'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
           }}
         >
           Jump in and explore all the new features today!
