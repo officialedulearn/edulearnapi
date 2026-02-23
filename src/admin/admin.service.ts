@@ -280,6 +280,16 @@ export class AdminService {
     }
   }
 
+  async sendV25AnnouncementTest(email: string, name?: string): Promise<{ sent: boolean }> {
+    try {
+      await this.resendService.sendV25AnnouncementEmail(email, name || 'Test User');
+      return { sent: true };
+    } catch (error) {
+      this.logger.error('Failed to send v2.5 announcement test', error);
+      throw error;
+    }
+  }
+
   async getAllUsersForAdmin() {
     return await this.retryQuery(() =>
       db.select({

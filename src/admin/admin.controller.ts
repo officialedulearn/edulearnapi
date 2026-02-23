@@ -125,6 +125,19 @@ export class AdminController {
     return await this.adminService.broadcastV25Announcement();
   }
 
+  @Post('emails/v25-announcement/test')
+  async sendV25AnnouncementTest(
+    @Body() body: { email: string; name?: string },
+  ) {
+    if (!body.email?.trim()) {
+      throw new BadRequestException('Email is required');
+    }
+    return await this.adminService.sendV25AnnouncementTest(
+      body.email.trim(),
+      body.name?.trim(),
+    );
+  }
+
   @Get('communities')
   async getAllCommunities() {
     return await this.adminService.getAllCommunities();
