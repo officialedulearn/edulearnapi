@@ -120,6 +120,11 @@ export class AdminController {
     return await this.adminService.sendEmailToUsers(body.emails, body.subject, body.htmlContent);
   }
 
+  @Post('emails/v25-announcement')
+  async sendV25Announcement() {
+    return await this.adminService.broadcastV25Announcement();
+  }
+
   @Get('communities')
   async getAllCommunities() {
     return await this.adminService.getAllCommunities();

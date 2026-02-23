@@ -1,6 +1,7 @@
 import { Module, Global } from '@nestjs/common';
 import { ResendService } from './resend.service';
 import { Resend } from 'resend';
+import { ResendController } from './resend.controller';
 
 @Global()
 @Module({
@@ -18,5 +19,6 @@ import { Resend } from 'resend';
     ResendService,
   ],
   exports: [ResendService],
+  controllers: [ResendController],
 })
 export class ResendModule {}

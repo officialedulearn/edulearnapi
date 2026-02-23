@@ -271,6 +271,15 @@ export class AdminService {
     return { sent, failed };
   }
 
+  async broadcastV25Announcement(): Promise<{ sent: number; failed: number; total: number }> {
+    try {
+      return await this.resendService.broadcastV25Announcement();
+    } catch (error) {
+      this.logger.error('Failed to broadcast v2.5 announcement', error);
+      throw error;
+    }
+  }
+
   async getAllUsersForAdmin() {
     return await this.retryQuery(() =>
       db.select({

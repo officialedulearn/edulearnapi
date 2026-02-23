@@ -310,7 +310,7 @@ export class CardsService implements OnModuleInit {
             },
           ],
         },
-      },
+      } as any,
       {
         width: 1080,
         height: 1080,
@@ -678,7 +678,7 @@ export class CardsService implements OnModuleInit {
             },
           ],
         },
-      },
+      } as any,
       {
         width: 1080,
         height: 1080,
@@ -1026,7 +1026,7 @@ export class CardsService implements OnModuleInit {
             },
           ],
         },
-      },
+      } as any,
       {
         width: 1080,
         height: 1080,
@@ -1415,7 +1415,7 @@ export class CardsService implements OnModuleInit {
             },
           ],
         },
-      },
+      } as any,
       {
         width: 1080,
         height: 1080,
@@ -2007,7 +2007,7 @@ export class CardsService implements OnModuleInit {
             },
           ],
         },
-      },
+      } as any,
       {
         width: 1080,
         height: 1080,
@@ -2405,7 +2405,7 @@ export class CardsService implements OnModuleInit {
             },
           ],
         },
-      },
+      } as any,
       {
         width: 1080,
         height: 1080,
@@ -2778,7 +2778,7 @@ export class CardsService implements OnModuleInit {
             },
           ],
         },
-      },
+      } as any,
       {
         width: 1080,
         height: 1080,

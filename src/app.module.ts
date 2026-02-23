@@ -24,6 +24,7 @@ import { FeedbackModule } from './feedback/feedback.module';
 import { SocialModule } from './social/social.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { QuizzesModule } from './quizzes/quizzes.module';
+import { EmailPreviewModule } from './emails/email-preview.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { QuizzesModule } from './quizzes/quizzes.module';
     SocialModule,
     NotificationsModule,
     QuizzesModule,
+    EmailPreviewModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisService],

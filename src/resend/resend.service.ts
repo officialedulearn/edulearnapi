@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { Resend } from 'resend';
+import {user} from '../../lib/db/schema';
+import { eq } from 'drizzle-orm';
+import db from '../../drizzle';
+import { render } from '@react-email/render';
+import * as React from 'react';
+import { V25AnnouncementEmail } from '../emails/templates/V25AnnouncementEmail';
 
 @Injectable()
 export class ResendService {
@@ -22,6 +28,20 @@ export class ResendService {
 
     constructor(private readonly resend: Resend) {
         this.resend = new Resend(process.env.RESEND_API_KEY);
+    }
+
+    async addAllUsersToResendContactList() {
+        const users = await db.select({
+            email: user.email,
+            name: user.name,
+        }).from(user);
+        for (const user of users) {
+            await this.addResendContact(user.email, user.name);
+        }
+        return {
+            message: 'All users added to resend contact list',
+            success: true,
+        }
     }
 
     async sendEmail(to: string, subject: string, html: string) {
@@ -66,6 +86,30 @@ export class ResendService {
     async sendNFTFollowingEmail(to: string, followerName: string, userName: string, nftTitle: string, nftDescription: string, imageUrl?: string) {
         const html = this.getFollowerNFTEmailTemplate(followerName, userName, nftTitle, nftDescription, imageUrl);
         return this.sendEmail(to, `${userName} Earned an NFT! 🏆`, html);
+    }
+
+    async sendV25AnnouncementEmail(to: string, name: string) {
+        const html = await render(
+            React.createElement(V25AnnouncementEmail, { name })
+        );
+        return this.sendEmail(to, '🎉 EduLearn v2.5 is Here!', html);
+    }
+
+    async broadcastV25Announcement() {
+        const users = await db.select({
+            email: user.email,
+            name: user.name,
+        }).from(user);
+
+        const results = await Promise.allSettled(
+            users.map(u => this.sendV25AnnouncementEmail(u.email, u.name))
+        );
+
+        return {
+            sent: results.filter(r => r.status === 'fulfilled').length,
+            failed: results.filter(r => r.status === 'rejected').length,
+            total: users.length,
+        };
     }
 
     async addResendContact(email: string, name: string) {
