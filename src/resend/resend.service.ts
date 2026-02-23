@@ -30,18 +30,86 @@ export class ResendService {
         this.resend = new Resend(process.env.RESEND_API_KEY);
     }
 
+    private readonly audienceId = 'b9e37a5c-482b-4c5b-b1d5-990fea1f7ac5';
+
+    async getResendContacts() {
+        try {
+            const { data } = await this.resend.contacts.list({
+                audienceId: this.audienceId,
+            });
+            return data?.data || [];
+        } catch (error) {
+            console.error('Error fetching Resend contacts:', error);
+            return [];
+        }
+    }
+
+    async checkContactExists(email: string): Promise<boolean> {
+        const contacts = await this.getResendContacts();
+        return contacts.some(contact => contact.email.toLowerCase() === email.toLowerCase());
+    }
+
     async addAllUsersToResendContactList() {
         const users = await db.select({
             email: user.email,
             name: user.name,
         }).from(user);
+        
+        const resendContacts = await this.getResendContacts();
+        const resendEmails = new Set(
+            resendContacts.map(contact => contact.email.toLowerCase())
+        );
+        
+        let added = 0;
+        let skipped = 0;
+        let failed = 0;
+        
         for (const user of users) {
-            await this.addResendContact(user.email, user.name);
+            if (resendEmails.has(user.email.toLowerCase())) {
+                skipped++;
+                continue;
+            }
+            
+            try {
+                await this.addResendContact(user.email, user.name);
+                added++;
+            } catch (error) {
+                console.error(`Failed to add ${user.email}:`, error);
+                failed++;
+            }
         }
+        
         return {
-            message: 'All users added to resend contact list',
+            message: 'Completed adding users to resend contact list',
             success: true,
-        }
+            added,
+            skipped,
+            failed,
+            total: users.length,
+        };
+    }
+
+    async getUsersNotInResendContacts() {
+        const users = await db.select({
+            email: user.email,
+            name: user.name,
+        }).from(user);
+        
+        const resendContacts = await this.getResendContacts();
+        const resendEmails = new Set(
+            resendContacts.map(contact => contact.email.toLowerCase())
+        );
+        
+        const usersNotInResend = users.filter(
+            user => !resendEmails.has(user.email.toLowerCase())
+        );
+        
+        return {
+            usersNotInResend,
+            count: usersNotInResend.length,
+            totalUsers: users.length,
+            totalResendContacts: resendContacts.length,
+        };
     }
 
     async sendEmail(to: string, subject: string, html: string) {
@@ -118,8 +186,9 @@ export class ResendService {
         firstName: name,
         lastName: '',
         unsubscribed: false,
-        audienceId: 'b9e37a5c-482b-4c5b-b1d5-990fea1f7ac5',
-      })
+        audienceId: this.audienceId,
+      });
+      return contact;
     }
 
     private getFollowerNFTEmailTemplate(followerName: string, userName: string, nftTitle: string, nftDescription: string, imageUrl?: string): string {

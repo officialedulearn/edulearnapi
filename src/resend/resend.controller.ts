@@ -10,5 +10,8 @@ export class ResendController {
         return await this.resendService.addAllUsersToResendContactList();
     }
 
-    
+    @Get('users-not-in-contacts')
+    async getUsersNotInContacts() {
+        return await this.resendService.getUsersNotInResendContacts();
+    }
 }
