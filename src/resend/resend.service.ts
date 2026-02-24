@@ -163,20 +163,36 @@ export class ResendService {
         return this.sendEmail(to, '🎉 EduLearn v2.5 is Here!', html);
     }
 
+    private readonly resendRateLimit = 2;
+
+    private sleep(ms: number) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
     async broadcastV25Announcement() {
         const users = await db.select({
             email: user.email,
             name: user.name,
         }).from(user);
 
-        const results = await Promise.allSettled(
-            users.map(u => this.sendV25AnnouncementEmail(u.email, u.name))
-        );
+        const validUsers = users.filter(u => u.email?.trim());
+        const results: PromiseSettledResult<unknown>[] = [];
+
+        for (let i = 0; i < validUsers.length; i += this.resendRateLimit) {
+            const batch = validUsers.slice(i, i + this.resendRateLimit);
+            const batchResults = await Promise.allSettled(
+                batch.map(u => this.sendV25AnnouncementEmail(u.email, u.name))
+            );
+            results.push(...batchResults);
+            if (i + this.resendRateLimit < validUsers.length) {
+                await this.sleep(2000);
+            }
+        }
 
         return {
             sent: results.filter(r => r.status === 'fulfilled').length,
             failed: results.filter(r => r.status === 'rejected').length,
-            total: users.length,
+            total: validUsers.length,
         };
     }
 
