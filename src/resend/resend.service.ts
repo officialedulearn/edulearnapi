@@ -114,7 +114,7 @@ export class ResendService {
 
     async sendEmail(to: string, subject: string, html: string) {
         const { data, error } = await this.resend.emails.send({
-            from: 'eddy@edulearn.fun <eddy@edulearn.fun>',
+            from: 'Eddy 💚 <eddy@edulearn.fun>',
             to: to,
             subject: subject,
             html: html,
