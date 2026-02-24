@@ -9,7 +9,7 @@ interface FeatureCardProps {
   ctaLink?: string;
 }
 
-const fontStack = "'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+const fontStack = `'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
 
 export const FeatureCard = ({ icon, title, description, ctaText, ctaLink }: FeatureCardProps) => {
   return (

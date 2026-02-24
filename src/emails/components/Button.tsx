@@ -6,7 +6,7 @@ interface ButtonProps {
   children: React.ReactNode;
 }
 
-const fontStack = "'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+const fontStack = `'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
 
 export const Button = ({ href, children }: ButtonProps) => {
   return (

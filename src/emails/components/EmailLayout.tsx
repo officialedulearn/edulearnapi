@@ -19,7 +19,7 @@ interface EmailLayoutProps {
 export const EmailLayout = ({ children, previewText }: EmailLayoutProps) => {
   const logoUrl = 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/logo.png';
 
-  const fontStack = "'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif';
+  const fontStack = `'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
 
   return (
     <Html>

@@ -10,7 +10,7 @@ interface HeroSectionProps {
   ctaLink: string;
 }
 
-const fontStack = "'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+const fontStack = `'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
 
 export const HeroSection = ({ mascotUrl, headline, subheadline, ctaText, ctaLink }: HeroSectionProps) => {
   return (
