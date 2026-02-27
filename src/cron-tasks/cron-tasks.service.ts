@@ -88,48 +88,48 @@ Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
       }
     }
     
-    @Cron('0 0 1 * *') 
-    async rewardTopUsersMonthly() {
-      this.logger.log('Starting monthly top user rewards job');
+    // @Cron('0 0 1 * *') 
+    // async rewardTopUsersMonthly() {
+    //   this.logger.log('Starting monthly top user rewards job');
       
-      try {
-        const today = new Date();
-        if (today.getDate() !== 1) {
-          this.logger.log('Not the 1st day of the month, skipping rewards');
-          return;
-        }
+    //   try {
+    //     const today = new Date();
+    //     if (today.getDate() !== 1) {
+    //       this.logger.log('Not the 1st day of the month, skipping rewards');
+    //       return;
+    //     }
         
-        const topUsers = await db.select()
-          .from(user)
-          .orderBy(desc(user.xp))
-          .limit(3);
+    //     const topUsers = await db.select()
+    //       .from(user)
+    //       .orderBy(desc(user.xp))
+    //       .limit(3);
           
-        this.logger.log(`Found ${topUsers.length} top users to reward`);
+    //     this.logger.log(`Found ${topUsers.length} top users to reward`);
         
-        for (let i = 0; i < topUsers.length; i++) {
-          const currentUser = topUsers[i];
+    //     for (let i = 0; i < topUsers.length; i++) {
+    //       const currentUser = topUsers[i];
           
-          const earning = 3
-          try {
-            await this.walletService.addEarnings(currentUser.id, {
-              sol: earning,
-              edln: 0
-            });
+    //       const earning = 3
+    //       try {
+    //         await this.walletService.addEarnings(currentUser.id, {
+    //           sol: earning,
+    //           edln: 0
+    //         });
 
-            if(currentUser.expoPushToken) {
-              await this.expoPushService.sendPushNotification(currentUser.expoPushToken as string, "Monthly Top User Rewards", "You have been awarded rewards for being in the top 3 users this month. Check the rewards tab on the web app to see your rewards.");
-            }
-            this.logger.log(`Successfully awarded rewards to user ${currentUser.id}`);
-          } catch (error) {
-            this.logger.error(`Failed to award rewards to user ${currentUser.id}`, error);
-          }
-        }
+    //         if(currentUser.expoPushToken) {
+    //           await this.expoPushService.sendPushNotification(currentUser.expoPushToken as string, "Monthly Top User Rewards", "You have been awarded rewards for being in the top 3 users this month. Check the rewards tab on the web app to see your rewards.");
+    //         }
+    //         this.logger.log(`Successfully awarded rewards to user ${currentUser.id}`);
+    //       } catch (error) {
+    //         this.logger.error(`Failed to award rewards to user ${currentUser.id}`, error);
+    //       }
+    //     }
         
-        this.logger.log('Monthly top user rewards completed');
-      } catch (error) {
-        this.logger.error('Failed to process monthly top user rewards', error);
-      }
-    }
+    //     this.logger.log('Monthly top user rewards completed');
+    //   } catch (error) {
+    //     this.logger.error('Failed to process monthly top user rewards', error);
+    //   }
+    // }
 
 
     @Cron('0 0 * * *') 
