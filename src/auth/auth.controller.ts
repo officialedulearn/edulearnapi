@@ -118,6 +118,17 @@ export class AuthController {
     }
   }
 
+  @Get('weekly-leaderboard')
+  @UseGuards(FlexibleAuthGuard)
+  async getWeeklyLeaderboard(@Query('week') week?: string) {
+    try {
+      const weekStart = week ? new Date(week) : undefined;
+      return this.authService.getWeeklyLeaderboard(weekStart);
+    } catch (error) {
+      throw new BadRequestException('Failed to fetch weekly leaderboard');
+    }
+  }
+
   @Put('expo-push-token')
   @UseGuards(JwtAuthGuard)
   async updateExpoPushToken(

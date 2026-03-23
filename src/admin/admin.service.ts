@@ -233,25 +233,16 @@ export class AdminService {
   }
 
   async broadcastEmail(subject: string, htmlContent: string): Promise<{ sent: number; failed: number }> {
-    const users = await db.select({
-      email: user.email,
-      name: user.name,
-    }).from(user);
-
-    let sent = 0;
-    let failed = 0;
-
-    for (const u of users) {
-      try {
-        await this.resendService.sendEmail(u.email, subject, htmlContent);
-        sent++;
-      } catch (error) {
-        this.logger.error(`Failed to send email to ${u.email}`, error);
-        failed++;
-      }
-    }
-
-    return { sent, failed };
+    const htmlWithUnsubscribe = htmlContent.includes('{{{RESEND_UNSUBSCRIBE_URL}}}')
+      ? htmlContent
+      : htmlContent.replace(
+          '</body>',
+          '<p style="margin:8px 0 0 0;color:#9E9E9E;font-size:12px;"><a href="{{{RESEND_UNSUBSCRIBE_URL}}}" style="color:#61728C;text-decoration:underline;">Unsubscribe</a></p></body>',
+        );
+    await this.resendService.createBroadcast(subject, htmlWithUnsubscribe);
+    const contacts = await this.resendService.getResendContacts();
+    const total = contacts.length;
+    return { sent: total, failed: 0 };
   }
 
   async sendEmailToUsers(emails: string[], subject: string, htmlContent: string): Promise<{ sent: number; failed: number }> {
@@ -288,6 +279,47 @@ export class AdminService {
       this.logger.error('Failed to send v2.5 announcement test', error);
       throw error;
     }
+  }
+
+  async getEmailPreview(
+    template: string,
+    params: { name?: string; referralCode?: string; referralCount?: number },
+  ): Promise<{ html: string }> {
+    const valid = ['come-back-soon', 'refer-friends', 'streak-reminder', 'eddy-tip', 'referral-superstar'];
+    if (!valid.includes(template)) {
+      throw new NotFoundException(`Unknown template: ${template}`);
+    }
+    const html = await this.resendService.getEngagementPreviewHtml(template as any, {
+      name: params.name || 'Test User',
+      referralCode: params.referralCode,
+      referralCount: params.referralCount,
+    });
+    return { html };
+  }
+
+  async sendEngagementTest(
+    template: string,
+    email: string,
+    params: { name?: string; referralCode?: string; referralCount?: number },
+  ): Promise<{ sent: boolean }> {
+    const valid = ['come-back-soon', 'refer-friends', 'streak-reminder', 'eddy-tip', 'referral-superstar'];
+    if (!valid.includes(template)) {
+      throw new NotFoundException(`Unknown template: ${template}`);
+    }
+    await this.resendService.sendEngagementEmail(template as any, email, {
+      name: params.name || 'Test User',
+      referralCode: params.referralCode,
+      referralCount: params.referralCount,
+    });
+    return { sent: true };
+  }
+
+  async broadcastEngagement(template: string): Promise<{ sent: number; failed: number; total: number }> {
+    const valid = ['come-back-soon', 'refer-friends', 'streak-reminder', 'eddy-tip', 'referral-superstar'];
+    if (!valid.includes(template)) {
+      throw new NotFoundException(`Unknown template: ${template}`);
+    }
+    return await this.resendService.broadcastEngagement(template as any);
   }
 
   async getAllUsersForAdmin() {

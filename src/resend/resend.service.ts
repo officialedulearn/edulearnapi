@@ -6,6 +6,15 @@ import db from '../../drizzle';
 import { render } from '@react-email/render';
 import * as React from 'react';
 import { V25AnnouncementEmail } from '../emails/templates/V25AnnouncementEmail';
+import { ComeBackSoonEmail } from '../emails/templates/ComeBackSoonEmail';
+import { ReferFriendsEmail } from '../emails/templates/ReferFriendsEmail';
+import { StreakReminderEmail } from '../emails/templates/StreakReminderEmail';
+import { EddyWeeklyTipEmail } from '../emails/templates/EddyWeeklyTipEmail';
+import { ReferralSuperstarEmail } from '../emails/templates/ReferralSuperstarEmail';
+import {
+  type EngagementTemplateId,
+  ENGAGEMENT_SUBJECTS,
+} from '../emails/engagement-config';
 
 @Injectable()
 export class ResendService {
@@ -167,6 +176,95 @@ export class ResendService {
 
     private sleep(ms: number) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async createBroadcast(subject: string, html: string, send = true) {
+        const { data, error } = await this.resend.broadcasts.create({
+            audienceId: this.audienceId,
+            from: 'Eddy 💚 <eddy@edulearn.fun>',
+            subject,
+            html,
+        });
+        if (error) throw new Error(error.message);
+        if (send && data?.id) {
+            const sendResult = await this.resend.broadcasts.send(data.id);
+            if (sendResult.error) throw new Error(sendResult.error.message);
+        }
+        return data;
+    }
+
+    async sendEngagementEmail(
+        template: EngagementTemplateId,
+        to: string,
+        params: { name?: string; referralCode?: string; referralCount?: number },
+    ) {
+        const html = await this.renderEngagementTemplate(template, params, false);
+        const subject = ENGAGEMENT_SUBJECTS[template];
+        return this.sendEmail(to, subject, html);
+    }
+
+    async getEngagementPreviewHtml(
+        template: EngagementTemplateId,
+        params: { name?: string; referralCode?: string; referralCount?: number },
+    ): Promise<string> {
+        return this.renderEngagementTemplate(template, params, false);
+    }
+
+    private async renderEngagementTemplate(
+        template: EngagementTemplateId,
+        params: { name?: string; referralCode?: string; referralCount?: number },
+        forBroadcast: boolean,
+    ): Promise<string> {
+        const base = { name: params.name || 'Learner', useResendUnsubscribe: forBroadcast, useResendFirstName: forBroadcast };
+        switch (template) {
+            case 'come-back-soon':
+                return render(React.createElement(ComeBackSoonEmail, base));
+            case 'refer-friends':
+                return render(React.createElement(ReferFriendsEmail, { ...base, referralCode: params.referralCode || 'ABC123' }));
+            case 'streak-reminder':
+                return render(React.createElement(StreakReminderEmail, base));
+            case 'eddy-tip':
+                return render(React.createElement(EddyWeeklyTipEmail, base));
+            case 'referral-superstar':
+                return render(
+                    React.createElement(ReferralSuperstarEmail, {
+                        ...base,
+                        referralCount: params.referralCount ?? 5,
+                        referralCode: params.referralCode || 'ABC123',
+                    }),
+                );
+            default:
+                throw new Error(`Unknown template: ${template}`);
+        }
+    }
+
+    async broadcastEngagement(template: EngagementTemplateId): Promise<{ sent: number; failed: number; total: number }> {
+        const broadcastTemplates: EngagementTemplateId[] = ['come-back-soon', 'streak-reminder', 'eddy-tip'];
+        if (broadcastTemplates.includes(template)) {
+            const html = await this.renderEngagementTemplate(template, {}, true);
+            const subject = ENGAGEMENT_SUBJECTS[template];
+            await this.createBroadcast(subject, html);
+            const contacts = await this.getResendContacts();
+            return { sent: contacts.length, failed: 0, total: contacts.length };
+        }
+        const users = await db.select({ email: user.email, name: user.name, referralCode: user.referralCode, referralCount: user.referralCount }).from(user);
+        const validUsers = users.filter(u => u.email?.trim());
+        let sent = 0;
+        let failed = 0;
+        for (const u of validUsers) {
+            try {
+                await this.sendEngagementEmail(template, u.email, {
+                    name: u.name,
+                    referralCode: u.referralCode ?? undefined,
+                    referralCount: u.referralCount ?? undefined,
+                });
+                sent++;
+            } catch (err) {
+                console.error(`Failed to send ${template} to ${u.email}:`, err);
+                failed++;
+            }
+        }
+        return { sent, failed, total: validUsers.length };
     }
 
     async broadcastV25Announcement() {

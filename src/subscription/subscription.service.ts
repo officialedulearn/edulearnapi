@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import db from '../../drizzle';
 import { user, userReward } from '../../lib/db/schema';
 import { RewardsService } from '../rewards/rewards.service';
+import { WalletService } from '../wallet/wallet.service';
 
 @Injectable()
 export class SubscriptionService {
@@ -11,6 +12,8 @@ export class SubscriptionService {
   constructor(
     @Inject(forwardRef(() => RewardsService))
     private readonly rewardsService: RewardsService,
+    @Inject(forwardRef(() => WalletService))
+    private readonly walletService: WalletService,
   ) {}
 
   async updateUserPremiumStatus(
@@ -131,5 +134,54 @@ export class SubscriptionService {
       this.logger.error(`❌ Failed to process badge claim for user ${appUserId}:`, error.stack);
       throw error;
     }
+  }
+
+  async handleStreakShieldPurchase(appUserId: string, _productId?: string) {
+    const users = await db.select().from(user).where(eq(user.id, appUserId));
+    if (users.length === 0) {
+      throw new Error(`User not found: ${appUserId}`);
+    }
+
+    const currentUser = users[0];
+    const expiry = new Date();
+    expiry.setDate(expiry.getDate() + 7);
+
+    await db
+      .update(user)
+      .set({
+        streakShieldActive: true,
+        streakShieldExpiry: expiry,
+        streakShieldPurchases: (currentUser.streakShieldPurchases || 0) + 1,
+      })
+      .where(eq(user.id, appUserId));
+
+    this.logger.log(`Streak Shield activated for user ${appUserId} until ${expiry}`);
+    return { success: true, expiresAt: expiry };
+  }
+
+  async handleQuizRefreshPurchase(appUserId: string) {
+    const users = await db.select().from(user).where(eq(user.id, appUserId));
+    if (users.length === 0) throw new Error('User not found');
+
+    const currentUser = users[0];
+    const newLimit = (currentUser.quizLimits || 0) + 5;
+
+    await db
+      .update(user)
+      .set({ quizLimits: newLimit })
+      .where(eq(user.id, appUserId));
+
+    this.logger.log(`Quiz refresh: user ${appUserId} now has ${newLimit} attempts`);
+    return { success: true, newLimit };
+  }
+
+  async purchaseStreakShieldViaApi(userId: string) {
+    await this.walletService.payMicrotransaction(userId, 0.99, 'streak_shield');
+    return this.handleStreakShieldPurchase(userId);
+  }
+
+  async purchaseQuizRefreshViaApi(userId: string) {
+    await this.walletService.payMicrotransaction(userId, 0.49, 'quiz_refresh');
+    return this.handleQuizRefreshPurchase(userId);
   }
 }

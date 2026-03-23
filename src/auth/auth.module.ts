@@ -11,6 +11,7 @@ import { ApiKeyGuard } from './guards/api-key.guard';
 import { RoadmapModule } from 'src/roadmap/roadmap.module';
 import { CommunityModule } from 'src/community/community.module';
 import { SocialModule } from 'src/social/social.module';
+import { LeaderboardModule } from 'src/leaderboard/leaderboard.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { SocialModule } from 'src/social/social.module';
     forwardRef(() => RoadmapModule),
     forwardRef(() => CommunityModule),
     forwardRef(() => SocialModule),
+    LeaderboardModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtAuthGuard, ApiKeyGuard],

@@ -34,7 +34,7 @@ export const user = pgTable('user', {
   })
     .notNull()
     .default('novice'),
-  username: text('username').notNull().unique(),
+  username: text('username').unique(),
   quizCompleted: integer('quizCompleted').notNull().default(0),
   encryptedPrivateKey: text('encryptedPrivateKey').notNull(),
   lastCreditRenewal: timestamp('last_credit_renewal'),
@@ -49,6 +49,9 @@ export const user = pgTable('user', {
   oauthProvider: text('oauth_provider'),
   oauthProviderId: text('oauth_provider_id'),
   hasCompletedProfile: boolean('has_completed_profile').default(true),
+  streakShieldActive: boolean('streak_shield_active').default(false),
+  streakShieldExpiry: timestamp('streak_shield_expiry'),
+  streakShieldPurchases: integer('streak_shield_purchases').default(0),
 });
 
 export type User = InferSelectModel<typeof user>;
@@ -110,6 +113,13 @@ export const chat = pgTable('chat', {
 });
 
 export type Chat = InferSelectModel<typeof chat>;
+
+export const quiz = pgTable('quiz', {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+});
 
 export const message = pgTable('message', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
@@ -348,6 +358,19 @@ export const contentAnalytics = pgTable("content_analytics", {
 });
 
 export type ContentAnalytics = InferSelectModel<typeof contentAnalytics>;
+
+export const weeklyLeaderboard = pgTable('weekly_leaderboard', {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  userId: uuid('userId').notNull().references(() => user.id),
+  weekStart: timestamp('week_start').notNull(),
+  weekEnd: timestamp('week_end').notNull(),
+  xpEarned: integer('xp_earned').notNull().default(0),
+  rank: integer('rank'),
+  prizeAwarded: boolean('prize_awarded').default(false),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export type WeeklyLeaderboard = InferSelectModel<typeof weeklyLeaderboard>;
 
 export const publicQuiz = pgTable('public_quiz', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),

@@ -3,13 +3,18 @@ import {
   Post,
   Body,
   Headers,
+  Param,
   UnauthorizedException,
   Logger,
   HttpCode,
   BadRequestException,
+  Request,
+  UseGuards,
 } from '@nestjs/common';
 import { SubscriptionService } from './subscription.service';
 import { ConfigService } from '@nestjs/config';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
 
 interface RevenueCatWebhookEvent {
   api_version: string;
@@ -76,7 +81,30 @@ export class SubscriptionController {
       const { type, app_user_id, expiration_at_ms, product_id } = payload.event;
 
       const isBadgeClaim = product_id === 'rc_badge_claim1';
-      
+      const isStreakShield = product_id?.includes('streak_shield');
+      const isQuizRefresh = product_id?.includes('quiz_refresh');
+
+      if (isStreakShield) {
+        if (type === 'INITIAL_PURCHASE' || type === 'NON_RENEWING_PURCHASE') {
+          const result = await this.subscriptionService.handleStreakShieldPurchase(
+            app_user_id,
+            product_id,
+          );
+          return { received: true, type: 'streak_shield', ...result };
+        }
+        return { received: true };
+      }
+
+      if (isQuizRefresh) {
+        if (type === 'INITIAL_PURCHASE' || type === 'NON_RENEWING_PURCHASE') {
+          const result = await this.subscriptionService.handleQuizRefreshPurchase(
+            app_user_id,
+          );
+          return { received: true, type: 'quiz_refresh', ...result };
+        }
+        return { received: true };
+      }
+
       if (isBadgeClaim) {
         this.logger.log(`Badge claim purchase detected for user ${app_user_id}, product: ${product_id}`);
         const result = await this.subscriptionService.handleBadgeClaim(app_user_id, product_id as string, payload);
@@ -145,5 +173,31 @@ export class SubscriptionController {
       this.logger.error('Error processing webhook', error.stack);
       throw new BadRequestException('Failed to process webhook');
     }
+  }
+
+  @Post('purchase/streak-shield/:userId')
+  @UseGuards(JwtAuthGuard)
+  async purchaseStreakShield(
+    @Request() req: { user: any },
+    @Param('userId') userId: string,
+  ) {
+    await verifyUserAuthorization(req.user, userId, 'streak shield purchase');
+    const result = await this.subscriptionService.purchaseStreakShieldViaApi(
+      userId,
+    );
+    return { success: true, ...result };
+  }
+
+  @Post('purchase/quiz-refresh/:userId')
+  @UseGuards(JwtAuthGuard)
+  async purchaseQuizRefresh(
+    @Request() req: { user: any },
+    @Param('userId') userId: string,
+  ) {
+    await verifyUserAuthorization(req.user, userId, 'quiz refresh purchase');
+    const result = await this.subscriptionService.purchaseQuizRefreshViaApi(
+      userId,
+    );
+    return { success: true, ...result };
   }
 }

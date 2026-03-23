@@ -10,6 +10,8 @@ import { ExpoPushService } from 'src/common/services/expo-push.service';
 import { NotificationsService } from 'src/common/services/notifications.service';
 import { ResendService } from 'src/resend/resend.service';
 import { CardsService } from 'src/cards/cards.service';
+import { LeaderboardService } from 'src/leaderboard/leaderboard.service';
+
 @Injectable()
 export class CronTasksService { 
   
@@ -22,7 +24,8 @@ export class CronTasksService {
         private expoPushService: ExpoPushService,
         private notificationsService: NotificationsService,
         private resendService: ResendService,
-        private cardService: CardsService
+        private cardService: CardsService,
+        private leaderboardService: LeaderboardService,
     ) {
     }
 
@@ -69,6 +72,44 @@ Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
         this.logger.log('Successfully posted leaderboard to X');
       } catch (error) {
         this.logger.error('Failed to post to social media', error);
+      }
+    }
+
+    @Cron('0 20 * * *')
+    async checkStreakExpirations() {
+      this.logger.log('Checking for expiring streaks');
+      try {
+        const now = new Date();
+        const todayMidnight = new Date(now);
+        todayMidnight.setHours(0, 0, 0, 0);
+        const allUsers = await db.select().from(user);
+        for (const currentUser of allUsers) {
+          if (!currentUser.lastLoggedIn) continue;
+          const lastLoginMidnight = new Date(currentUser.lastLoggedIn);
+          lastLoginMidnight.setHours(0, 0, 0, 0);
+          const daysSinceLogin = Math.floor(
+            (todayMidnight.getTime() - lastLoginMidnight.getTime()) /
+              (1000 * 60 * 60 * 24),
+          );
+          if (
+            daysSinceLogin >= 1 &&
+            (currentUser.streak || 0) >= 3 &&
+            currentUser.expoPushToken
+          ) {
+            const hoursRemaining = 24 - now.getHours();
+            await this.expoPushService.sendPushNotification(
+              currentUser.expoPushToken,
+              '🔥 Streak Expiring Soon!',
+              `Your ${currentUser.streak}-day streak expires in ${hoursRemaining} hours! Check in now to keep it alive.`,
+              { screen: 'profile', action: 'streak_warning' },
+            );
+            this.logger.log(
+              `Sent streak warning to user ${currentUser.id} (${currentUser.streak} days)`,
+            );
+          }
+        }
+      } catch (error) {
+        this.logger.error('Failed to check streak expirations', error);
       }
     }
 
@@ -160,6 +201,55 @@ Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
         this.logger.log(`Premium expiration check completed - processed ${expiredUsers.length} expired subscriptions`);
       } catch (error) {
         this.logger.error('Failed to process premium expirations', error);
+      }
+    }
+
+    @Cron('0 0 * * 0')
+    async finalizeWeeklyLeaderboard() {
+      this.logger.log('Finalizing weekly leaderboard');
+      try {
+        const topUsers =
+          await this.leaderboardService.finalizeWeeklyLeaderboard();
+        const prizes = [
+          { rank: 1, premiumDays: 7 },
+          { rank: 2, premiumDays: 3 },
+          { rank: 3, premiumDays: 1 },
+        ];
+        for (let i = 0; i < topUsers.length; i++) {
+          const u = topUsers[i];
+          const prize = prizes[i];
+          try {
+            const premiumUntil = new Date();
+            premiumUntil.setDate(premiumUntil.getDate() + prize.premiumDays);
+            await db
+              .update(user)
+              .set({
+                isPremium: true,
+                premiumUntil,
+              })
+              .where(eq(user.id, u.userId));
+            if (u.user.expoPushToken) {
+              await this.expoPushService.sendPushNotification(
+                u.user.expoPushToken,
+                `🏆 Weekly Leaderboard Rank #${i + 1}!`,
+                `You won ${prize.premiumDays} days premium!`,
+                { screen: 'leaderboard' },
+              );
+            }
+          } catch (err) {
+            this.logger.error(`Failed to award prize to user ${u.userId}`, err);
+          }
+        }
+        if (topUsers.length >= 3) {
+          const tweetText = `📊 EduLearn Weekly Leaderboard Winners!\n\n🥇 @${topUsers[0].user.username || 'User'} - ${topUsers[0].xpEarned} XP\n🥈 @${topUsers[1].user.username || 'User'} - ${topUsers[1].xpEarned} XP\n🥉 @${topUsers[2].user.username || 'User'} - ${topUsers[2].xpEarned} XP\n\nJoin edulearn.fun to compete!`;
+          try {
+            await this.twitterService.postTweet(tweetText);
+          } catch (err) {
+            this.logger.error('Failed to post weekly leaderboard tweet', err);
+          }
+        }
+      } catch (error) {
+        this.logger.error('Failed to finalize weekly leaderboard', error);
       }
     }
 

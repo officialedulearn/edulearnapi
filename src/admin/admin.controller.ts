@@ -138,6 +138,40 @@ export class AdminController {
     );
   }
 
+  @Get('emails/preview/:template')
+  async getEmailPreview(
+    @Param('template') template: string,
+    @Query('name') name?: string,
+    @Query('referralCode') referralCode?: string,
+    @Query('referralCount') referralCount?: string,
+  ) {
+    return await this.adminService.getEmailPreview(template, {
+      name,
+      referralCode,
+      referralCount: referralCount ? parseInt(referralCount, 10) : undefined,
+    });
+  }
+
+  @Post('emails/engagement/:template/test')
+  async sendEngagementTest(
+    @Param('template') template: string,
+    @Body() body: { email: string; name?: string; referralCode?: string; referralCount?: number },
+  ) {
+    if (!body.email?.trim()) {
+      throw new BadRequestException('Email is required');
+    }
+    return await this.adminService.sendEngagementTest(template, body.email.trim(), {
+      name: body.name,
+      referralCode: body.referralCode,
+      referralCount: body.referralCount,
+    });
+  }
+
+  @Post('emails/engagement/:template/broadcast')
+  async broadcastEngagement(@Param('template') template: string) {
+    return await this.adminService.broadcastEngagement(template);
+  }
+
   @Get('communities')
   async getAllCommunities() {
     return await this.adminService.getAllCommunities();

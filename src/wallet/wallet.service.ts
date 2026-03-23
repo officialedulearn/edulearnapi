@@ -330,6 +330,122 @@ export class WalletService {
     };
   }
 
+  async payMicrotransaction(
+    userId: string,
+    amount: number,
+    productType: 'streak_shield' | 'quiz_refresh',
+  ): Promise<{ signature: string }> {
+    const validAmounts: Record<string, number> = {
+      streak_shield: 0.99,
+      quiz_refresh: 0.49,
+    };
+    if (amount !== validAmounts[productType]) {
+      throw new Error(`Invalid amount for ${productType}`);
+    }
+
+    const user = await this.authService.getUserById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const userPublicKey = new PublicKey(user.address as unknown as string);
+    const secretKey = bs58.default.decode(decrypt(user.encryptedPrivateKey));
+    const userKeypair = Keypair.fromSecretKey(secretKey);
+
+    const userUsdcTokenAccount = await getAssociatedTokenAddress(
+      this.USDC,
+      userPublicKey,
+    );
+
+    const accountInfo =
+      await this.connection.getAccountInfo(userUsdcTokenAccount);
+    if (!accountInfo) {
+      throw new Error(
+        'User does not have a USDC token account. Please ensure you have USDC in your wallet.',
+      );
+    }
+
+    const tokenAccountInfo =
+      await this.connection.getParsedTokenAccountsByOwner(userPublicKey, {
+        mint: this.USDC,
+      });
+
+    if (tokenAccountInfo.value.length === 0) {
+      throw new Error('No USDC token account found');
+    }
+
+    const usdcBalance =
+      tokenAccountInfo.value[0].account.data.parsed.info.tokenAmount.uiAmount;
+    if (usdcBalance < amount) {
+      throw new Error(
+        `Insufficient USDC balance. Required: ${amount} USDC, Available: ${usdcBalance} USDC`,
+      );
+    }
+
+    const adminSecretKey = process.env.ADMIN_WALLET_SECRET_KEY;
+    if (!adminSecretKey) {
+      throw new Error('Admin wallet secret key not configured');
+    }
+
+    const adminKeypair = Keypair.fromSecretKey(
+      bs58.default.decode(adminSecretKey),
+    );
+
+    const adminUsdcTokenAccount = await getAssociatedTokenAddress(
+      this.USDC,
+      this.proPaymentWallet,
+    );
+
+    await getOrCreateAssociatedTokenAccount(
+      this.connection,
+      userKeypair,
+      this.USDC,
+      adminKeypair.publicKey,
+    );
+
+    const usdcDecimals = 6;
+    const adjustedAmount = amount * Math.pow(10, usdcDecimals);
+
+    console.log(
+      `Processing microtransaction: ${amount} USDC for ${productType} from user ${userId}`,
+    );
+
+    const transferInstruction = createTransferCheckedInstruction(
+      userUsdcTokenAccount,
+      this.USDC,
+      adminUsdcTokenAccount,
+      userPublicKey,
+      adjustedAmount,
+      usdcDecimals,
+    );
+
+    const transaction = new Transaction().add(transferInstruction);
+    transaction.recentBlockhash = (
+      await this.connection.getLatestBlockhash()
+    ).blockhash;
+    transaction.feePayer = userPublicKey;
+    transaction.sign(userKeypair);
+
+    const signature = await this.connection.sendRawTransaction(
+      transaction.serialize(),
+    );
+    await this.connection.confirmTransaction(signature);
+
+    await db.insert(premiumTransactions).values({
+      userId: user.id,
+      signature: signature,
+      amount: amount,
+    });
+    await db
+      .update(totalVolumes)
+      .set({
+        totalRevenue: sql`${totalVolumes.totalRevenue} + ${amount}`,
+      })
+      .where(eq(totalVolumes.id, 1));
+
+    return { signature };
+  }
+
   async swapSolToEdln(userId: string, amount: number, usdc?: boolean) {
     const user = await this.authService.getUserById(userId);
     if (!user) {

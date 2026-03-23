@@ -288,6 +288,13 @@
       "when": 1768408468474,
       "tag": "0040_colossal_juggernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1774199869370,
+      "tag": "0041_legal_dreadnoughts",
+      "breakpoints": true
     }
   ]
 }

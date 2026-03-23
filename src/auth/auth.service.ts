@@ -15,6 +15,7 @@ import { RoadmapService } from 'src/roadmap/roadmap.service';
 import { CommunityService } from 'src/community/community.service';
 import { update } from '@metaplex-foundation/mpl-core';
 import { SocialService } from 'src/social/social.service';
+import { LeaderboardService } from 'src/leaderboard/leaderboard.service';
 import resend from 'resend';
 
 export interface UserResponse extends User {
@@ -35,6 +36,7 @@ export class AuthService {
     private communityService: CommunityService,
     @Inject(forwardRef(() => SocialService))
     private socialService: SocialService,
+    private leaderboardService: LeaderboardService,
   ) {}
   async createUser(data: signUpDetails): Promise<UserResponse | Error> {
     try {
@@ -60,20 +62,13 @@ export class AuthService {
         email: data.email,
         referralCode: referralCode,
         referredBy: referredByCode,
-        username: data.username,
+        username: data.username || '',
         address: userWallet.publicKey,
         encryptedPrivateKey: userWallet.encryptedSecret,
       });
 
       if (referredByCode && referredByCode.trim() !== '') {
         try {
-          console.log(`Processing referral with code: ${referredByCode}`);
-
-          if (referredByCode.trim() === "PRDHUNT1") {
-            console.log('PRDHUNT1 referral code detected - granting premium');
-            await db.update(user).set({isPremium: true, premiumUntil: new Date(Date.now() + 1000 * 60 * 60 * 24 * 60)}).where(eq(user.id, data.id));
-          }
-
           const referringUsers = await db
             .select()
             .from(user)
@@ -114,43 +109,6 @@ export class AuthService {
         .from(user)
         .where(eq(user.email, data.email));
 
-      if (data.username && data.username.trim() !== '') {
-        try {
-          console.log(`Fetching Twitter profile picture for username: ${data.username}`);
-          const axios = require('axios');
-          const bearerToken = process.env.TWITTER_BEARER_TOKEN;
-          if (bearerToken) {
-            const response = await axios.get(
-              `https://api.twitter.com/2/users/by/username/${data.username}`,
-              {
-                headers: {
-                  Authorization: `Bearer ${bearerToken}`,
-                },
-                params: {
-                  'user.fields': 'profile_image_url',
-                },
-              }
-            );
-
-            if (response.data?.data?.profile_image_url) {
-              const profilePictureURL = response.data.data.profile_image_url;
-              console.log(`Updating profile picture for ${data.email}: ${profilePictureURL}`);
-              
-              await db
-                .update(user)
-                .set({ profilePictureURL })
-                .where(eq(user.email, data.email));
-                
-              createdUser.profilePictureURL = profilePictureURL;
-            }
-          } else {
-            console.warn('TWITTER_BEARER_TOKEN not configured, skipping profile picture fetch');
-          }
-        } catch (error) {
-          console.error('Failed to fetch Twitter profile picture:', error.response?.data || error.message);
-        }
-      }
-      
       this.resendService.addResendContact(createdUser.email, createdUser.name).catch((error) => {
         console.error('Failed to add resend contact:', error);
       });
@@ -457,6 +415,10 @@ export class AuthService {
     }
   }
 
+  async getWeeklyLeaderboard(weekStart?: Date) {
+    return this.leaderboardService.getWeeklyLeaderboard(weekStart);
+  }
+
   async updateUserExpoPushToken(userId: string, expoPushToken: string) {
     try {
       const updatedUser = await db
@@ -498,6 +460,8 @@ export class AuthService {
         title: title,
         xpEarned: xp,
       });
+
+      await this.leaderboardService.trackWeeklyXP(userId, xp);
 
       let newLevel = 'novice';
       const oldLevel = currentUser.level;
@@ -566,7 +530,7 @@ export class AuthService {
 
   async updateUserStreak(
     userId: string,
-    newStreak: number,
+    clientStreak: number,
   ): Promise<number> {
     try {
       const users = await db.select().from(user).where(eq(user.id, userId));
@@ -574,9 +538,36 @@ export class AuthService {
         throw new Error(`User with id ${userId} not found`);
       }
 
+      const currentUser = users[0];
+      const now = new Date();
+      const todayMidnight = new Date(now);
+      todayMidnight.setHours(0, 0, 0, 0);
+      const lastLogin = currentUser.lastLoggedIn
+        ? new Date(currentUser.lastLoggedIn)
+        : now;
+      lastLogin.setHours(0, 0, 0, 0);
+      const daysSinceLogin = Math.floor(
+        (todayMidnight.getTime() - lastLogin.getTime()) / (1000 * 60 * 60 * 24),
+      );
+
+      let newStreak = clientStreak;
+      if (daysSinceLogin > 1 && clientStreak === 1) {
+        const shieldActive =
+          currentUser.streakShieldActive &&
+          currentUser.streakShieldExpiry &&
+          new Date(currentUser.streakShieldExpiry) > now;
+        if (shieldActive) {
+          newStreak = currentUser.streak || 1;
+          await db
+            .update(user)
+            .set({ streakShieldActive: false, streakShieldExpiry: null })
+            .where(eq(user.id, userId));
+        }
+      }
+
       await db
         .update(user)
-        .set({ streak: newStreak, lastLoggedIn: new Date() })
+        .set({ streak: newStreak, lastLoggedIn: now })
         .where(eq(user.id, userId));
 
       return newStreak;
@@ -956,7 +947,7 @@ export class AuthService {
       hasCompletedProfile: false
     });
     
-    return { user: newUser, isNewUser: true, needsUsername: true };
+    return { user: newUser, isNewUser: true, needsUsername: false };
   }
 
   private generateTempUsername(email: string): string {

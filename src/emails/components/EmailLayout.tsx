@@ -14,9 +14,10 @@ import {
 interface EmailLayoutProps {
   children: React.ReactNode;
   previewText?: string;
+  useResendUnsubscribe?: boolean;
 }
 
-export const EmailLayout = ({ children, previewText }: EmailLayoutProps) => {
+export const EmailLayout = ({ children, previewText, useResendUnsubscribe }: EmailLayoutProps) => {
   const logoUrl = 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/logo.png';
 
   const fontStack = `'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
@@ -125,15 +126,15 @@ export const EmailLayout = ({ children, previewText }: EmailLayoutProps) => {
                 fontFamily: fontStack,
               }}
             >
-              <Link
-                href="https://edulearn.fun/unsubscribe"
-                style={{
-                  color: '#61728C',
-                  textDecoration: 'underline',
-                }}
-              >
-                Unsubscribe
-              </Link>
+            <Link
+              href={useResendUnsubscribe ? '{{{RESEND_UNSUBSCRIBE_URL}}}' : 'https://edulearn.fun/unsubscribe'}
+              style={{
+                color: '#61728C',
+                textDecoration: 'underline',
+              }}
+            >
+              Unsubscribe
+            </Link>
             </Text>
           </Section>
         </Container>
