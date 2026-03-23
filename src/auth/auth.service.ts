@@ -375,7 +375,10 @@ export class AuthService {
     }
   }
 
-  async deductUserCredits(userId: string): Promise<number> {
+  async deductUserCredits(
+    userId: string,
+    amount: number = 0.5,
+  ): Promise<number> {
     try {
       const users = await db.select().from(user).where(eq(user.id, userId));
       if (users.length === 0) {
@@ -384,7 +387,10 @@ export class AuthService {
 
       const currentUser = users[0];
       const currentCredits = Number(currentUser.credits);
-      const newCredits = currentCredits - 0.5;
+      const newCredits = currentCredits - amount;
+      if (newCredits < 0) {
+        throw new Error('Insufficient credits');
+      }
 
       await db
         .update(user)

@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { sql, eq, gte, lte, and, desc, count } from 'drizzle-orm';
+import { sql, eq, gte, lte, and, or, desc, count } from 'drizzle-orm';
 import db from '../../drizzle';
 import { user, xpActivity, reward, userReward, premiumTransactions, totalVolumes, chat, community, community_members, feedback } from '../../lib/db/schema';
 import { NotificationsService } from '../common/services/notifications.service';
@@ -532,12 +532,12 @@ export class AdminService {
     const adminUser = await this.retryQuery(() =>
       db.select({ id: user.id, email: user.email, username: user.username })
         .from(user)
-        .where(eq(user.username, data.adminEmail))
+        .where(or(eq(user.username, data.adminEmail), eq(user.email, data.adminEmail)))
         .limit(1)
     );
 
     if (!adminUser.length) {
-      throw new Error(`User with username ${data.adminEmail} not found`);
+      throw new Error(`User with username/email ${data.adminEmail} not found`);
     }
 
     const [newCommunity] = await db

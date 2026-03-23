@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsArray, IsNotEmpty, ValidateNested, IsUUID, IsDate } from 'class-validator';
+import { IsString, IsArray, IsNotEmpty, ValidateNested, IsUUID, IsDate, IsOptional, IsInt, Min, Max, MaxLength, MinLength } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 
 export class MessageContentDto {
@@ -196,6 +196,37 @@ export class GenerateSuggestionsDto {
   @IsUUID()
   @IsNotEmpty()
   userId: string;
+}
+
+export class GenerateFlashcardsDto {
+  @ApiProperty({
+    description: 'The ID of the user requesting flashcard generation',
+    example: '987fbc97-4bed-5078-9f07-9141ba07c9f3',
+  })
+  @IsUUID()
+  @IsNotEmpty()
+  userId: string;
+
+  @ApiProperty({
+    description: 'Description of what to study (topic, scope, level)',
+    example: 'Solana account model and rent for an intermediate learner',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(10)
+  @MaxLength(2000)
+  topic: string;
+
+  @ApiProperty({
+    description: 'Number of cards to generate (5–30). Default 15.',
+    example: 15,
+    required: false,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(30)
+  cardCount?: number;
 }
 
 export class MarketplaceStreamDto {

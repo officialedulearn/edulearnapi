@@ -11,6 +11,7 @@ import {
   boolean,
   integer,
   numeric,
+  index,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -387,3 +388,38 @@ export const publicQuiz = pgTable('public_quiz', {
 });
 
 export type PublicQuiz = InferSelectModel<typeof publicQuiz>;
+
+export const flashcardDeck = pgTable(
+  'flashcard_deck',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    userId: uuid('userId')
+      .notNull()
+      .references(() => user.id),
+    title: text('title').notNull(),
+    topic: text('topic').notNull(),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+    updatedAt: timestamp('updatedAt'),
+  },
+  (table) => ({
+    userIdIdx: index('flashcard_deck_user_id_idx').on(table.userId),
+    userCreatedIdx: index('flashcard_deck_user_id_created_at_idx').on(
+      table.userId,
+      table.createdAt,
+    ),
+  }),
+);
+
+export type FlashcardDeck = InferSelectModel<typeof flashcardDeck>;
+
+export const flashcard = pgTable('flashcard', {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  deckId: uuid('deckId')
+    .notNull()
+    .references(() => flashcardDeck.id, { onDelete: 'cascade' }),
+  front: text('front').notNull(),
+  back: text('back').notNull(),
+  sortOrder: integer('sortOrder').notNull(),
+});
+
+export type Flashcard = InferSelectModel<typeof flashcard>;

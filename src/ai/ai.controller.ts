@@ -2,6 +2,8 @@ import {
     Body,
     Controller,
     Post,
+    Get,
+    Delete,
     UseGuards,
     UseInterceptors,
     UploadedFile,
@@ -15,7 +17,9 @@ import {
     Query,
     Param,
     NotFoundException,
-    ForbiddenException
+    ForbiddenException,
+    DefaultValuePipe,
+    ParseIntPipe,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { ApiTags, ApiOperation, ApiSecurity, ApiResponse, ApiConsumes, ApiBody } from '@nestjs/swagger';
@@ -32,6 +36,7 @@ import {
   GenerateTitleDto, 
   GenerateQuizDto, 
   GenerateSuggestionsDto,
+  GenerateFlashcardsDto,
   MarketplaceStreamDto 
 } from './dto/ai.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -230,6 +235,113 @@ export class AiController {
       }
       
       throw new InternalServerErrorException('An unexpected error occurred while generating the quiz');
+    }
+  }
+
+  @Post('flashcards/generate')
+  @ApiOperation({
+    summary: 'Generate flashcards from a topic',
+    description:
+      'Creates a new flashcard deck with AI-generated cards. Charges 0.5 credits per card.',
+  })
+  @ApiBody({ type: GenerateFlashcardsDto })
+  @ApiResponse({ status: 200, description: 'Saved deck and cards' })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden (e.g. insufficient credits)' })
+  async generateFlashcards(
+    @Request() req,
+    @Body() dto: GenerateFlashcardsDto,
+  ) {
+    await verifyUserAuthorization(req.user, dto.userId, 'generating flashcards');
+
+    try {
+      return await this.aiService.generateFlashcards(dto);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      if (error instanceof Error) {
+        throw new BadRequestException(error.message);
+      }
+
+      throw new InternalServerErrorException(
+        'An unexpected error occurred while generating flashcards',
+      );
+    }
+  }
+
+  @Get('flashcards')
+  @ApiOperation({ summary: 'List flashcard decks for a user' })
+  @ApiResponse({ status: 200, description: 'List of decks' })
+  async listFlashcards(
+    @Request() req,
+    @Query('userId') userId: string,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+    @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('userId is required');
+    }
+    await verifyUserAuthorization(req.user, userId, 'listing flashcards');
+    return this.aiService.listFlashcardDecks(userId, limit, offset);
+  }
+
+  @Get('flashcards/:deckId')
+  @ApiOperation({ summary: 'Get a flashcard deck with cards' })
+  @ApiResponse({ status: 200, description: 'Deck and cards' })
+  @ApiResponse({ status: 404, description: 'Not found' })
+  async getFlashcardDeck(
+    @Request() req,
+    @Param('deckId') deckId: string,
+    @Query('userId') userId: string,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('userId is required');
+    }
+    await verifyUserAuthorization(req.user, userId, 'fetching flashcard deck');
+    try {
+      return await this.aiService.getFlashcardDeckWithCards(userId, deckId);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      if (error instanceof Error) {
+        throw new BadRequestException(error.message);
+      }
+      throw new InternalServerErrorException(
+        'An unexpected error occurred while fetching flashcards',
+      );
+    }
+  }
+
+  @Delete('flashcards/:deckId')
+  @ApiOperation({ summary: 'Delete a flashcard deck' })
+  @ApiResponse({ status: 200, description: 'Deleted' })
+  @ApiResponse({ status: 404, description: 'Not found' })
+  async deleteFlashcardDeck(
+    @Request() req,
+    @Param('deckId') deckId: string,
+    @Query('userId') userId: string,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('userId is required');
+    }
+    await verifyUserAuthorization(req.user, userId, 'deleting flashcard deck');
+    try {
+      await this.aiService.deleteFlashcardDeck(userId, deckId);
+      return { ok: true };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      if (error instanceof Error) {
+        throw new BadRequestException(error.message);
+      }
+      throw new InternalServerErrorException(
+        'An unexpected error occurred while deleting flashcards',
+      );
     }
   }
 

@@ -295,6 +295,13 @@
       "when": 1774199869370,
       "tag": "0041_legal_dreadnoughts",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1774275917472,
+      "tag": "0042_flashcard_decks",
+      "breakpoints": true
     }
   ]
 }
