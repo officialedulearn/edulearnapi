@@ -11,6 +11,7 @@ import { NotificationsService } from 'src/common/services/notifications.service'
 import { ResendService } from 'src/resend/resend.service';
 import { CardsService } from 'src/cards/cards.service';
 import { LeaderboardService } from 'src/leaderboard/leaderboard.service';
+import { MonthlyLeaderboardService } from 'src/monthly-leaderboard/monthly-leaderboard.service';
 
 @Injectable()
 export class CronTasksService { 
@@ -26,7 +27,18 @@ export class CronTasksService {
         private resendService: ResendService,
         private cardService: CardsService,
         private leaderboardService: LeaderboardService,
+        private monthlyLeaderboardService: MonthlyLeaderboardService,
     ) {
+    }
+
+    @Cron('0 0 1 * *', { timeZone: 'UTC' })
+    async handleMonthlyLeaderboardPost() {
+      this.logger.log('Running monthly leaderboard X post');
+      try {
+        await this.monthlyLeaderboardService.postPreviousMonthToX();
+      } catch (error) {
+        this.logger.error('Failed monthly leaderboard post', error);
+      }
     }
 
     @Cron(CronExpression.EVERY_WEEKEND) 
@@ -51,25 +63,59 @@ export class CronTasksService {
       .orderBy(desc(user.xp))
       .limit(3);
 
-      for (const user of topUsers) {
-        if(user.expoPushToken) {
-          await this.expoPushService.sendPushNotification(user.expoPushToken as string, "EduLearn Top Users 🏆", "You are in the top 3 users today, let's keep it up!", {
+      if (topUsers.length === 0) {
+        this.logger.log('Daily leaderboard: no users, skipping');
+        return;
+      }
+
+      for (const u of topUsers) {
+        if (u.expoPushToken) {
+          await this.expoPushService.sendPushNotification(u.expoPushToken as string, "EduLearn Top Users 🏆", "You are in the top 3 users today, let's keep it up!", {
             screen: "leaderboard"
           });
         }
       }
 
-      const postFormat = `EduLearn Top Users 🏆
+      const dateLabel = new Date().toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
 
-First Place: @${topUsers[0].username} - ${topUsers[0].xp} XP
-Second Place: @${topUsers[1].username} - ${topUsers[1].xp} XP
-Third Place: @${topUsers[2].username} - ${topUsers[2].xp} XP
+      const entries = topUsers.map((u, i) => ({
+        rank: (i + 1) as 1 | 2 | 3,
+        username: u.username || 'user',
+        name: u.name || u.username || 'User',
+        xp: u.xp ?? 0,
+        avatarUrl: u.profilePictureURL,
+      }));
 
-Sign up on edulearn.fun to join the leaderboard and earn rewards!`;
+      const medals = ['🥇', '🥈', '🥉'];
+      const lines = topUsers.map(
+        (u, i) =>
+          `${medals[i] ?? '🏅'} @${u.username || 'user'} — ${(u.xp ?? 0).toLocaleString()} XP`,
+      );
+      const postFormat = [
+        'EduLearn Daily Leaderboard 🏆',
+        '',
+        ...lines,
+        '',
+        'Sign up at edulearn.fun — learn and earn!',
+      ].join('\n');
 
       try {
-        await this.twitterService.postTweet(postFormat);
-        this.logger.log('Successfully posted leaderboard to X');
+        const png = await this.cardService.generateMonthlyLeaderboardCard({
+          monthLabel: dateLabel,
+          theme: 'dark',
+          variant: 'daily',
+          entries,
+        });
+        const mediaId = await this.twitterService.uploadMediaBuffer(png);
+        await this.twitterService.postTweet(postFormat, {
+          media: { media_ids: [mediaId] },
+        });
+        this.logger.log('Successfully posted daily leaderboard to X with image');
       } catch (error) {
         this.logger.error('Failed to post to social media', error);
       }

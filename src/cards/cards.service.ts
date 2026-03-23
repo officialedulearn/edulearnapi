@@ -159,6 +159,7 @@ export class CardsService implements OnModuleInit {
       console.error(`Failed to fetch image from ${url}:`, error.message);
       return undefined;
     }
+    
   }
 
   async generateOg(params?: {
@@ -2794,6 +2795,502 @@ export class CardsService implements OnModuleInit {
     const png = new Resvg(svg).render().asPng();
     console.log(`[RoadmapProgressCard] PNG rendered in ${Date.now() - renderStartTime}ms`);
     console.log(`[RoadmapProgressCard] Total time: ${Date.now() - startTime}ms`);
+    return Buffer.from(png);
+  }
+
+  async generateMonthlyLeaderboardCard(params: {
+    monthLabel: string;
+    theme?: 'light' | 'dark';
+    variant?: 'monthly' | 'daily';
+    entries: Array<{
+      rank: 1 | 2 | 3;
+      username: string;
+      name: string;
+      xp: number;
+      avatarUrl?: string | null;
+    }>;
+  }): Promise<Buffer> {
+    await this.loadFonts();
+    const theme = this.getTheme(params?.theme ?? 'dark');
+    const variant = params.variant ?? 'monthly';
+    const titleUpper =
+      variant === 'daily' ? 'Daily leaderboard' : 'Monthly leaderboard';
+    const emptyBlurb =
+      variant === 'daily'
+        ? 'No ranked users yet. Start learning on edulearn.fun!'
+        : 'No weekly XP was recorded for this month yet. Keep learning!';
+    const bodyBlurb =
+      variant === 'daily'
+        ? 'Top learners by all-time XP on the platform right now.'
+        : 'Top learners by XP earned across weekly periods in this month.';
+    const xpPillLabel = variant === 'daily' ? 'XP' : 'XP (month)';
+    const [logoDataUrl, mascotDataUrl] = await Promise.all([
+      this.toDataUrl(this.eduLearnLogoUrl),
+      this.toDataUrl(this.mascotUrls.earnings),
+    ]);
+
+    if (!params.entries.length) {
+      const svgEmpty = await satori(
+        {
+          type: 'div',
+          props: {
+            style: {
+              width: '1080px',
+              height: '1080px',
+              background: theme.background,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '60px',
+            },
+            children: [
+              {
+                type: 'div',
+                props: {
+                  children: titleUpper,
+                  style: {
+                    display: 'flex',
+                    fontFamily: 'Satoshi',
+                    fontSize: 24,
+                    fontWeight: 600,
+                    color: theme.success,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase' as const,
+                    marginBottom: 12,
+                  },
+                },
+              },
+              {
+                type: 'div',
+                props: {
+                  children: params.monthLabel,
+                  style: {
+                    display: 'flex',
+                    fontFamily: 'Satoshi',
+                    fontSize: 40,
+                    fontWeight: 700,
+                    color: theme.foreground,
+                    marginBottom: 24,
+                  },
+                },
+              },
+              {
+                type: 'div',
+                props: {
+                  children: emptyBlurb,
+                  style: {
+                    display: 'flex',
+                    fontFamily: 'Satoshi',
+                    fontSize: 22,
+                    color: theme.mutedForeground,
+                    textAlign: 'center' as const,
+                    maxWidth: '720px',
+                    lineHeight: 1.5,
+                  },
+                },
+              },
+            ],
+          },
+        } as any,
+        {
+          width: 1080,
+          height: 1080,
+          fonts: [
+            { name: 'Satoshi', data: this.regular!, weight: 400 },
+            { name: 'Satoshi', data: this.bold!, weight: 700 },
+          ],
+        },
+      );
+      return Buffer.from(new Resvg(svgEmpty).render().asPng());
+    }
+
+    const rankColors: Record<1 | 2 | 3, string> = {
+      1: '#FFD700',
+      2: '#B8BCC8',
+      3: '#CD7F32',
+    };
+
+    const entries = params.entries.slice(0, 3);
+    const rowsResolved = await Promise.all(
+      entries.map(async (e) => ({
+        ...e,
+        avatarDataUrl: await this.toDataUrl(
+          this.getHighQualityImageUrl(e.avatarUrl || undefined) || undefined,
+        ),
+      })),
+    );
+
+    const rowNodes = rowsResolved.map((e) => ({
+      type: 'div',
+      props: {
+        style: {
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: theme.card,
+          border: `3px solid ${rankColors[e.rank]}`,
+          borderRadius: '20px',
+          padding: '22px 26px',
+          marginBottom: '18px',
+          width: '100%',
+          boxSizing: 'border-box' as const,
+        },
+        children: [
+          {
+            type: 'div',
+            props: {
+              style: {
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: '20px',
+                flex: 1,
+                minWidth: 0,
+              },
+              children: [
+                {
+                  type: 'div',
+                  props: {
+                    style: {
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontFamily: 'Satoshi',
+                      fontSize: 36,
+                      fontWeight: 700,
+                      color: rankColors[e.rank],
+                      width: '56px',
+                      textAlign: 'center' as const,
+                    },
+                    children: `${e.rank}`,
+                  },
+                },
+                e.avatarDataUrl
+                  ? {
+                      type: 'img',
+                      props: {
+                        src: e.avatarDataUrl,
+                        style: {
+                          width: '72px',
+                          height: '72px',
+                          borderRadius: '50%',
+                          border: `3px solid ${rankColors[e.rank]}`,
+                          objectFit: 'cover' as const,
+                        },
+                      },
+                    }
+                  : {
+                      type: 'div',
+                      props: {
+                        style: {
+                          width: '72px',
+                          height: '72px',
+                          borderRadius: '50%',
+                          background: theme.secondary,
+                          border: `3px solid ${rankColors[e.rank]}`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontFamily: 'Satoshi',
+                          fontSize: 28,
+                          color: theme.mutedForeground,
+                        },
+                        children: '?',
+                      },
+                    },
+                {
+                  type: 'div',
+                  props: {
+                    style: {
+                      display: 'flex',
+                      flexDirection: 'column',
+                      minWidth: 0,
+                      flex: 1,
+                    },
+                    children: [
+                      {
+                        type: 'div',
+                        props: {
+                          children: e.name || e.username,
+                          style: {
+                            display: 'flex',
+                            fontFamily: 'Satoshi',
+                            fontSize: 26,
+                            fontWeight: 700,
+                            color: theme.foreground,
+                            whiteSpace: 'nowrap' as const,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          },
+                        },
+                      },
+                      {
+                        type: 'div',
+                        props: {
+                          children: `@${e.username}`,
+                          style: {
+                            display: 'flex',
+                            fontFamily: 'Satoshi',
+                            fontSize: 18,
+                            color: theme.mutedForeground,
+                            marginTop: 4,
+                            whiteSpace: 'nowrap' as const,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          },
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            type: 'div',
+            props: {
+              style: {
+                background: theme.secondary,
+                border: `2px solid ${theme.success}`,
+                borderRadius: '14px',
+                padding: '14px 22px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+              },
+              children: [
+                {
+                  type: 'div',
+                  props: {
+                    children: e.xp.toLocaleString(),
+                    style: {
+                      display: 'flex',
+                      fontFamily: 'Satoshi',
+                      fontSize: 32,
+                      fontWeight: 700,
+                      color: theme.success,
+                    },
+                  },
+                },
+                {
+                  type: 'div',
+                  props: {
+                    children: xpPillLabel,
+                    style: {
+                      display: 'flex',
+                      fontFamily: 'Satoshi',
+                      fontSize: 14,
+                      color: theme.mutedForeground,
+                      marginTop: 4,
+                      fontWeight: 600,
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    }));
+
+    const svg = await satori(
+      {
+        type: 'div',
+        props: {
+          style: {
+            width: '1080px',
+            height: '1080px',
+            background: theme.background,
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '48px',
+            position: 'relative' as const,
+          },
+          children: [
+            {
+              type: 'div',
+              props: {
+                style: {
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '28px',
+                },
+                children: [
+                  logoDataUrl
+                    ? {
+                        type: 'img',
+                        props: {
+                          src: logoDataUrl,
+                          style: {
+                            width: '88px',
+                            height: '88px',
+                            objectFit: 'contain' as const,
+                          },
+                        },
+                      }
+                    : {
+                        type: 'div',
+                        props: {
+                          style: {
+                            display: 'flex',
+                            width: '88px',
+                            height: '88px',
+                          },
+                        },
+                      },
+                  {
+                    type: 'div',
+                    props: {
+                      style: {
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'flex-end',
+                      },
+                      children: [
+                        {
+                          type: 'div',
+                          props: {
+                            children: titleUpper,
+                            style: {
+                              display: 'flex',
+                              fontFamily: 'Satoshi',
+                              fontSize: 20,
+                              fontWeight: 600,
+                              color: theme.success,
+                              letterSpacing: '0.08em',
+                              textTransform: 'uppercase' as const,
+                            },
+                          },
+                        },
+                        {
+                          type: 'div',
+                          props: {
+                            children: params.monthLabel,
+                            style: {
+                              display: 'flex',
+                              fontFamily: 'Satoshi',
+                              fontSize: 34,
+                              fontWeight: 700,
+                              color: theme.foreground,
+                              marginTop: 6,
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+            {
+              type: 'div',
+              props: {
+                style: {
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'stretch',
+                  gap: '24px',
+                  flex: 1,
+                  minHeight: 0,
+                },
+                children: [
+                  {
+                    type: 'div',
+                    props: {
+                      style: {
+                        display: 'flex',
+                        flexDirection: 'column',
+                        flex: 1,
+                        minWidth: 0,
+                      },
+                      children: [
+                        {
+                          type: 'div',
+                          props: {
+                            children: bodyBlurb,
+                            style: {
+                              display: 'flex',
+                              fontFamily: 'Satoshi',
+                              fontSize: 18,
+                              color: theme.mutedForeground,
+                              marginBottom: '20px',
+                              lineHeight: 1.4,
+                            },
+                          },
+                        },
+                        ...rowNodes,
+                        {
+                          type: 'div',
+                          props: {
+                            style: {
+                              display: 'flex',
+                              flexDirection: 'column',
+                              marginTop: 'auto',
+                              paddingTop: '16px',
+                            },
+                            children: [
+                              {
+                                type: 'div',
+                                props: {
+                                  children: 'edulearn.fun',
+                                  style: {
+                                    display: 'flex',
+                                    fontFamily: 'Satoshi',
+                                    fontSize: 22,
+                                    fontWeight: 700,
+                                    color: theme.mutedForeground,
+                                  },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                      ],
+                    },
+                  },
+                  mascotDataUrl
+                    ? {
+                        type: 'img',
+                        props: {
+                          src: mascotDataUrl,
+                          style: {
+                            width: '320px',
+                            height: '320px',
+                            objectFit: 'contain' as const,
+                            alignSelf: 'flex-end',
+                            marginBottom: '-12px',
+                          },
+                        },
+                      }
+                    : {
+                        type: 'div',
+                        props: {
+                          style: {
+                            display: 'flex',
+                            width: '320px',
+                          },
+                        },
+                      },
+                ],
+              },
+            },
+          ],
+        },
+      } as any,
+      {
+        width: 1080,
+        height: 1080,
+        fonts: [
+          { name: 'Satoshi', data: this.regular!, weight: 400 },
+          { name: 'Satoshi', data: this.bold!, weight: 700 },
+        ],
+      },
+    );
+
+    const png = new Resvg(svg).render().asPng();
     return Buffer.from(png);
   }
 }

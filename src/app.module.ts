@@ -25,6 +25,7 @@ import { SocialModule } from './social/social.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { QuizzesModule } from './quizzes/quizzes.module';
 import { EmailPreviewModule } from './emails/email-preview.module';
+import { MonthlyLeaderboardModule } from './monthly-leaderboard/monthly-leaderboard.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { EmailPreviewModule } from './emails/email-preview.module';
     NotificationsModule,
     QuizzesModule,
     EmailPreviewModule,
+    MonthlyLeaderboardModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisService],

@@ -7,6 +7,7 @@ import { TwitterModule } from 'src/twitter/twitter.module';
 import { ExpoPushService } from 'src/common/services/expo-push.service';
 import { CardsModule } from 'src/cards/cards.module';
 import { LeaderboardModule } from 'src/leaderboard/leaderboard.module';
+import { MonthlyLeaderboardModule } from 'src/monthly-leaderboard/monthly-leaderboard.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { LeaderboardModule } from 'src/leaderboard/leaderboard.module';
     TwitterModule,
     CardsModule,
     LeaderboardModule,
+    MonthlyLeaderboardModule,
   ],
   providers: [CronTasksService, ExpoPushService],
   controllers: [CronTasksController],

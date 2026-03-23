@@ -184,6 +184,24 @@ export class TwitterService {
     }
   }
 
+  async uploadMediaBuffer(
+    buffer: Buffer,
+    mimeType: string = 'image/png',
+  ): Promise<string> {
+    if (!this.apiKey || !this.apiSecret || !this.accessToken || !this.accessTokenSecret) {
+      throw new BadRequestException('Twitter OAuth 1.0a credentials missing');
+    }
+    const client = new TwitterApi({
+      appKey: this.apiKey,
+      appSecret: this.apiSecret,
+      accessToken: this.accessToken,
+      accessSecret: this.accessTokenSecret,
+    });
+    const mediaId = await client.v1.uploadMedia(buffer, { mimeType });
+    this.logger.log('✅ Buffer uploaded to Twitter. Media ID:', mediaId);
+    return mediaId;
+  }
+
   async postTweet(
     text: string,
     options?: {

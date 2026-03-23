@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, gte, lt, sql, inArray } from 'drizzle-orm';
 import db from '../../drizzle';
 import { weeklyLeaderboard, user } from '../../lib/db/schema';
 
@@ -116,5 +116,60 @@ export class LeaderboardService {
     }
 
     return topUsers;
+  }
+
+  async getMonthlyXpLeaders(
+    year: number,
+    month: number,
+  ): Promise<
+    Array<{
+      rank: number;
+      totalXp: number;
+      user: typeof user.$inferSelect;
+    }>
+  > {
+    const monthStart = new Date(year, month - 1, 1);
+    monthStart.setHours(0, 0, 0, 0);
+    const nextMonthStart = new Date(year, month, 1);
+    nextMonthStart.setHours(0, 0, 0, 0);
+
+    const aggregated = await db
+      .select({
+        userId: weeklyLeaderboard.userId,
+        totalXp: sql<number>`sum(${weeklyLeaderboard.xpEarned})::int`.mapWith(
+          Number,
+        ),
+      })
+      .from(weeklyLeaderboard)
+      .where(
+        and(
+          gte(weeklyLeaderboard.weekStart, monthStart),
+          lt(weeklyLeaderboard.weekStart, nextMonthStart),
+        ),
+      )
+      .groupBy(weeklyLeaderboard.userId)
+      .orderBy(desc(sql`sum(${weeklyLeaderboard.xpEarned})`))
+      .limit(3);
+
+    if (aggregated.length === 0) return [];
+
+    const userRows = await db
+      .select()
+      .from(user)
+      .where(
+        inArray(
+          user.id,
+          aggregated.map((a) => a.userId),
+        ),
+      );
+    const byId = new Map(userRows.map((u) => [u.id, u]));
+
+    return aggregated
+      .map((a, i) => {
+        const u = byId.get(a.userId);
+        if (!u) return null;
+        return { rank: i + 1, totalXp: a.totalXp, user: u };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
   }
 }
