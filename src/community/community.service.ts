@@ -674,7 +674,9 @@ export class CommunityService {
       .from(user)
       .where(or(...conditions));
     
-    return results.map(u => ({ username: u.username, userId: u.id }));
+    return results
+      .filter((u): u is { id: string; username: string } => u.username != null)
+      .map(u => ({ username: u.username, userId: u.id }));
   }
 
   async findUserByUsername(username: string): Promise<{ id: string; username: string } | null> {
@@ -686,7 +688,8 @@ export class CommunityService {
       .from(user)
       .where(eq(user.username, username))
       .limit(1);
-    
-    return result || null;
+
+    if (!result || result.username == null) return null;
+    return { id: result.id, username: result.username };
   }
 }

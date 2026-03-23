@@ -185,7 +185,7 @@ export class SubscriptionController {
     const result = await this.subscriptionService.purchaseStreakShieldViaApi(
       userId,
     );
-    return { success: true, ...result };
+    return { ...result, success: true };
   }
 
   @Post('purchase/quiz-refresh/:userId')
@@ -198,6 +198,6 @@ export class SubscriptionController {
     const result = await this.subscriptionService.purchaseQuizRefreshViaApi(
       userId,
     );
-    return { success: true, ...result };
+    return { ...result, success: true };
   }
 }

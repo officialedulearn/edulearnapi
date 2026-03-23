@@ -284,7 +284,7 @@ export class SocialService {
 
     if (!userInfo.length) return;
 
-    const username = userInfo[0].username;
+    const username = userInfo[0].username ?? 'User';
     let title = '';
     let content = '';
 
