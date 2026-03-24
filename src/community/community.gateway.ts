@@ -18,6 +18,22 @@ interface AuthenticatedSocket extends Socket {
   username?: string;
 }
 
+function displayNameFromJwtPayload(payload: Record<string, unknown>): string | undefined {
+  const meta = (payload.user_metadata ?? {}) as Record<string, unknown>;
+  const email = payload.email;
+  const fromEmail =
+    typeof email === 'string' && email.includes('@') ? email.split('@')[0] : undefined;
+  const pick = (v: unknown) => (typeof v === 'string' && v.length > 0 ? v : undefined);
+  return (
+    pick(payload.username) ||
+    pick(meta.username) ||
+    pick(meta.preferred_username) ||
+    pick(meta.full_name) ||
+    pick(meta.name) ||
+    fromEmail
+  );
+}
+
 @WebSocketGateway({
   cors: {
     origin: '*',
@@ -66,7 +82,18 @@ export class CommunityGateway
       }
 
       client.userId = payload.sub;
-      client.username = payload.username;
+      let resolvedName: string | null = null;
+      try {
+        resolvedName = await this.communityService.getDisplayNameForSocket(
+          payload.sub as string,
+        );
+      } catch (e) {
+        this.logger.warn(`Could not resolve username for socket user ${payload.sub}`);
+      }
+      client.username =
+        resolvedName ??
+        displayNameFromJwtPayload(payload as Record<string, unknown>) ??
+        'User';
 
       await this.redisService.addOnlineUser(client.userId as unknown as string);
 
@@ -98,7 +125,18 @@ export class CommunityGateway
     if (!client.userId) return;
 
     try {
+      const communityIds = await this.redisService.getUserRooms(client.userId);
       await this.redisService.cleanupUserPresence(client.userId);
+
+      for (const communityId of communityIds) {
+        const roomStats = await this.redisService.getRoomStats(communityId);
+        this.server.to(communityId).emit('room_user_left', {
+          userId: client.userId,
+          username: client.username,
+          timestamp: new Date().toISOString(),
+          onlineCount: roomStats.onlineCount,
+        });
+      }
 
       this.server.emit('user_status', {
         userId: client.userId,

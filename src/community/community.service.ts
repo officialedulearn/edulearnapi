@@ -692,4 +692,14 @@ export class CommunityService {
     if (!result || result.username == null) return null;
     return { id: result.id, username: result.username };
   }
+
+  async getDisplayNameForSocket(userId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ username: user.username, name: user.name })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+    if (!row) return null;
+    return row.username ?? row.name ?? null;
+  }
 }
