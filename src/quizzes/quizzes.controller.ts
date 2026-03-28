@@ -100,4 +100,16 @@ export class QuizzesController {
       limitNum,
     );
   }
+
+  /**
+   * Share quiz (increment view count for shareable links)
+   * Public endpoint - no auth required
+   * GET /quizzes/public/:id/share
+   */
+  @Get('public/:id/share')
+  async shareQuiz(@Param('id') id: string) {
+    // This endpoint increments view count for quiz sharing analytics
+    // Same as findOne but used for tracking shared links
+    return this.quizzesService.findOne(id);
+  }
 }

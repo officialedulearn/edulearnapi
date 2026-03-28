@@ -122,14 +122,14 @@ export class QuizGenerationService {
         `Generated quiz ${createdQuiz.id} for user ${userId} from chat ${mostRecentChat.chatId}`,
       );
 
-      // 8. Send notification to user
+      // 8. Send notification to user (with compelling copy)
       let notificationSent = false;
       if (userRecord.expoPushToken) {
         try {
           await this.notificationsService.createNotification(
             {
-              title: '🎯 New Quiz Available!',
-              content: `Test your knowledge: ${quizTitle}`,
+              title: '✨ New Quiz Ready for You!',
+              content: `Test yourself on ${quizTitle.replace('Quiz: ', '')} — see how much you've learned! 🚀`,
               userId: userId,
             },
             true, // sendPush = true
@@ -211,11 +211,11 @@ export class QuizGenerationService {
 
   /**
    * Schedule automatic quiz generation for a user
-   * Can be called by a cron job or manually triggered
+   * Called by cron job (monthly) - generates quiz if user has recent activity
    */
   async scheduleQuizGeneration(userId: string): Promise<void> {
     try {
-      // Check when user last got a quiz (optional rate limiting)
+      // Check when user last got a quiz (monthly rate limit)
       const recentGeneratedQuizzes = await db
         .select()
         .from(publicQuiz)
@@ -225,28 +225,87 @@ export class QuizGenerationService {
 
       const lastQuizTime = recentGeneratedQuizzes[0]?.createdAt;
       const now = new Date();
-      const hoursSinceLastQuiz = lastQuizTime
-        ? (now.getTime() - lastQuizTime.getTime()) / (1000 * 60 * 60)
-        : 24;
+      const daysSinceLastQuiz = lastQuizTime
+        ? (now.getTime() - lastQuizTime.getTime()) / (1000 * 60 * 60 * 24)
+        : 31;
 
-      // Only generate if at least 6 hours have passed since last quiz
-      if (hoursSinceLastQuiz < 6) {
+      // Only generate if at least 30 days (1 month) have passed since last quiz
+      if (daysSinceLastQuiz < 30) {
         this.logger.log(
-          `Skipping quiz generation for user ${userId} - recently generated`,
+          `Skipping monthly quiz generation for user ${userId} - recently generated (${Math.floor(daysSinceLastQuiz)} days ago)`,
         );
         return;
       }
 
-      // Generate quiz
-      const result = await this.generateQuizFromRecentLearning(userId, 1);
+      // Generate quiz (look back 7 days for recent activity)
+      const result = await this.generateQuizFromRecentLearning(userId, 7);
       this.logger.log(
-        `Scheduled quiz generation completed for user ${userId}: ${result.quizId}`,
+        `Monthly quiz generation completed for user ${userId}: ${result.quizId}`,
       );
     } catch (error) {
       this.logger.warn(
-        `Scheduled quiz generation failed for user ${userId}: ${(error as Error)?.message}`,
+        `Monthly quiz generation failed for user ${userId}: ${(error as Error)?.message}`,
       );
       // Don't throw - this is a background task
+    }
+  }
+
+  /**
+   * Run monthly quiz generation for all active users
+   * Called by cron job once per month
+   */
+  async runMonthlyQuizGeneration(): Promise<{
+    total: number;
+    successful: number;
+    failed: number;
+  }> {
+    try {
+      this.logger.log('Starting monthly quiz generation for all users...');
+
+      // Get all users who have been active in last 7 days
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const activeUsers = await db
+        .select({ id: user.id })
+        .from(user)
+        .where(gte(user.lastLoggedIn, sevenDaysAgo));
+
+      let successful = 0;
+      let failed = 0;
+
+      this.logger.log(
+        `Found ${activeUsers.length} active users for monthly quiz generation`,
+      );
+
+      // Generate quizzes for each user
+      for (const u of activeUsers) {
+        try {
+          await this.scheduleQuizGeneration(u.id);
+          successful++;
+        } catch (error) {
+          this.logger.warn(
+            `Failed to generate quiz for user ${u.id}: ${(error as Error)?.message}`,
+          );
+          failed++;
+        }
+      }
+
+      this.logger.log(
+        `Monthly quiz generation complete: ${successful} successful, ${failed} failed`,
+      );
+
+      return {
+        total: activeUsers.length,
+        successful,
+        failed,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Monthly quiz generation job failed`,
+        (error as Error)?.stack,
+      );
+      return { total: 0, successful: 0, failed: 1 };
     }
   }
 }
