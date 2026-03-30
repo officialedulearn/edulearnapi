@@ -71,6 +71,9 @@ importers:
       '@nestjs/websockets':
         specifier: ^11.0.1
         version: 11.1.9(@nestjs/common@11.1.6(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.6)(@nestjs/platform-socket.io@11.1.9)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@perplexity-ai/perplexity_ai':
+        specifier: ^0.26.4
+        version: 0.26.4
       '@project-serum/anchor':
         specifier: ^0.26.0
         version: 0.26.0(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)
@@ -2656,6 +2659,9 @@ packages:
 
   '@pedrouid/environment@1.0.1':
     resolution: {integrity: sha512-HaW78NszGzRZd9SeoI3JD11JqY+lubnaOx7Pewj5pfjqWXOEATpeKIFb9Z4t2WBUK2iryiXX3lzWwmYWgUL0Ug==}
+
+  '@perplexity-ai/perplexity_ai@0.26.4':
+    resolution: {integrity: sha512-imuFIoVs97Zqm19t+kLwFvAhyDmfAvbsmEMUC+YnM0xsrQ4bA0YLVJQI/b23b48zXZy4ciXHOAKhI1eeY2YHhg==}
 
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
@@ -11828,6 +11834,8 @@ snapshots:
       '@noble/hashes': 1.8.0
 
   '@pedrouid/environment@1.0.1': {}
+
+  '@perplexity-ai/perplexity_ai@0.26.4': {}
 
   '@pkgjs/parseargs@0.11.0':
     optional: true

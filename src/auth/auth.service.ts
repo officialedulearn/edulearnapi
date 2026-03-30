@@ -1,7 +1,30 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
-import { eq, desc, ilike } from 'drizzle-orm';
+import { eq, desc, ilike, or, inArray } from 'drizzle-orm';
 import db from '../../drizzle';
-import { user, type User, message, chat, xpActivity, userReward, earning, roadmap, premiumTransactions, roadMapStep } from '../../lib/db/schema';
+import {
+  user,
+  type User,
+  message,
+  chat,
+  xpActivity,
+  userReward,
+  earning,
+  roadmap,
+  premiumTransactions,
+  roadMapStep,
+  publicQuiz,
+  flashcardDeck,
+  roomMessage,
+  messageReaction,
+  mention,
+  community_members,
+  community_join_request,
+  notifications,
+  feedback,
+  userFollows,
+  weeklyLeaderboard,
+  claim,
+} from '../../lib/db/schema';
 import { signUpDetails, OAuthUserData, OAuthCallbackResult } from 'types/auth';
 import { generateReferralCode } from 'lib/constants';
 import { UUID } from 'crypto';
@@ -53,7 +76,7 @@ export class AuthService {
       const userWallet = await this.walletService.genereteWallet();
 
       const referralCode = generateReferralCode();
-   
+
       const referredByCode = data.referredBy || data.referralCode;
 
       await db.insert(user).values({
@@ -74,13 +97,17 @@ export class AuthService {
             .from(user)
             .where(eq(user.referralCode, referredByCode));
 
-          console.log(`Found ${referringUsers.length} user(s) with referral code: ${referredByCode}`);
+          console.log(
+            `Found ${referringUsers.length} user(s) with referral code: ${referredByCode}`,
+          );
 
           if (referringUsers.length > 0) {
             const referringUser = referringUsers[0];
             const currentReferralCount = referringUser.referralCount || 0;
 
-            console.log(`Incrementing referral count for user ${referringUser.email} from ${currentReferralCount} to ${currentReferralCount + 1}`);
+            console.log(
+              `Incrementing referral count for user ${referringUser.email} from ${currentReferralCount} to ${currentReferralCount + 1}`,
+            );
 
             await db
               .update(user)
@@ -89,10 +116,12 @@ export class AuthService {
 
             await db
               .update(user)
-              .set({xp: referringUser.xp + 5})
+              .set({ xp: referringUser.xp + 5 })
               .where(eq(user.referralCode, referredByCode));
-              
-            console.log(`Successfully updated referral count and XP for referring user ${referringUser.email}`);
+
+            console.log(
+              `Successfully updated referral count and XP for referring user ${referringUser.email}`,
+            );
           } else {
             console.log(`No user found with referral code: ${referredByCode}`);
           }
@@ -109,18 +138,22 @@ export class AuthService {
         .from(user)
         .where(eq(user.email, data.email));
 
-      this.resendService.addResendContact(createdUser.email, createdUser.name).catch((error) => {
-        console.error('Failed to add resend contact:', error);
-      });
+      this.resendService
+        .addResendContact(createdUser.email, createdUser.name)
+        .catch((error) => {
+          console.error('Failed to add resend contact:', error);
+        });
 
-      this.resendService.sendWelcomeEmail(
-        createdUser.email,
-        createdUser.name,
-        createdUser.username || '',
-        createdUser.referralCode || ''
-      ).catch((error) => {
-        console.error('Failed to send welcome email:', error);
-      });
+      this.resendService
+        .sendWelcomeEmail(
+          createdUser.email,
+          createdUser.name,
+          createdUser.username || '',
+          createdUser.referralCode || '',
+        )
+        .catch((error) => {
+          console.error('Failed to send welcome email:', error);
+        });
 
       return {
         id: createdUser.id,
@@ -147,36 +180,50 @@ export class AuthService {
         message: error.message,
         code: error.code,
         detail: error.detail,
-        constraint: error.constraint
+        constraint: error.constraint,
       });
-      
+
       console.log('🔄 ROLLBACK: Checking for Supabase Auth user to delete...');
       try {
-        const { data: authUsersData, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-        
+        const { data: authUsersData, error: listError } =
+          await supabaseAdmin.auth.admin.listUsers();
+
         if (listError) {
           console.error('⚠️ Error listing Supabase Auth users:', listError);
         } else {
-          const matchingUser = authUsersData?.users?.find((u: any) => u.email?.toLowerCase() === data.email.toLowerCase());
-          
+          const matchingUser = authUsersData?.users?.find(
+            (u: any) => u.email?.toLowerCase() === data.email.toLowerCase(),
+          );
+
           if (matchingUser) {
             const supabaseUserId = matchingUser.id;
-            console.log(`🔄 ROLLBACK: Found Supabase Auth user (${supabaseUserId}), deleting...`);
-            
-            const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(supabaseUserId);
+            console.log(
+              `🔄 ROLLBACK: Found Supabase Auth user (${supabaseUserId}), deleting...`,
+            );
+
+            const { error: deleteError } =
+              await supabaseAdmin.auth.admin.deleteUser(supabaseUserId);
             if (deleteError) {
-              console.error('⚠️ Failed to delete Supabase Auth user during rollback:', deleteError);
+              console.error(
+                '⚠️ Failed to delete Supabase Auth user during rollback:',
+                deleteError,
+              );
             } else {
-              console.log('✅ Successfully deleted Supabase Auth user during rollback');
+              console.log(
+                '✅ Successfully deleted Supabase Auth user during rollback',
+              );
             }
           } else {
             console.log('✅ No Supabase Auth user found - nothing to rollback');
           }
         }
       } catch (rollbackErr) {
-        console.error('❌ Error during Supabase Auth rollback check:', rollbackErr);
+        console.error(
+          '❌ Error during Supabase Auth rollback check:',
+          rollbackErr,
+        );
       }
-      
+
       throw error;
     }
   }
@@ -203,8 +250,8 @@ export class AuthService {
         lastLoggedIn: result[0]?.lastLoggedIn,
         profilePictureURL: result[0]?.profilePictureURL,
         quizLimit: result[0]?.quizLimits,
-      }
-      return userObject as UserResponse || null;
+      };
+      return (userObject as UserResponse) || null;
     } catch (error) {
       console.error('Failed to get user by email');
       throw error;
@@ -215,7 +262,7 @@ export class AuthService {
     try {
       const result = await db.select().from(user).where(eq(user.id, id));
       if (!result[0]) return null;
-      
+
       return {
         ...result[0],
         quizLimit: result[0].quizLimits,
@@ -226,7 +273,14 @@ export class AuthService {
     }
   }
 
-  async checkUserAvailability(email?: string, username?: string): Promise<{ emailAvailable: boolean; usernameAvailable: boolean; message?: string }> {
+  async checkUserAvailability(
+    email?: string,
+    username?: string,
+  ): Promise<{
+    emailAvailable: boolean;
+    usernameAvailable: boolean;
+    message?: string;
+  }> {
     try {
       let emailAvailable = true;
       let usernameAvailable = true;
@@ -238,7 +292,7 @@ export class AuthService {
           .from(user)
           .where(eq(user.email, email))
           .limit(1);
-        
+
         if (existingUserByEmail.length > 0) {
           emailAvailable = false;
           messages.push('Email is already registered');
@@ -251,7 +305,7 @@ export class AuthService {
           .from(user)
           .where(eq(user.username, username))
           .limit(1);
-        
+
         if (existingUserByUsername.length > 0) {
           usernameAvailable = false;
           messages.push('Username is already taken');
@@ -261,7 +315,7 @@ export class AuthService {
       return {
         emailAvailable,
         usernameAvailable,
-        message: messages.length > 0 ? messages.join('. ') : undefined
+        message: messages.length > 0 ? messages.join('. ') : undefined,
       };
     } catch (error) {
       console.error('Failed to check user availability:', error);
@@ -270,9 +324,12 @@ export class AuthService {
   }
   async getUserByAddress(address: string): Promise<User | null> {
     try {
-      const result = await db.select().from(user).where(eq(user.address, address));
+      const result = await db
+        .select()
+        .from(user)
+        .where(eq(user.address, address));
       if (!result[0]) return null;
-      
+
       return {
         ...result[0],
         quizLimit: result[0].quizLimits,
@@ -286,12 +343,12 @@ export class AuthService {
     name,
     email,
     username,
-    learning
+    learning,
   }: {
     name: string;
     email: string;
     username: string;
-    learning: string
+    learning: string;
   }): Promise<User | null> {
     try {
       const result = await db
@@ -303,21 +360,25 @@ export class AuthService {
       const updatedUser = result[0] ?? null;
 
       if (updatedUser && learning && learning.trim() !== '') {
-        this.roadmapService.generateRoadmap(updatedUser.id, learning.trim()).catch((error) => {
-          console.error('Failed to generate roadmap:', error);
-        });
+        this.roadmapService
+          .generateRoadmap(updatedUser.id, learning.trim())
+          .catch((error) => {
+            console.error('Failed to generate roadmap:', error);
+          });
 
-        this.resendService.sendRoadmapGeneratedEmail(
-          updatedUser.email, 
-          learning.trim(), 
-          updatedUser.username || ''
-        ).catch((error) => {
-          console.error('Failed to send roadmap generated email:', error);
-        });
+        this.resendService
+          .sendRoadmapGeneratedEmail(
+            updatedUser.email,
+            learning.trim(),
+            updatedUser.username || '',
+          )
+          .catch((error) => {
+            console.error('Failed to send roadmap generated email:', error);
+          });
       }
 
       if (!updatedUser) return null;
-      
+
       return {
         ...updatedUser,
         quizLimit: updatedUser.quizLimits,
@@ -432,12 +493,14 @@ export class AuthService {
         .set({ expoPushToken })
         .where(eq(user.id, userId))
         .returning();
-      
+
       if (!updatedUser || updatedUser.length === 0) {
         throw new Error(`User not found with id: ${userId}`);
       }
 
-      console.log(`✅ User expo push token updated successfully for user ${userId}: ${updatedUser[0]?.expoPushToken}`);
+      console.log(
+        `✅ User expo push token updated successfully for user ${userId}: ${updatedUser[0]?.expoPushToken}`,
+      );
       return updatedUser[0];
     } catch (error) {
       console.error('❌ Failed to update user expo push token:', error);
@@ -480,7 +543,9 @@ export class AuthService {
         newLevel = 'intermediate';
       } else if (newXP >= 500) {
         newLevel = 'beginner';
-        console.log(`User ${userId} reached ${newXP} XP - awarding beginner NFT reward`);
+        console.log(
+          `User ${userId} reached ${newXP} XP - awarding beginner NFT reward`,
+        );
         try {
           await this.rewardService.awardRewardToUser(
             userId,
@@ -488,14 +553,26 @@ export class AuthService {
           );
           console.log(`Successfully awarded beginner NFT to user ${userId}`);
         } catch (error) {
-          if (error.message && error.message.includes('already has this reward')) {
+          if (
+            error.message &&
+            error.message.includes('already has this reward')
+          ) {
             console.log(`User ${userId} already has the beginner NFT reward`);
           } else {
-            console.error(`Failed to award beginner NFT to user ${userId}:`, error);
+            console.error(
+              `Failed to award beginner NFT to user ${userId}:`,
+              error,
+            );
           }
         }
       }
-      const levels = ['novice', 'beginner', 'intermediate', 'advanced', 'expert'];
+      const levels = [
+        'novice',
+        'beginner',
+        'intermediate',
+        'advanced',
+        'expert',
+      ];
       await db
         .update(user)
         .set({
@@ -513,17 +590,23 @@ export class AuthService {
         await this.communityService.updateModStatusBasedOnXP(userId);
       } catch (error) {
         console.error('Failed to update mod status after XP change:', error);
-    
       }
 
       if (oldLevel !== newLevel) {
         try {
           await this.socialService.notifyFollowers(userId, {
             type: 'level_up',
-            data: { level: levels[levels.indexOf(newLevel)], levelTitle: title, xpTotal: newXP },
+            data: {
+              level: levels[levels.indexOf(newLevel)],
+              levelTitle: title,
+              xpTotal: newXP,
+            },
           });
         } catch (notifyError) {
-          console.error('Failed to notify followers about level change:', notifyError);
+          console.error(
+            'Failed to notify followers about level change:',
+            notifyError,
+          );
         }
       }
 
@@ -603,7 +686,10 @@ export class AuthService {
             data: { level },
           });
         } catch (notifyError) {
-          console.error('Failed to notify followers about level change:', notifyError);
+          console.error(
+            'Failed to notify followers about level change:',
+            notifyError,
+          );
         }
       }
 
@@ -626,29 +712,33 @@ export class AuthService {
       const now = new Date();
       const todayMidnight = new Date(now);
       todayMidnight.setHours(0, 0, 0, 0);
-      const lastRenewalMidnight = currentUser.lastCreditRenewal ? new Date(currentUser.lastCreditRenewal) : new Date(0);
+      const lastRenewalMidnight = currentUser.lastCreditRenewal
+        ? new Date(currentUser.lastCreditRenewal)
+        : new Date(0);
       lastRenewalMidnight.setHours(0, 0, 0, 0);
 
       if (lastRenewalMidnight.getTime() < todayMidnight.getTime()) {
-        const newCredits = currentUser.isPremium ? currentCredits + 20 : 10
+        const newCredits = currentUser.isPremium ? currentCredits + 20 : 10;
         const newUploadLimit = currentUser.isPremium ? 5 : 2;
-        
+
         await db
           .update(user)
-          .set({ 
+          .set({
             credits: newCredits.toString(),
-            lastCreditRenewal: now 
+            lastCreditRenewal: now,
           })
           .where(eq(user.id, userId));
 
-        await db.update(user)
-        .set({imageUploadLimit: newUploadLimit})
-        .where(eq(user.id, userId));
-        
+        await db
+          .update(user)
+          .set({ imageUploadLimit: newUploadLimit })
+          .where(eq(user.id, userId));
+
         const newQuizLimits = currentUser.isPremium ? 15 : 5;
-        await db.update(user)
-        .set({quizLimits: newQuizLimits})
-        .where(eq(user.id, userId));
+        await db
+          .update(user)
+          .set({ quizLimits: newQuizLimits })
+          .where(eq(user.id, userId));
 
         return newCredits;
       }
@@ -675,9 +765,9 @@ export class AuthService {
 
       await db
         .update(user)
-        .set({ 
+        .set({
           isPremium,
-          premiumUntil: isPremium ? premiumUntil : null 
+          premiumUntil: isPremium ? premiumUntil : null,
         })
         .where(eq(user.id, userId));
 
@@ -710,7 +800,7 @@ export class AuthService {
     }
   }
 
-  async verifyUser(email: string): Promise<User | null> { 
+  async verifyUser(email: string): Promise<User | null> {
     try {
       const result = await db
         .update(user)
@@ -719,7 +809,7 @@ export class AuthService {
         .returning();
 
       if (!result[0]) return null;
-      
+
       return {
         ...result[0],
         quizLimit: result[0].quizLimits,
@@ -730,7 +820,10 @@ export class AuthService {
     }
   }
 
-  async searchUsersByUsername(usernameQuery: string, limit: number = 10): Promise<Partial<User>[]> {
+  async searchUsersByUsername(
+    usernameQuery: string,
+    limit: number = 10,
+  ): Promise<Partial<User>[]> {
     try {
       const results = await db
         .select({
@@ -744,7 +837,7 @@ export class AuthService {
           address: user.address,
           learning: user.learning,
           profilePictureURL: user.profilePictureURL,
-          streak: user.streak
+          streak: user.streak,
         })
         .from(user)
         .where(ilike(user.username, `%${usernameQuery}%`))
@@ -764,14 +857,14 @@ export class AuthService {
       if (users.length === 0) {
         throw new Error(`User with id ${userId} not found`);
       }
-      
+
       const currentUser = users[0];
       const currentQuizLimits = currentUser.quizLimits || 0;
       if (currentQuizLimits <= 0) {
         throw new Error('No quiz attempts left for today');
       }
       const newQuizLimits = currentQuizLimits - 1;
-      
+
       await db
         .update(user)
         .set({ quizLimits: newQuizLimits })
@@ -785,12 +878,15 @@ export class AuthService {
 
   async getUserByRefCode(referralCode: string): Promise<User> {
     try {
-      const affiliate = await db.select().from(user).where(eq(user.referralCode, referralCode));
-      
+      const affiliate = await db
+        .select()
+        .from(user)
+        .where(eq(user.referralCode, referralCode));
+
       if (affiliate.length === 0) {
         throw new Error(`User with referral code ${referralCode} not found`);
       }
-      
+
       return {
         ...affiliate[0],
         quizLimit: affiliate[0].quizLimits,
@@ -801,7 +897,10 @@ export class AuthService {
     }
   }
 
-  async deleteUserDataAsync(userId: string, supabaseUserId: string): Promise<{ message: string; deletionStarted: boolean }> {
+  async deleteUserDataAsync(
+    userId: string,
+    supabaseUserId: string,
+  ): Promise<{ message: string; deletionStarted: boolean }> {
     try {
       const userToDelete = await this.getUserById(userId);
       if (!userToDelete) {
@@ -813,8 +912,9 @@ export class AuthService {
       });
 
       return {
-        message: 'User deletion process has been initiated and will complete in the background',
-        deletionStarted: true
+        message:
+          'User deletion process has been initiated and will complete in the background',
+        deletionStarted: true,
       };
     } catch (error) {
       console.error('Failed to initiate user deletion', error);
@@ -822,30 +922,119 @@ export class AuthService {
     }
   }
 
-  async deleteUserData(userId: string, supabaseUserId: string): Promise<boolean> {
+  async deleteUserData(
+    userId: string,
+    supabaseUserId: string,
+  ): Promise<boolean> {
     try {
       console.log(`Starting deletion process for user: ${supabaseUserId}`);
       try {
-        const { error: supabaseError } = await supabaseAdmin.auth.admin.deleteUser(supabaseUserId as UUID);
+        const { error: supabaseError } =
+          await supabaseAdmin.auth.admin.deleteUser(supabaseUserId as UUID);
         if (supabaseError) {
-          console.error(`Failed to delete user from Supabase Auth: ${supabaseError.message}`);
+          console.error(
+            `Failed to delete user from Supabase Auth: ${supabaseError.message}`,
+          );
         } else {
-          console.log(`Successfully deleted user from Supabase Auth: ${supabaseUserId}`);
+          console.log(
+            `Successfully deleted user from Supabase Auth: ${supabaseUserId}`,
+          );
         }
       } catch (supabaseError) {
         console.error(`Error deleting user from Supabase Auth:`, supabaseError);
       }
-      
-      
-      const userRoadmaps = await db.select().from(roadmap).where(eq(roadmap.userId, userId));
+
+      const userRoadmaps = await db
+        .select()
+        .from(roadmap)
+        .where(eq(roadmap.userId, userId));
       console.log(`Found ${userRoadmaps.length} roadmaps for user ${userId}`);
-      
+
       for (const userRoadmap of userRoadmaps) {
-        await db.delete(roadMapStep).where(eq(roadMapStep.roadmapId, userRoadmap.id));
+        await db
+          .delete(roadMapStep)
+          .where(eq(roadMapStep.roadmapId, userRoadmap.id));
         console.log(`Deleted roadmap steps for roadmap ${userRoadmap.id}`);
       }
-      const userChats = await db.select().from(chat).where(eq(chat.userId, userId));
-      console.log(`Found ${userChats.length} chats for user ${userId}`)
+      const userChats = await db
+        .select()
+        .from(chat)
+        .where(eq(chat.userId, userId));
+      console.log(`Found ${userChats.length} chats for user ${userId}`);
+
+      await db.delete(publicQuiz).where(eq(publicQuiz.createdBy, userId));
+      const chatIds = userChats.map((c) => c.id);
+      if (chatIds.length > 0) {
+        await db
+          .update(publicQuiz)
+          .set({ sourceChatId: null })
+          .where(inArray(publicQuiz.sourceChatId, chatIds));
+      }
+
+      const userRoomMsgs = await db
+        .select({ id: roomMessage.id })
+        .from(roomMessage)
+        .where(eq(roomMessage.userId, userId));
+      const roomMsgIds = userRoomMsgs.map((r) => r.id);
+      if (roomMsgIds.length > 0) {
+        await db
+          .delete(messageReaction)
+          .where(
+            or(
+              eq(messageReaction.userId, userId),
+              inArray(messageReaction.messageId, roomMsgIds),
+            ),
+          );
+        await db
+          .delete(mention)
+          .where(
+            or(
+              eq(mention.mentionedUserId, userId),
+              inArray(mention.messageId, roomMsgIds),
+            ),
+          );
+      } else {
+        await db
+          .delete(messageReaction)
+          .where(eq(messageReaction.userId, userId));
+        await db.delete(mention).where(eq(mention.mentionedUserId, userId));
+      }
+      await db.delete(roomMessage).where(eq(roomMessage.userId, userId));
+
+      await db.delete(flashcardDeck).where(eq(flashcardDeck.userId, userId));
+
+      await db
+        .delete(community_members)
+        .where(eq(community_members.userId, userId));
+      await db
+        .delete(community_join_request)
+        .where(eq(community_join_request.userId, userId));
+      await db.delete(notifications).where(eq(notifications.userId, userId));
+      await db
+        .update(feedback)
+        .set({ reviewedBy: null })
+        .where(eq(feedback.reviewedBy, userId));
+      await db.delete(feedback).where(eq(feedback.userId, userId));
+      await db
+        .delete(userFollows)
+        .where(
+          or(
+            eq(userFollows.followerId, userId),
+            eq(userFollows.followingId, userId),
+          ),
+        );
+      await db
+        .delete(weeklyLeaderboard)
+        .where(eq(weeklyLeaderboard.userId, userId));
+
+      const [userRow] = await db
+        .select({ address: user.address })
+        .from(user)
+        .where(eq(user.id, userId));
+      if (userRow?.address) {
+        await db.delete(claim).where(eq(claim.wallet, userRow.address));
+      }
+
       for (const userChat of userChats) {
         await db.delete(message).where(eq(message.chatId, userChat.id));
         console.log(`Deleted messages for chat ${userChat.id}`);
@@ -865,12 +1054,13 @@ export class AuthService {
       await db.delete(earning).where(eq(earning.userId, userId));
       console.log(`Deleted earnings for user ${userId}`);
 
-      await db.delete(premiumTransactions).where(eq(premiumTransactions.userId, userId));
+      await db
+        .delete(premiumTransactions)
+        .where(eq(premiumTransactions.userId, userId));
       console.log(`Deleted premium transactions for user ${userId}`);
-      
+
       await db.delete(user).where(eq(user.id, userId));
       console.log(`Successfully deleted user from database: ${userId}`);
-
 
       return true;
     } catch (error) {
@@ -879,28 +1069,31 @@ export class AuthService {
     }
   }
 
-  async getUserByEmailOrProviderId(email: string, providerId: string): Promise<User | null> {
+  async getUserByEmailOrProviderId(
+    email: string,
+    providerId: string,
+  ): Promise<User | null> {
     const byProviderId = await db
       .select()
       .from(user)
       .where(eq(user.oauthProviderId, providerId))
       .limit(1);
-    
+
     if (byProviderId[0]) {
       return {
         ...byProviderId[0],
         quizLimit: byProviderId[0].quizLimits,
       } as any;
     }
-    
+
     const byEmail = await db
       .select()
       .from(user)
       .where(eq(user.email, email))
       .limit(1);
-    
+
     if (!byEmail[0]) return null;
-    
+
     return {
       ...byEmail[0],
       quizLimit: byEmail[0].quizLimits,
@@ -908,8 +1101,10 @@ export class AuthService {
   }
 
   async handleOAuthUser(data: OAuthUserData): Promise<OAuthCallbackResult> {
-    const existingUser = await this.getUserByEmailOrProviderId(data.email, data.providerId);
-    
+    const existingUser = await this.getUserByEmailOrProviderId(
+      data.email,
+      data.providerId,
+    );
     if (existingUser) {
       if (!existingUser.oauthProvider || !existingUser.oauthProviderId) {
         await db
@@ -917,32 +1112,32 @@ export class AuthService {
           .set({
             oauthProvider: data.provider,
             oauthProviderId: data.providerId,
-            lastLoggedIn: new Date()
+            lastLoggedIn: new Date(),
           })
           .where(eq(user.id, existingUser.id));
-        
+
         const updatedUser = await this.getUserById(existingUser.id);
-        return { 
-          user: updatedUser, 
-          isNewUser: false, 
-          needsUsername: false 
+        return {
+          user: updatedUser,
+          isNewUser: false,
+          needsUsername: false,
         };
       }
-      
+
       await db
         .update(user)
         .set({ lastLoggedIn: new Date() })
         .where(eq(user.id, existingUser.id));
-      
-      return { 
-        user: existingUser, 
-        isNewUser: false, 
-        needsUsername: false 
+
+      return {
+        user: existingUser,
+        isNewUser: false,
+        needsUsername: false,
       };
     }
-    
+
     const tempUsername = this.generateTempUsername(data.email);
-    
+
     const newUser = await this.createOAuthUser({
       id: data.id,
       name: data.name,
@@ -950,14 +1145,17 @@ export class AuthService {
       username: tempUsername,
       oauthProvider: data.provider,
       oauthProviderId: data.providerId,
-      hasCompletedProfile: false
+      hasCompletedProfile: false,
     });
-    
+
     return { user: newUser, isNewUser: true, needsUsername: false };
   }
 
   private generateTempUsername(email: string): string {
-    const emailPrefix = email.split('@')[0].replace(/[^a-z0-9]/gi, '').toLowerCase();
+    const emailPrefix = email
+      .split('@')[0]
+      .replace(/[^a-z0-9]/gi, '')
+      .toLowerCase();
     const randomSuffix = Math.random().toString(36).substring(2, 8);
     return `${emailPrefix}_${randomSuffix}`;
   }
@@ -994,14 +1192,16 @@ export class AuthService {
         .from(user)
         .where(eq(user.email, data.email));
 
-      this.resendService.sendWelcomeEmail(
-        createdUser.email,
-        createdUser.name,
-        createdUser.username || '',
-        createdUser.referralCode || ''
-      ).catch((error) => {
-        console.error('Failed to send welcome email:', error);
-      });
+      this.resendService
+        .sendWelcomeEmail(
+          createdUser.email,
+          createdUser.name,
+          createdUser.username || '',
+          createdUser.referralCode || '',
+        )
+        .catch((error) => {
+          console.error('Failed to send welcome email:', error);
+        });
 
       return {
         ...createdUser,
@@ -1017,9 +1217,9 @@ export class AuthService {
     try {
       const result = await db
         .update(user)
-        .set({ 
+        .set({
           username: username,
-          hasCompletedProfile: true 
+          hasCompletedProfile: true,
         })
         .where(eq(user.id, userId))
         .returning();
@@ -1040,7 +1240,7 @@ export class AuthService {
                 params: {
                   'user.fields': 'profile_image_url',
                 },
-              }
+              },
             );
 
             if (response.data?.data?.profile_image_url) {
@@ -1052,12 +1252,15 @@ export class AuthService {
             }
           }
         } catch (error) {
-          console.error('Failed to fetch Twitter profile picture:', error.response?.data || error.message);
+          console.error(
+            'Failed to fetch Twitter profile picture:',
+            error.response?.data || error.message,
+          );
         }
       }
 
       if (!updatedUser) return null;
-      
+
       return {
         ...updatedUser,
         quizLimit: updatedUser.quizLimits,
