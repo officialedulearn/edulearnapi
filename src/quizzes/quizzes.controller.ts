@@ -15,12 +15,16 @@ import {
   getDatabaseUserId,
 } from '../common/helpers/authorization.helper';
 import { QuizzesService } from './quizzes.service';
+import { QuizGenerationService } from './quiz-generation.service';
 import { PublishQuizDto } from './dto/publish-quiz.dto';
 import { SubmitPublicQuizDto } from './dto/submit-public-quiz.dto';
 
 @Controller('quizzes')
 export class QuizzesController {
-  constructor(private readonly quizzesService: QuizzesService) {}
+  constructor(
+    private readonly quizzesService: QuizzesService,
+    private readonly quizGenerationService: QuizGenerationService,
+  ) {}
 
   @Post('public')
   @UseGuards(JwtAuthGuard)
@@ -58,5 +62,54 @@ export class QuizzesController {
     }
     await verifyUserAuthorization(req.user, dto.userId, 'submitting attempt');
     return this.quizzesService.submitAttempt(id, dto.userId, dto);
+  }
+
+  /**
+   * Generate a quiz from user's recent learning history
+   * Creates a notification and returns quiz ID
+   * POST /quizzes/generate
+   */
+  @Post('generate')
+  @UseGuards(JwtAuthGuard)
+  async generateQuizFromLearning(
+    @Request() req,
+    @Query('daysBack') daysBack?: string,
+  ) {
+    const userId = await getDatabaseUserId(req.user);
+    const days = daysBack ? parseInt(daysBack, 10) : 3;
+    return this.quizGenerationService.generateQuizFromRecentLearning(
+      userId,
+      days,
+    );
+  }
+
+  /**
+   * Get user's generated quizzes
+   * GET /quizzes/generated
+   */
+  @Get('generated')
+  @UseGuards(JwtAuthGuard)
+  async getUserGeneratedQuizzes(
+    @Request() req,
+    @Query('limit') limit?: string,
+  ) {
+    const userId = await getDatabaseUserId(req.user);
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+    return this.quizGenerationService.getUserGeneratedQuizzes(
+      userId,
+      limitNum,
+    );
+  }
+
+  /**
+   * Share quiz (increment view count for shareable links)
+   * Public endpoint - no auth required
+   * GET /quizzes/public/:id/share
+   */
+  @Get('public/:id/share')
+  async shareQuiz(@Param('id') id: string) {
+    // This endpoint increments view count for quiz sharing analytics
+    // Same as findOne but used for tracking shared links
+    return this.quizzesService.findOne(id);
   }
 }

@@ -2321,4 +2321,127 @@ Rules:
       throw new NotFoundException('Deck not found');
     }
   }
+
+  /**
+   * Generate quiz questions from raw conversation text (for auto-generated quizzes)
+   * Used by QuizGenerationService to generate quizzes from recent learning history
+   */
+  async generateQuizQuestions(
+    conversationText: string,
+  ): Promise<
+    Array<{
+      question: string;
+      options: string[];
+      correctAnswer: string;
+      explanation: string;
+    }>
+  > {
+    try {
+      if (!conversationText || conversationText.trim().length === 0) {
+        throw new Error('Conversation text is required');
+      }
+
+      let result;
+      let attempts = 0;
+      const maxAttempts = 2;
+
+      while (attempts < maxAttempts) {
+        try {
+          result = await Promise.race([
+            this.genAI.models.generateContent({
+              model: 'gemini-2.5-flash',
+              contents: conversationText,
+              config: {
+                temperature: 0.1,
+                maxOutputTokens: 5000,
+                systemInstruction: this.systemInstructionForQuiz,
+                responseMimeType: 'application/json',
+                responseSchema: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      question: {
+                        type: Type.STRING,
+                        description: 'The quiz question text',
+                      },
+                      options: {
+                        type: Type.ARRAY,
+                        items: {
+                          type: Type.STRING,
+                        },
+                        description: 'Array of 4 possible answers',
+                      },
+                      correctAnswer: {
+                        type: Type.STRING,
+                        description:
+                          'The correct answer (must be one of the options)',
+                      },
+                      explanation: {
+                        type: Type.STRING,
+                        description: 'Brief explanation of the correct answer',
+                      },
+                    },
+                    required: [
+                      'question',
+                      'options',
+                      'correctAnswer',
+                      'explanation',
+                    ],
+                  },
+                },
+              },
+            }),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Quiz generation timeout')), 30000),
+            ),
+          ]);
+
+          if (
+            result &&
+            result.candidates &&
+            result.candidates[0]?.content?.parts[0]?.text
+          ) {
+            const text = result.candidates[0].content.parts[0].text;
+            const questions = JSON.parse(text);
+
+            if (!Array.isArray(questions)) {
+              throw new Error('Response is not an array');
+            }
+
+            // Validate questions
+            const validatedQuestions = questions.filter((q) => {
+              return (
+                q.question &&
+                Array.isArray(q.options) &&
+                q.options.length === 4 &&
+                q.correctAnswer &&
+                q.options.includes(q.correctAnswer) &&
+                q.explanation
+              );
+            });
+
+            if (validatedQuestions.length === 0) {
+              throw new Error('No valid questions generated');
+            }
+
+            return validatedQuestions;
+          }
+
+          throw new Error('No response from AI model');
+        } catch (error) {
+          attempts++;
+          if (attempts >= maxAttempts) {
+            throw error;
+          }
+          // Retry once on error
+        }
+      }
+
+      throw new Error('Failed to generate quiz after max attempts');
+    } catch (error) {
+      console.error('Error in generateQuizQuestions:', error);
+      throw error;
+    }
+  }
 }
