@@ -8,8 +8,11 @@ interface V25AnnouncementEmailProps {
   name: string;
 }
 
-export const V25AnnouncementEmail = ({ name = 'Learner' }: V25AnnouncementEmailProps) => {
-  const mascotUrl = 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/Celebrate.png';
+export const V25AnnouncementEmail = ({
+  name = 'Learner',
+}: V25AnnouncementEmailProps) => {
+  const mascotUrl =
+    'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/Celebrate.png';
   const appUrl = 'https://edulearn.fun';
 
   return (
@@ -80,9 +83,10 @@ export const V25AnnouncementEmail = ({ name = 'Learner' }: V25AnnouncementEmailP
             fontFamily: `'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`,
           }}
         >
-          Hi {name}! We've been working hard to make EduLearn more engaging and rewarding for you. 
-          These new features are designed to help you connect with other learners, celebrate your 
-          achievements, and make your learning journey more fun than ever.
+          Hi {name}! We've been working hard to make EduLearn more engaging and
+          rewarding for you. These new features are designed to help you connect
+          with other learners, celebrate your achievements, and make your
+          learning journey more fun than ever.
         </Text>
 
         <Text

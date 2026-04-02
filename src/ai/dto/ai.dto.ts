@@ -1,5 +1,18 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsArray, IsNotEmpty, ValidateNested, IsUUID, IsDate, IsOptional, IsInt, Min, Max, MaxLength, MinLength } from 'class-validator';
+import {
+  IsString,
+  IsArray,
+  IsNotEmpty,
+  ValidateNested,
+  IsUUID,
+  IsDate,
+  IsOptional,
+  IsInt,
+  Min,
+  Max,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 
 export class MessageContentDto {
@@ -13,7 +26,8 @@ export class MessageContentDto {
   type: string;
 
   @ApiProperty({
-    description: 'The text content of the message. Required when type is "text"',
+    description:
+      'The text content of the message. Required when type is "text"',
     example: 'What is machine learning?',
     required: false,
   })
@@ -56,7 +70,8 @@ export class MessageDto {
   role: 'user' | 'assistant' | 'system';
 
   @ApiProperty({
-    description: 'The content of the message. Can be a simple text string or an array of content objects for multimodal messages',
+    description:
+      'The content of the message. Can be a simple text string or an array of content objects for multimodal messages',
     example: [
       {
         type: 'text',
@@ -75,7 +90,7 @@ export class MessageDto {
     description: 'Timestamp when the message was created',
     example: '2024-01-15T10:30:00.000Z',
   })
-  @Transform(({ value }) => value instanceof Date ? value : new Date(value))
+  @Transform(({ value }) => (value instanceof Date ? value : new Date(value)))
   @IsDate()
   @IsNotEmpty()
   createdAt: Date;
@@ -164,7 +179,7 @@ export class GenerateTitleDto {
     description: 'Timestamp when the message was created',
     example: '2024-01-15T10:30:00.000Z',
   })
-  @Transform(({ value }) => value instanceof Date ? value : new Date(value))
+  @Transform(({ value }) => (value instanceof Date ? value : new Date(value)))
   @IsDate()
   @IsNotEmpty()
   createdAt: Date;
@@ -228,37 +243,3 @@ export class GenerateFlashcardsDto {
   @Max(30)
   cardCount?: number;
 }
-
-export class MarketplaceStreamDto {
-  @ApiProperty({
-    description: 'Array of messages in the conversation',
-    type: [MessageDto],
-    example: [
-      {
-        id: '550e8400-e29b-41d4-a716-446655440000',
-        chatId: '123e4567-e89b-12d3-a456-426614174000',
-        role: 'user',
-        content: [
-          {
-            type: 'text',
-            text: 'Explain Solana PDAs in simple terms',
-          },
-        ],
-        createdAt: '2024-01-15T10:30:00.000Z',
-      },
-    ],
-  })
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => MessageDto)
-  messages: MessageDto[];
-
-  @ApiProperty({
-    description: 'The ID of the chat conversation',
-    example: '123e4567-e89b-12d3-a456-426614174000',
-  })
-  @IsUUID()
-  @IsNotEmpty()
-  chatId: string;
-}
-

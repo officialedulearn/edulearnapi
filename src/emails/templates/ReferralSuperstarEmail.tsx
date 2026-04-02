@@ -23,7 +23,10 @@ export const ReferralSuperstarEmail = ({
   const displayName = useResendFirstName ? '{{{FIRST_NAME|Learner}}}' : name;
 
   return (
-    <EmailLayout previewText="You're a referral superstar! Keep sharing and earning." useResendUnsubscribe={useResendUnsubscribe}>
+    <EmailLayout
+      previewText="You're a referral superstar! Keep sharing and earning."
+      useResendUnsubscribe={useResendUnsubscribe}
+    >
       <HeroSection
         mascotUrl={mascotUrl}
         headline="You're a Referral Superstar! 🌟"
@@ -76,7 +79,8 @@ export const ReferralSuperstarEmail = ({
             fontFamily: `'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`,
           }}
         >
-          {displayName}, every referral helps someone discover EduLearn. Keep sharing your code and earn more rewards when they go premium!
+          {displayName}, every referral helps someone discover EduLearn. Keep
+          sharing your code and earn more rewards when they go premium!
         </Text>
       </Section>
     </EmailLayout>

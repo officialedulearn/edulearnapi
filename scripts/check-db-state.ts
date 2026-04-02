@@ -13,10 +13,12 @@ async function checkDbState() {
     // Check drizzle-kit migrations table
     console.log('=== Drizzle-Kit Migrations Table ===');
     try {
-      const kitMigrations = await db.execute(sql`
+      const kitMigrations = (await db.execute(sql`
         SELECT * FROM drizzle.__drizzle_migrations ORDER BY id;
-      `) as any[];
-      console.log(`Found ${kitMigrations.length} migrations in drizzle.__drizzle_migrations`);
+      `)) as any[];
+      console.log(
+        `Found ${kitMigrations.length} migrations in drizzle.__drizzle_migrations`,
+      );
       kitMigrations.forEach((row: any) => {
         console.log(`  ${row.id}: ${row.hash}`);
       });
@@ -25,22 +27,22 @@ async function checkDbState() {
     }
 
     console.log('\n=== Checking if community table exists ===');
-    const communityExists = await db.execute(sql`
+    const communityExists = (await db.execute(sql`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
         WHERE table_schema = 'public' 
         AND table_name = 'community'
       );
-    `) as any[];
+    `)) as any[];
     console.log('Community table exists:', communityExists[0]?.exists);
 
     console.log('\n=== All tables in public schema ===');
-    const tables = await db.execute(sql`
+    const tables = (await db.execute(sql`
       SELECT table_name 
       FROM information_schema.tables 
       WHERE table_schema = 'public'
       ORDER BY table_name;
-    `) as any[];
+    `)) as any[];
     console.log('Tables:', tables.map((r: any) => r.table_name).join(', '));
 
     process.exit(0);

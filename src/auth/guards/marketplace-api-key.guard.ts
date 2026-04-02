@@ -1,4 +1,9 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Request } from 'express';
 import db from '../../../drizzle';
 import { user } from '../../../lib/db/schema';
@@ -9,33 +14,43 @@ export class MarketplaceApiKeyGuard implements CanActivate {
   private readonly validKey = process.env.MARKETPLACE_API_KEY;
   private marketplaceUser: any = null;
   private lastFetchTime = 0;
-  private readonly CACHE_DURATION = 5 * 60 * 1000; 
+  private readonly CACHE_DURATION = 5 * 60 * 1000;
 
   constructor() {
     if (!this.validKey) {
-      console.warn('WARNING: MARKETPLACE_API_KEY environment variable is not set. Marketplace endpoints requiring authentication will reject all requests.');
+      console.warn(
+        'WARNING: MARKETPLACE_API_KEY environment variable is not set. Marketplace endpoints requiring authentication will reject all requests.',
+      );
     }
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
     // Check both header and query param (query param needed for EventSource which can't send headers)
-    const apiKey = request.headers['x-marketplace-key'] || request.query['apiKey'];
+    const apiKey =
+      request.headers['x-marketplace-key'] || request.query['apiKey'];
 
     if (!apiKey) {
-      throw new UnauthorizedException('Marketplace API key is missing (provide via x-marketplace-key header or apiKey query parameter)');
+      throw new UnauthorizedException(
+        'Marketplace API key is missing (provide via x-marketplace-key header or apiKey query parameter)',
+      );
     }
-    
+
     if (!this.validKey) {
-      throw new UnauthorizedException('Marketplace API authentication is misconfigured');
+      throw new UnauthorizedException(
+        'Marketplace API authentication is misconfigured',
+      );
     }
-    
+
     if (apiKey !== this.validKey) {
       throw new UnauthorizedException('Invalid marketplace API key');
     }
 
     const now = Date.now();
-    if (!this.marketplaceUser || (now - this.lastFetchTime > this.CACHE_DURATION)) {
+    if (
+      !this.marketplaceUser ||
+      now - this.lastFetchTime > this.CACHE_DURATION
+    ) {
       const users = await db
         .select()
         .from(user)
@@ -43,7 +58,9 @@ export class MarketplaceApiKeyGuard implements CanActivate {
         .limit(1);
 
       if (!users.length) {
-        throw new UnauthorizedException('Marketplace user not found in database. Please create the marketplace user account first.');
+        throw new UnauthorizedException(
+          'Marketplace user not found in database. Please create the marketplace user account first.',
+        );
       }
 
       this.marketplaceUser = users[0];
@@ -60,4 +77,3 @@ export class MarketplaceApiKeyGuard implements CanActivate {
     return true;
   }
 }
-

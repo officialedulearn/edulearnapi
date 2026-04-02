@@ -57,4 +57,3 @@ export class SaveMessagesDto {
   })
   messages: MessageDto[];
 }
-

@@ -28,7 +28,7 @@ export const user = pgTable('user', {
   streak: integer('streak').notNull().default(1),
   referralCode: text('referralCode'),
   referralCount: integer('referralCount').default(0),
-  learning: text("learning"),
+  learning: text('learning'),
   referredBy: text('referredBy'),
   level: varchar('level', {
     enum: ['novice', 'beginner', 'intermediate', 'advanced', 'expert'],
@@ -43,10 +43,12 @@ export const user = pgTable('user', {
   premiumUntil: timestamp('premiumUntil'),
   verified: boolean('verified').default(false),
   imageUploadLimit: integer('imageUploadLimit').default(3),
-  quizLimits: integer('quizLimits').default(5), 
-  totalEarnings: numeric('totalEarnings', { precision: 10, scale: 2 }).default('0.00'),
-  expoPushToken: text("expoPushToken"),
-  profilePictureURL: text("profilePictureURL"),
+  quizLimits: integer('quizLimits').default(5),
+  totalEarnings: numeric('totalEarnings', { precision: 10, scale: 2 }).default(
+    '0.00',
+  ),
+  expoPushToken: text('expoPushToken'),
+  profilePictureURL: text('profilePictureURL'),
   oauthProvider: text('oauth_provider'),
   oauthProviderId: text('oauth_provider_id'),
   hasCompletedProfile: boolean('has_completed_profile').default(true),
@@ -149,7 +151,9 @@ export type XpActivity = InferSelectModel<typeof xpActivity>;
 
 export const premiumTransactions = pgTable('premium_transactions', {
   id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id').notNull().references(() => user.id),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => user.id),
   signature: varchar('signature', { length: 256 }).notNull().unique(),
   amount: integer('amount').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
@@ -162,12 +166,8 @@ export const earning = pgTable('earning', {
   userId: uuid('userId')
     .notNull()
     .references(() => user.id),
-  sol: numeric('sol', { precision: 10, scale: 2 })
-    .notNull()
-    .default('0.00'),
-  edln: numeric('edln', { precision: 10, scale: 2 })
-    .notNull()
-    .default('0.00'),
+  sol: numeric('sol', { precision: 10, scale: 2 }).notNull().default('0.00'),
+  edln: numeric('edln', { precision: 10, scale: 2 }).notNull().default('0.00'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 });
 
@@ -176,34 +176,34 @@ export type Earning = InferSelectModel<typeof earning>;
 export const roadmap = pgTable('roadmap', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
   userId: uuid('userId')
-  .notNull()
-  .references(() => user.id),
+    .notNull()
+    .references(() => user.id),
   chatId: uuid('chatId')
-  .notNull()
-  .references(() => chat.id),
+    .notNull()
+    .references(() => chat.id),
   topic: text('topic').notNull(),
   title: text('title').notNull(),
   description: text('description').notNull(),
   claimableNFT: uuid('claimableNFT')
-  .references(() => reward.id)
-  .default(sql`NULL`),
+    .references(() => reward.id)
+    .default(sql`NULL`),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
-})
+});
 
 export type Roadmap = InferSelectModel<typeof roadmap>;
 
 export const roadMapStep = pgTable('roadmap_step', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
   roadmapId: uuid('roadmapId')
-  .notNull()
-  .references(() => roadmap.id),
+    .notNull()
+    .references(() => roadmap.id),
   prompt: text('prompt').notNull(),
   title: text('title').notNull(),
   description: text('description').notNull(),
   time: integer('time').notNull(),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   done: boolean('done').default(false),
-})
+});
 
 export const totalVolumes = pgTable('total_volumes', {
   id: integer('id').primaryKey(),
@@ -214,7 +214,7 @@ export const totalVolumes = pgTable('total_volumes', {
     .notNull()
     .default('0.00'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
-})
+});
 
 export type TotalVolumes = InferSelectModel<typeof totalVolumes>;
 
@@ -227,11 +227,11 @@ export const community = pgTable('community', {
     .notNull()
     .default('private'),
   imageUrl: text('imageUrl'),
-})
+});
 
 export type Community = InferSelectModel<typeof community>;
 
-export const roomMessage = pgTable("room_message", {
+export const roomMessage = pgTable('room_message', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
   roomId: uuid('roomId')
     .notNull()
@@ -241,11 +241,11 @@ export const roomMessage = pgTable("room_message", {
     .references(() => user.id),
   content: text('content').notNull(),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
-})
+});
 
 export type roomMessage = InferSelectModel<typeof roomMessage>;
 
-export const messageReaction = pgTable("message_reaction", {
+export const messageReaction = pgTable('message_reaction', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
   messageId: uuid('messageId')
     .notNull()
@@ -254,11 +254,11 @@ export const messageReaction = pgTable("message_reaction", {
     .notNull()
     .references(() => user.id),
   reaction: text('reaction').notNull(),
-})
+});
 
 export type MessageReaction = InferSelectModel<typeof messageReaction>;
 
-export const mention = pgTable("mention", {
+export const mention = pgTable('mention', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
   messageId: uuid('messageId')
     .notNull()
@@ -266,16 +266,16 @@ export const mention = pgTable("mention", {
   mentionedUserId: uuid('mentionedUserId')
     .notNull()
     .references(() => user.id),
-})
+});
 
 export type Mention = InferSelectModel<typeof mention>;
 
-export const community_members = pgTable("community_members", {
-  id: uuid("id").primaryKey().defaultRandom().notNull(),
-  userId: uuid("userId")
+export const community_members = pgTable('community_members', {
+  id: uuid('id').primaryKey().defaultRandom().notNull(),
+  userId: uuid('userId')
     .notNull()
     .references(() => user.id),
-  communityId: uuid("communityId")
+  communityId: uuid('communityId')
     .notNull()
     .references(() => community.id),
   role: varchar('role', {
@@ -283,63 +283,71 @@ export const community_members = pgTable("community_members", {
   })
     .notNull()
     .default('member'),
-})
+});
 
 export type CommunityMembers = InferSelectModel<typeof community_members>;
 
-export const notifications = pgTable("notifications", {
-  id: uuid("id").notNull().primaryKey().defaultRandom(),
-  content: text("content").notNull(),
-  title: text("title").notNull(),
-  userId: uuid("userId")
+export const notifications = pgTable('notifications', {
+  id: uuid('id').notNull().primaryKey().defaultRandom(),
+  content: text('content').notNull(),
+  title: text('title').notNull(),
+  userId: uuid('userId')
     .notNull()
     .references(() => user.id),
-    createdAt: timestamp('createdAt').notNull().defaultNow(),
-})
-
-export const community_join_request = pgTable("community_join_request", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("userId").notNull().references(() => user.id),
-  communityId: uuid("communityId").notNull().references(() => community.id),
-  createdAt: timestamp("createdAt").defaultNow(),
-  status: varchar("status", { enum: ["pending", "approved", "rejected"] })
-    .notNull()
-    .default("pending"),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
 });
 
-export type CommunityJoinRequest = InferSelectModel<typeof community_join_request>;
-
-export const feedback = pgTable("feedback", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  userId: uuid("userId")
+export const community_join_request = pgTable('community_join_request', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('userId')
     .notNull()
     .references(() => user.id),
-  content: text("content").notNull(),
-  category: varchar("category", { enum: ["bug", "feature", "improvement", "other"] }),
-  status: varchar("status", { enum: ["pending", "reviewed", "resolved"] })
+  communityId: uuid('communityId')
     .notNull()
-    .default("pending"),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-  reviewedAt: timestamp("reviewedAt"),
-  reviewedBy: uuid("reviewedBy").references(() => user.id),
+    .references(() => community.id),
+  createdAt: timestamp('createdAt').defaultNow(),
+  status: varchar('status', { enum: ['pending', 'approved', 'rejected'] })
+    .notNull()
+    .default('pending'),
+});
+
+export type CommunityJoinRequest = InferSelectModel<
+  typeof community_join_request
+>;
+
+export const feedback = pgTable('feedback', {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  userId: uuid('userId')
+    .notNull()
+    .references(() => user.id),
+  content: text('content').notNull(),
+  category: varchar('category', {
+    enum: ['bug', 'feature', 'improvement', 'other'],
+  }),
+  status: varchar('status', { enum: ['pending', 'reviewed', 'resolved'] })
+    .notNull()
+    .default('pending'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  reviewedAt: timestamp('reviewedAt'),
+  reviewedBy: uuid('reviewedBy').references(() => user.id),
 });
 
 export type Feedback = InferSelectModel<typeof feedback>;
 
 export const userFollows = pgTable(
-  "user_follows",
+  'user_follows',
   {
-    id: uuid("id").notNull().defaultRandom().unique(),
-    followerId: uuid("followerId")
+    id: uuid('id').notNull().defaultRandom().unique(),
+    followerId: uuid('followerId')
       .notNull()
       .references(() => user.id),
-    followingId: uuid("followingId")
+    followingId: uuid('followingId')
       .notNull()
       .references(() => user.id),
-    emailNotifications: boolean("emailNotifications").default(true),
-    pushNotifications: boolean("pushNotifications").default(true),
-    inAppNotifications: boolean("inAppNotifications").default(true),
-    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    emailNotifications: boolean('emailNotifications').default(true),
+    pushNotifications: boolean('pushNotifications').default(true),
+    inAppNotifications: boolean('inAppNotifications').default(true),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
   },
   (table) => {
     return {
@@ -350,19 +358,21 @@ export const userFollows = pgTable(
 
 export type UserFollow = InferSelectModel<typeof userFollows>;
 
-export const contentAnalytics = pgTable("content_analytics", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  topic: text("topic").notNull(),
-  category: varchar("category", { length: 50 }).notNull(),
-  totalViews: integer("totalViews").default(0),
-  lastUpdated: timestamp("lastUpdated").notNull().defaultNow(),
+export const contentAnalytics = pgTable('content_analytics', {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  topic: text('topic').notNull(),
+  category: varchar('category', { length: 50 }).notNull(),
+  totalViews: integer('totalViews').default(0),
+  lastUpdated: timestamp('lastUpdated').notNull().defaultNow(),
 });
 
 export type ContentAnalytics = InferSelectModel<typeof contentAnalytics>;
 
 export const weeklyLeaderboard = pgTable('weekly_leaderboard', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
-  userId: uuid('userId').notNull().references(() => user.id),
+  userId: uuid('userId')
+    .notNull()
+    .references(() => user.id),
   weekStart: timestamp('week_start').notNull(),
   weekEnd: timestamp('week_end').notNull(),
   xpEarned: integer('xp_earned').notNull().default(0),

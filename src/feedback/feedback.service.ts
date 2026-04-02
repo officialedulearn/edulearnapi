@@ -2,7 +2,10 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import db from '../../drizzle';
 import { feedback } from '../../lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
-import { CreateFeedbackDto, UpdateFeedbackStatusDto } from './dto/create-feedback.dto';
+import {
+  CreateFeedbackDto,
+  UpdateFeedbackStatusDto,
+} from './dto/create-feedback.dto';
 
 @Injectable()
 export class FeedbackService {
@@ -71,6 +74,3 @@ export class FeedbackService {
     return updatedFeedback[0];
   }
 }
-
-
-

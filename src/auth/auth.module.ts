@@ -15,11 +15,11 @@ import { LeaderboardModule } from 'src/leaderboard/leaderboard.module';
 
 @Module({
   imports: [
-    ActivityModule, 
-    forwardRef(() => WalletModule), 
-    RewardsModule, 
-    forwardRef(() => CronTasksModule), 
-    ResendModule, 
+    ActivityModule,
+    forwardRef(() => WalletModule),
+    RewardsModule,
+    forwardRef(() => CronTasksModule),
+    ResendModule,
     forwardRef(() => RoadmapModule),
     forwardRef(() => CommunityModule),
     forwardRef(() => SocialModule),

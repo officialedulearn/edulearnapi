@@ -27,13 +27,13 @@ const journal = require('../lib/db/migrations/meta/_journal.json');
 
 async function checkTableExists(tableName: string): Promise<boolean> {
   try {
-    const result = await db.execute(sql`
+    const result = (await db.execute(sql`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
         WHERE table_schema = 'public' 
         AND table_name = ${tableName}
       );
-    `) as any[];
+    `)) as any[];
     return result[0]?.exists || false;
   } catch (error) {
     console.error(`Error checking table ${tableName}:`, error);
@@ -55,9 +55,9 @@ async function getMigrationStatus(): Promise<number[]> {
       );
     `);
 
-    const result = await db.execute(sql`
+    const result = (await db.execute(sql`
       SELECT id FROM drizzle.__drizzle_migrations ORDER BY id;
-    `) as any[];
+    `)) as any[];
 
     return result.map((row: any) => row.id);
   } catch (error) {
@@ -69,14 +69,16 @@ async function getMigrationStatus(): Promise<number[]> {
 async function markMigrationApplied(migration: MigrationRecord): Promise<void> {
   try {
     const hash = `${migration.tag}:${String(migration.idx).padStart(4, '0')}`;
-    
+
     await db.execute(sql`
       INSERT INTO drizzle.__drizzle_migrations (id, hash, created_at)
       VALUES (${migration.idx}, ${hash}, ${migration.when})
       ON CONFLICT (id) DO NOTHING;
     `);
-    
-    console.log(`✓ Marked migration ${migration.idx} (${migration.tag}) as applied`);
+
+    console.log(
+      `✓ Marked migration ${migration.idx} (${migration.tag}) as applied`,
+    );
   } catch (error) {
     console.error(`Error marking migration ${migration.idx}:`, error);
     throw error;
@@ -94,7 +96,7 @@ async function fixMigrations() {
     console.log(`Total migrations in files: ${allMigrations.length}\n`);
 
     const missingMigrations = allMigrations.filter(
-      (migration) => !appliedMigrations.includes(migration.idx)
+      (migration) => !appliedMigrations.includes(migration.idx),
     );
 
     if (missingMigrations.length === 0) {
@@ -102,11 +104,13 @@ async function fixMigrations() {
       process.exit(0);
     }
 
-    console.log(`Found ${missingMigrations.length} missing migration(s) in tracking table:\n`);
+    console.log(
+      `Found ${missingMigrations.length} missing migration(s) in tracking table:\n`,
+    );
 
     // Check if tables from migration 0034 exist
     const migration34 = missingMigrations.find((m) => m.idx === 34);
-    
+
     if (migration34) {
       console.log('Checking if tables from migration 0034 exist...');
       const communityExists = await checkTableExists('community');
@@ -125,17 +129,22 @@ async function fixMigrations() {
       if (migration.idx === 34) continue; // Already handled above
 
       console.log(`Checking migration ${migration.idx} (${migration.tag})...`);
-      
+
       // For safety, we'll mark all missing migrations up to the latest applied one
-      if (appliedMigrations.length > 0 && migration.idx < Math.max(...appliedMigrations)) {
-        console.log(`  Migration ${migration.idx} is older than latest applied, marking as applied...`);
+      if (
+        appliedMigrations.length > 0 &&
+        migration.idx < Math.max(...appliedMigrations)
+      ) {
+        console.log(
+          `  Migration ${migration.idx} is older than latest applied, marking as applied...`,
+        );
         await markMigrationApplied(migration);
       }
     }
 
     console.log('\n✓ Migration tracking fixed!');
     console.log('\nYou can now run: pnpm migrate');
-    
+
     await connection.end();
     process.exit(0);
   } catch (error) {

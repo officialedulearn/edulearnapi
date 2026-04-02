@@ -8,13 +8,13 @@ import { SocialModule } from 'src/social/social.module';
 
 @Module({
   imports: [
-    ResendModule, 
+    ResendModule,
     TwitterModule,
     forwardRef(() => AuthModule),
     forwardRef(() => SocialModule),
   ],
   controllers: [RewardsController],
   providers: [RewardsService],
-  exports: [RewardsService]
+  exports: [RewardsService],
 })
 export class RewardsModule {}

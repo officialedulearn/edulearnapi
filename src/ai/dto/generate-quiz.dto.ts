@@ -13,4 +13,3 @@ export class GenerateQuizDto {
   })
   userId: string;
 }
-

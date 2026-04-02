@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 export async function verifyUserAuthorization(
   authenticatedUser: any,
   targetUserId: string,
-  operationName: string = 'this operation'
+  operationName: string = 'this operation',
 ): Promise<void> {
   if (!authenticatedUser) {
     throw new UnauthorizedException('Authentication required');
@@ -25,8 +25,12 @@ export async function verifyUserAuthorization(
     throw new UnauthorizedException('Email not found in JWT token');
   }
 
-  const users = await db.select().from(user).where(eq(user.email, email)).limit(1);
-  
+  const users = await db
+    .select()
+    .from(user)
+    .where(eq(user.email, email))
+    .limit(1);
+
   if (!users.length) {
     throw new UnauthorizedException('User not found in database');
   }
@@ -35,11 +39,10 @@ export async function verifyUserAuthorization(
 
   if (authenticatedUserId !== targetUserId) {
     throw new ForbiddenException(
-      `You are not authorized to perform ${operationName} for another user`
+      `You are not authorized to perform ${operationName} for another user`,
     );
   }
 }
-
 
 export function getAuthenticatedUserId(authenticatedUser: any): string {
   if (!authenticatedUser) {
@@ -47,7 +50,7 @@ export function getAuthenticatedUserId(authenticatedUser: any): string {
   }
 
   const userId = authenticatedUser.sub || authenticatedUser.id;
-  
+
   if (!userId) {
     throw new UnauthorizedException('Invalid authentication token');
   }
@@ -55,13 +58,20 @@ export function getAuthenticatedUserId(authenticatedUser: any): string {
   return userId;
 }
 
-export async function getDatabaseUserId(authenticatedUser: any): Promise<string> {
+export async function getDatabaseUserId(
+  authenticatedUser: any,
+): Promise<string> {
   if (!authenticatedUser) {
     throw new UnauthorizedException('Authentication required');
   }
 
-  if (authenticatedUser.role === 'reviewer' || authenticatedUser.role === 'marketplace') {
-    throw new UnauthorizedException('This operation is not available for system users');
+  if (
+    authenticatedUser.role === 'reviewer' ||
+    authenticatedUser.role === 'marketplace'
+  ) {
+    throw new UnauthorizedException(
+      'This operation is not available for system users',
+    );
   }
 
   const email = authenticatedUser.email;
@@ -69,8 +79,12 @@ export async function getDatabaseUserId(authenticatedUser: any): Promise<string>
     throw new UnauthorizedException('Email not found in JWT token');
   }
 
-  const users = await db.select().from(user).where(eq(user.email, email)).limit(1);
-  
+  const users = await db
+    .select()
+    .from(user)
+    .where(eq(user.email, email))
+    .limit(1);
+
   if (!users.length) {
     throw new UnauthorizedException('User not found in database');
   }
@@ -83,7 +97,10 @@ export async function verifyUserEmail(authenticatedUser: any): Promise<string> {
     throw new UnauthorizedException('Authentication required');
   }
 
-  if (authenticatedUser.role === 'reviewer' || authenticatedUser.role === 'marketplace') {
+  if (
+    authenticatedUser.role === 'reviewer' ||
+    authenticatedUser.role === 'marketplace'
+  ) {
     return authenticatedUser.email;
   }
 
@@ -97,13 +114,16 @@ export async function verifyUserEmail(authenticatedUser: any): Promise<string> {
 
 export async function verifyUserViewAuthorization(
   authenticatedUser: any,
-  targetUserId: string
+  targetUserId: string,
 ): Promise<void> {
   if (!authenticatedUser) {
     throw new UnauthorizedException('Authentication required');
   }
 
-  if (authenticatedUser.role === 'reviewer' || authenticatedUser.role === 'marketplace') {
+  if (
+    authenticatedUser.role === 'reviewer' ||
+    authenticatedUser.role === 'marketplace'
+  ) {
     return;
   }
 
@@ -112,8 +132,12 @@ export async function verifyUserViewAuthorization(
     throw new UnauthorizedException('Email not found in JWT token');
   }
 
-  const users = await db.select().from(user).where(eq(user.email, email)).limit(1);
-  
+  const users = await db
+    .select()
+    .from(user)
+    .where(eq(user.email, email))
+    .limit(1);
+
   if (!users.length) {
     throw new UnauthorizedException('User not found in database');
   }
@@ -124,8 +148,12 @@ export async function verifyUserViewAuthorization(
     return;
   }
 
-  const targetUser = await db.select().from(user).where(eq(user.id, targetUserId)).limit(1);
-  
+  const targetUser = await db
+    .select()
+    .from(user)
+    .where(eq(user.id, targetUserId))
+    .limit(1);
+
   if (!targetUser.length) {
     throw new UnauthorizedException('Target user not found');
   }
@@ -134,7 +162,7 @@ export async function verifyUserViewAuthorization(
 export async function verifyChatAccess(
   authenticatedUser: any,
   chat: any,
-  operationName: string = 'access this chat'
+  operationName: string = 'access this chat',
 ): Promise<void> {
   if (!chat) {
     throw new UnauthorizedException('Chat not found');
@@ -148,7 +176,10 @@ export async function verifyChatAccess(
     throw new UnauthorizedException('Authentication required');
   }
 
-  if (authenticatedUser.role === 'reviewer' || authenticatedUser.role === 'marketplace') {
+  if (
+    authenticatedUser.role === 'reviewer' ||
+    authenticatedUser.role === 'marketplace'
+  ) {
     return;
   }
 
@@ -157,8 +188,12 @@ export async function verifyChatAccess(
     throw new UnauthorizedException('Email not found in authentication token');
   }
 
-  const users = await db.select().from(user).where(eq(user.email, email)).limit(1);
-  
+  const users = await db
+    .select()
+    .from(user)
+    .where(eq(user.email, email))
+    .limit(1);
+
   if (!users.length) {
     throw new UnauthorizedException('User not found in database');
   }
@@ -167,8 +202,7 @@ export async function verifyChatAccess(
 
   if (chat.userId !== authenticatedUserId) {
     throw new ForbiddenException(
-      `You are not authorized to ${operationName}. This chat is private.`
+      `You are not authorized to ${operationName}. This chat is private.`,
     );
   }
 }
-

@@ -1,4 +1,9 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Request } from 'express';
 
 @Injectable()
@@ -7,7 +12,9 @@ export class ApiKeyGuard implements CanActivate {
 
   constructor() {
     if (!this.validKey) {
-      console.warn('WARNING: MOBILE_API_KEY environment variable is not set. API endpoints requiring authentication will reject all requests.');
+      console.warn(
+        'WARNING: MOBILE_API_KEY environment variable is not set. API endpoints requiring authentication will reject all requests.',
+      );
     }
   }
 
@@ -18,7 +25,7 @@ export class ApiKeyGuard implements CanActivate {
     if (!apiKey) {
       throw new UnauthorizedException('API key is missing');
     }
-    
+
     if (!this.validKey) {
       throw new UnauthorizedException('API authentication is misconfigured');
     }

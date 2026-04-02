@@ -10,7 +10,10 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FeedbackService } from './feedback.service';
-import { CreateFeedbackDto, UpdateFeedbackStatusDto } from './dto/create-feedback.dto';
+import {
+  CreateFeedbackDto,
+  UpdateFeedbackStatusDto,
+} from './dto/create-feedback.dto';
 import { FlexibleAuthGuard } from '../auth/guards/flexible-auth.guard';
 import { AdminApiKeyGuard } from '../auth/guards/admin-api-key.guard';
 
@@ -20,7 +23,10 @@ export class FeedbackController {
 
   @Post()
   @UseGuards(FlexibleAuthGuard)
-  async createFeedback(@Request() req, @Body() createFeedbackDto: CreateFeedbackDto) {
+  async createFeedback(
+    @Request() req,
+    @Body() createFeedbackDto: CreateFeedbackDto,
+  ) {
     return await this.feedbackService.createFeedback(createFeedbackDto);
   }
 
@@ -44,9 +50,10 @@ export class FeedbackController {
     @Body() updateStatusDto: UpdateFeedbackStatusDto,
   ) {
     const reviewerId = req.user?.sub || 'admin';
-    return await this.feedbackService.updateFeedbackStatus(id, updateStatusDto, reviewerId);
+    return await this.feedbackService.updateFeedbackStatus(
+      id,
+      updateStatusDto,
+      reviewerId,
+    );
   }
 }
-
-
-

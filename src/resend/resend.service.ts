@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Resend } from 'resend';
-import {user} from '../../lib/db/schema';
+import { user } from '../../lib/db/schema';
 import { eq } from 'drizzle-orm';
 import db from '../../drizzle';
 import { render } from '@react-email/render';
@@ -15,301 +15,441 @@ import {
   type EngagementTemplateId,
   ENGAGEMENT_SUBJECTS,
 } from '../emails/engagement-config';
+import {
+  mergeNftListingBroadcastData,
+  type NftListingBroadcastData,
+} from '../emails/nft-listing-announcement.config';
+import { NftListingAnnouncementEmail } from '../emails/templates/NftListingAnnouncementEmail';
 
 @Injectable()
 export class ResendService {
-    private readonly mascotMoods = {
-        welcome: 'proud',
-        nftAward: 'celebrate',
-        roadmapGenerated: 'proud',
-        roadmapReminder: 'curious',
-        levelUp: 'celebrate',
-    };
+  private readonly mascotMoods = {
+    welcome: 'proud',
+    nftAward: 'celebrate',
+    roadmapGenerated: 'proud',
+    roadmapReminder: 'curious',
+    levelUp: 'celebrate',
+  };
 
-    private readonly mascotImageUrls: Record<string, string> = {
-        proud: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/proud.png',
-        sad: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/Sad.png',
-        curious: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/Curiuos.png',
-        mischievous: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/Mischievous.png',
-        celebrate: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/Celebrate.png',
-        congrats: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/congrats.png',
-    };
+  private readonly mascotImageUrls: Record<string, string> = {
+    proud:
+      'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/proud.png',
+    sad: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/Sad.png',
+    curious:
+      'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/Curiuos.png',
+    mischievous:
+      'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/Mischievous.png',
+    celebrate:
+      'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/Celebrate.png',
+    congrats:
+      'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/congrats.png',
+  };
 
-    constructor(private readonly resend: Resend) {
-        this.resend = new Resend(process.env.RESEND_API_KEY);
-    }
+  constructor(private readonly resend: Resend) {
+    this.resend = new Resend(process.env.RESEND_API_KEY);
+  }
 
-    private readonly audienceId = 'b9e37a5c-482b-4c5b-b1d5-990fea1f7ac5';
+  private readonly audienceId = 'b9e37a5c-482b-4c5b-b1d5-990fea1f7ac5';
 
-    async getResendContacts() {
-        try {
-            const { data } = await this.resend.contacts.list({
-                audienceId: this.audienceId,
-            });
-            return data?.data || [];
-        } catch (error) {
-            console.error('Error fetching Resend contacts:', error);
-            return [];
-        }
-    }
-
-    async checkContactExists(email: string): Promise<boolean> {
-        const contacts = await this.getResendContacts();
-        return contacts.some(contact => contact.email.toLowerCase() === email.toLowerCase());
-    }
-
-    async addAllUsersToResendContactList() {
-        const users = await db.select({
-            email: user.email,
-            name: user.name,
-        }).from(user);
-        
-        const resendContacts = await this.getResendContacts();
-        const resendEmails = new Set(
-            resendContacts.map(contact => contact.email.toLowerCase())
-        );
-        
-        let added = 0;
-        let skipped = 0;
-        let failed = 0;
-        
-        for (const user of users) {
-            if (resendEmails.has(user.email.toLowerCase())) {
-                skipped++;
-                continue;
-            }
-            
-            try {
-                await this.addResendContact(user.email, user.name);
-                added++;
-            } catch (error) {
-                console.error(`Failed to add ${user.email}:`, error);
-                failed++;
-            }
-        }
-        
-        return {
-            message: 'Completed adding users to resend contact list',
-            success: true,
-            added,
-            skipped,
-            failed,
-            total: users.length,
-        };
-    }
-
-    async getUsersNotInResendContacts() {
-        const users = await db.select({
-            email: user.email,
-            name: user.name,
-        }).from(user);
-        
-        const resendContacts = await this.getResendContacts();
-        const resendEmails = new Set(
-            resendContacts.map(contact => contact.email.toLowerCase())
-        );
-        
-        const usersNotInResend = users.filter(
-            user => !resendEmails.has(user.email.toLowerCase())
-        );
-        
-        return {
-            usersNotInResend,
-            count: usersNotInResend.length,
-            totalUsers: users.length,
-            totalResendContacts: resendContacts.length,
-        };
-    }
-
-    async sendEmail(to: string, subject: string, html: string) {
-        const { data, error } = await this.resend.emails.send({
-            from: 'Eddy 💚 <eddy@edulearn.fun>',
-            to: to,
-            subject: subject,
-            html: html,
-        });
-
-        if (error) {
-            throw new Error(error.message);
-        }
-
-        return data;
-    }
-
-    async sendWelcomeEmail(to: string, name: string, username: string, referralCode: string) {
-        const html = this.getWelcomeEmailTemplate(name, username, referralCode);
-        return this.sendEmail(to, 'Welcome to EduLearn.fun 💚', html);
-    }
-
-    async sendNFTAwardEmail(to: string, name: string, nftTitle: string, nftDescription: string, imageUrl?: string) {
-        const html = this.getNFTAwardEmailTemplate(name, nftTitle, nftDescription, imageUrl);
-        return this.sendEmail(to, 'You Earned an Badge Certificate!', html);
-    }
-
-    async sendRoadmapGeneratedEmail(to: string, name: string, roadmapTitle: string) {
-        const html = this.getRoadmapGeneratedEmailTemplate(name, roadmapTitle);
-        return this.sendEmail(to, 'Your Learning Roadmap is Ready! 🚀', html);
-    }
-
-    async sendRoadmapReminderEmail(to: string, name: string, roadmapTopic: string, roadmapTitle: string, roadmapStepTitle: string, roadmapStepDescription: string, roadmapStepTime: number) {
-        const html = this.getRoadmapReminderEmailTemplate(name, roadmapTopic, roadmapTitle, roadmapStepTitle, roadmapStepDescription, roadmapStepTime);
-        return this.sendEmail(to, 'Roadmap Reminder 🔔', html);
-    }
-    async sendLevelUpEmail(to: string, name: string, leveledUpUserName: string, newLevel: number, levelTitle: string, xpTotal: number) {
-        const html = this.getFollowerLevelUpEmailTemplate(name, leveledUpUserName, newLevel, levelTitle, xpTotal);
-        return this.sendEmail(to, `${leveledUpUserName} Just Leveled Up! 🎉`, html);
-    }
-
-    async sendNFTFollowingEmail(to: string, followerName: string, userName: string, nftTitle: string, nftDescription: string, imageUrl?: string) {
-        const html = this.getFollowerNFTEmailTemplate(followerName, userName, nftTitle, nftDescription, imageUrl);
-        return this.sendEmail(to, `${userName} Earned an NFT! 🏆`, html);
-    }
-
-    async sendV25AnnouncementEmail(to: string, name: string) {
-        const html = await render(
-            React.createElement(V25AnnouncementEmail, { name })
-        );
-        return this.sendEmail(to, '🎉 EduLearn v2.5 is Here!', html);
-    }
-
-    private readonly resendRateLimit = 2;
-
-    private sleep(ms: number) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    async createBroadcast(subject: string, html: string, send = true) {
-        const { data, error } = await this.resend.broadcasts.create({
-            audienceId: this.audienceId,
-            from: 'Eddy 💚 <eddy@edulearn.fun>',
-            subject,
-            html,
-        });
-        if (error) throw new Error(error.message);
-        if (send && data?.id) {
-            const sendResult = await this.resend.broadcasts.send(data.id);
-            if (sendResult.error) throw new Error(sendResult.error.message);
-        }
-        return data;
-    }
-
-    async sendEngagementEmail(
-        template: EngagementTemplateId,
-        to: string,
-        params: { name?: string; referralCode?: string; referralCount?: number },
-    ) {
-        const html = await this.renderEngagementTemplate(template, params, false);
-        const subject = ENGAGEMENT_SUBJECTS[template];
-        return this.sendEmail(to, subject, html);
-    }
-
-    async getEngagementPreviewHtml(
-        template: EngagementTemplateId,
-        params: { name?: string; referralCode?: string; referralCount?: number },
-    ): Promise<string> {
-        return this.renderEngagementTemplate(template, params, false);
-    }
-
-    private async renderEngagementTemplate(
-        template: EngagementTemplateId,
-        params: { name?: string; referralCode?: string; referralCount?: number },
-        forBroadcast: boolean,
-    ): Promise<string> {
-        const base = { name: params.name || 'Learner', useResendUnsubscribe: forBroadcast, useResendFirstName: forBroadcast };
-        switch (template) {
-            case 'come-back-soon':
-                return render(React.createElement(ComeBackSoonEmail, base));
-            case 'refer-friends':
-                return render(React.createElement(ReferFriendsEmail, { ...base, referralCode: params.referralCode || 'ABC123' }));
-            case 'streak-reminder':
-                return render(React.createElement(StreakReminderEmail, base));
-            case 'eddy-tip':
-                return render(React.createElement(EddyWeeklyTipEmail, base));
-            case 'referral-superstar':
-                return render(
-                    React.createElement(ReferralSuperstarEmail, {
-                        ...base,
-                        referralCount: params.referralCount ?? 5,
-                        referralCode: params.referralCode || 'ABC123',
-                    }),
-                );
-            default:
-                throw new Error(`Unknown template: ${template}`);
-        }
-    }
-
-    async broadcastEngagement(template: EngagementTemplateId): Promise<{ sent: number; failed: number; total: number }> {
-        const broadcastTemplates: EngagementTemplateId[] = ['come-back-soon', 'streak-reminder', 'eddy-tip'];
-        if (broadcastTemplates.includes(template)) {
-            const html = await this.renderEngagementTemplate(template, {}, true);
-            const subject = ENGAGEMENT_SUBJECTS[template];
-            await this.createBroadcast(subject, html);
-            const contacts = await this.getResendContacts();
-            return { sent: contacts.length, failed: 0, total: contacts.length };
-        }
-        const users = await db.select({ email: user.email, name: user.name, referralCode: user.referralCode, referralCount: user.referralCount }).from(user);
-        const validUsers = users.filter(u => u.email?.trim());
-        let sent = 0;
-        let failed = 0;
-        for (const u of validUsers) {
-            try {
-                await this.sendEngagementEmail(template, u.email, {
-                    name: u.name,
-                    referralCode: u.referralCode ?? undefined,
-                    referralCount: u.referralCount ?? undefined,
-                });
-                sent++;
-            } catch (err) {
-                console.error(`Failed to send ${template} to ${u.email}:`, err);
-                failed++;
-            }
-        }
-        return { sent, failed, total: validUsers.length };
-    }
-
-    async broadcastV25Announcement() {
-        const users = await db.select({
-            email: user.email,
-            name: user.name,
-        }).from(user);
-
-        const validUsers = users.filter(u => u.email?.trim());
-        const results: PromiseSettledResult<unknown>[] = [];
-
-        for (let i = 0; i < validUsers.length; i += this.resendRateLimit) {
-            const batch = validUsers.slice(i, i + this.resendRateLimit);
-            const batchResults = await Promise.allSettled(
-                batch.map(u => this.sendV25AnnouncementEmail(u.email, u.name))
-            );
-            results.push(...batchResults);
-            if (i + this.resendRateLimit < validUsers.length) {
-                await this.sleep(2000);
-            }
-        }
-
-        return {
-            sent: results.filter(r => r.status === 'fulfilled').length,
-            failed: results.filter(r => r.status === 'rejected').length,
-            total: validUsers.length,
-        };
-    }
-
-    async addResendContact(email: string, name: string) {
-      const contact = await this.resend.contacts.create({
-        email: email,
-        firstName: name,
-        lastName: '',
-        unsubscribed: false,
+  async getResendContacts() {
+    try {
+      const { data } = await this.resend.contacts.list({
         audienceId: this.audienceId,
       });
-      return contact;
+      return data?.data || [];
+    } catch (error) {
+      console.error('Error fetching Resend contacts:', error);
+      return [];
+    }
+  }
+
+  async checkContactExists(email: string): Promise<boolean> {
+    const contacts = await this.getResendContacts();
+    return contacts.some(
+      (contact) => contact.email.toLowerCase() === email.toLowerCase(),
+    );
+  }
+
+  async addAllUsersToResendContactList() {
+    const users = await db
+      .select({
+        email: user.email,
+        name: user.name,
+      })
+      .from(user);
+
+    const resendContacts = await this.getResendContacts();
+    const resendEmails = new Set(
+      resendContacts.map((contact) => contact.email.toLowerCase()),
+    );
+
+    let added = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    for (const user of users) {
+      if (resendEmails.has(user.email.toLowerCase())) {
+        skipped++;
+        continue;
+      }
+
+      try {
+        await this.addResendContact(user.email, user.name);
+        added++;
+      } catch (error) {
+        console.error(`Failed to add ${user.email}:`, error);
+        failed++;
+      }
     }
 
-    private getFollowerNFTEmailTemplate(followerName: string, userName: string, nftTitle: string, nftDescription: string, imageUrl?: string): string {
-        const mascotMood = this.mascotMoods.nftAward;
-        const mascotUrl = this.mascotImageUrls[mascotMood];
+    return {
+      message: 'Completed adding users to resend contact list',
+      success: true,
+      added,
+      skipped,
+      failed,
+      total: users.length,
+    };
+  }
 
-        return `
+  async getUsersNotInResendContacts() {
+    const users = await db
+      .select({
+        email: user.email,
+        name: user.name,
+      })
+      .from(user);
+
+    const resendContacts = await this.getResendContacts();
+    const resendEmails = new Set(
+      resendContacts.map((contact) => contact.email.toLowerCase()),
+    );
+
+    const usersNotInResend = users.filter(
+      (user) => !resendEmails.has(user.email.toLowerCase()),
+    );
+
+    return {
+      usersNotInResend,
+      count: usersNotInResend.length,
+      totalUsers: users.length,
+      totalResendContacts: resendContacts.length,
+    };
+  }
+
+  async sendEmail(to: string, subject: string, html: string) {
+    const { data, error } = await this.resend.emails.send({
+      from: 'Eddy 💚 <eddy@edulearn.fun>',
+      to: to,
+      subject: subject,
+      html: html,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data;
+  }
+
+  async sendWelcomeEmail(
+    to: string,
+    name: string,
+    username: string,
+    referralCode: string,
+  ) {
+    const html = this.getWelcomeEmailTemplate(name, username, referralCode);
+    return this.sendEmail(to, 'Welcome to EduLearn.fun 💚', html);
+  }
+
+  async sendNFTAwardEmail(
+    to: string,
+    name: string,
+    nftTitle: string,
+    nftDescription: string,
+    imageUrl?: string,
+  ) {
+    const html = this.getNFTAwardEmailTemplate(
+      name,
+      nftTitle,
+      nftDescription,
+      imageUrl,
+    );
+    return this.sendEmail(to, 'You Earned an Badge Certificate!', html);
+  }
+
+  async sendRoadmapGeneratedEmail(
+    to: string,
+    name: string,
+    roadmapTitle: string,
+  ) {
+    const html = this.getRoadmapGeneratedEmailTemplate(name, roadmapTitle);
+    return this.sendEmail(to, 'Your Learning Roadmap is Ready! 🚀', html);
+  }
+
+  async sendRoadmapReminderEmail(
+    to: string,
+    name: string,
+    roadmapTopic: string,
+    roadmapTitle: string,
+    roadmapStepTitle: string,
+    roadmapStepDescription: string,
+    roadmapStepTime: number,
+  ) {
+    const html = this.getRoadmapReminderEmailTemplate(
+      name,
+      roadmapTopic,
+      roadmapTitle,
+      roadmapStepTitle,
+      roadmapStepDescription,
+      roadmapStepTime,
+    );
+    return this.sendEmail(to, 'Roadmap Reminder 🔔', html);
+  }
+  async sendLevelUpEmail(
+    to: string,
+    name: string,
+    leveledUpUserName: string,
+    newLevel: number,
+    levelTitle: string,
+    xpTotal: number,
+  ) {
+    const html = this.getFollowerLevelUpEmailTemplate(
+      name,
+      leveledUpUserName,
+      newLevel,
+      levelTitle,
+      xpTotal,
+    );
+    return this.sendEmail(to, `${leveledUpUserName} Just Leveled Up! 🎉`, html);
+  }
+
+  async sendNFTFollowingEmail(
+    to: string,
+    followerName: string,
+    userName: string,
+    nftTitle: string,
+    nftDescription: string,
+    imageUrl?: string,
+  ) {
+    const html = this.getFollowerNFTEmailTemplate(
+      followerName,
+      userName,
+      nftTitle,
+      nftDescription,
+      imageUrl,
+    );
+    return this.sendEmail(to, `${userName} Earned an NFT! 🏆`, html);
+  }
+
+  async sendV25AnnouncementEmail(to: string, name: string) {
+    const html = await render(
+      React.createElement(V25AnnouncementEmail, { name }),
+    );
+    return this.sendEmail(to, '🎉 EduLearn v2.5 is Here!', html);
+  }
+
+  private readonly resendRateLimit = 2;
+
+  private sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async createBroadcast(subject: string, html: string, send = true) {
+    const { data, error } = await this.resend.broadcasts.create({
+      audienceId: this.audienceId,
+      from: 'Eddy 💚 <eddy@edulearn.fun>',
+      subject,
+      html,
+    });
+    if (error) throw new Error(error.message);
+    if (send && data?.id) {
+      const sendResult = await this.resend.broadcasts.send(data.id);
+      if (sendResult.error) throw new Error(sendResult.error.message);
+    }
+    return data;
+  }
+
+  async sendEngagementEmail(
+    template: EngagementTemplateId,
+    to: string,
+    params: { name?: string; referralCode?: string; referralCount?: number },
+  ) {
+    const html = await this.renderEngagementTemplate(template, params, false);
+    const subject = ENGAGEMENT_SUBJECTS[template];
+    return this.sendEmail(to, subject, html);
+  }
+
+  async getEngagementPreviewHtml(
+    template: EngagementTemplateId,
+    params: { name?: string; referralCode?: string; referralCount?: number },
+  ): Promise<string> {
+    return this.renderEngagementTemplate(template, params, false);
+  }
+
+  private async renderEngagementTemplate(
+    template: EngagementTemplateId,
+    params: { name?: string; referralCode?: string; referralCount?: number },
+    forBroadcast: boolean,
+  ): Promise<string> {
+    const base = {
+      name: params.name || 'Learner',
+      useResendUnsubscribe: forBroadcast,
+      useResendFirstName: forBroadcast,
+    };
+    switch (template) {
+      case 'come-back-soon':
+        return render(React.createElement(ComeBackSoonEmail, base));
+      case 'refer-friends':
+        return render(
+          React.createElement(ReferFriendsEmail, {
+            ...base,
+            referralCode: params.referralCode || 'ABC123',
+          }),
+        );
+      case 'streak-reminder':
+        return render(React.createElement(StreakReminderEmail, base));
+      case 'eddy-tip':
+        return render(React.createElement(EddyWeeklyTipEmail, base));
+      case 'referral-superstar':
+        return render(
+          React.createElement(ReferralSuperstarEmail, {
+            ...base,
+            referralCount: params.referralCount ?? 5,
+            referralCode: params.referralCode || 'ABC123',
+          }),
+        );
+      default:
+        throw new Error(`Unknown template: ${template}`);
+    }
+  }
+
+  async renderNftListingAnnouncementHtml(
+    partial?: Partial<NftListingBroadcastData>,
+    forBroadcast = false,
+  ): Promise<string> {
+    const data = mergeNftListingBroadcastData(partial);
+    return render(
+      React.createElement(NftListingAnnouncementEmail, {
+        ...data,
+        useResendUnsubscribe: forBroadcast,
+        useResendFirstName: forBroadcast,
+      }),
+    );
+  }
+
+  async sendNftListingAnnouncementTest(
+    to: string,
+    partial?: Partial<NftListingBroadcastData>,
+  ) {
+    const data = mergeNftListingBroadcastData(partial);
+    const html = await this.renderNftListingAnnouncementHtml(partial, false);
+    return this.sendEmail(to, data.subject, html);
+  }
+
+  async broadcastNftListingAnnouncement(
+    partial?: Partial<NftListingBroadcastData>,
+  ): Promise<{ sent: number; failed: number; total: number }> {
+    const data = mergeNftListingBroadcastData(partial);
+    const html = await this.renderNftListingAnnouncementHtml(partial, true);
+    await this.createBroadcast(data.subject, html);
+    const contacts = await this.getResendContacts();
+    return { sent: contacts.length, failed: 0, total: contacts.length };
+  }
+
+  async broadcastEngagement(
+    template: EngagementTemplateId,
+  ): Promise<{ sent: number; failed: number; total: number }> {
+    const broadcastTemplates: EngagementTemplateId[] = [
+      'come-back-soon',
+      'streak-reminder',
+      'eddy-tip',
+    ];
+    if (broadcastTemplates.includes(template)) {
+      const html = await this.renderEngagementTemplate(template, {}, true);
+      const subject = ENGAGEMENT_SUBJECTS[template];
+      await this.createBroadcast(subject, html);
+      const contacts = await this.getResendContacts();
+      return { sent: contacts.length, failed: 0, total: contacts.length };
+    }
+    const users = await db
+      .select({
+        email: user.email,
+        name: user.name,
+        referralCode: user.referralCode,
+        referralCount: user.referralCount,
+      })
+      .from(user);
+    const validUsers = users.filter((u) => u.email?.trim());
+    let sent = 0;
+    let failed = 0;
+    for (const u of validUsers) {
+      try {
+        await this.sendEngagementEmail(template, u.email, {
+          name: u.name,
+          referralCode: u.referralCode ?? undefined,
+          referralCount: u.referralCount ?? undefined,
+        });
+        sent++;
+      } catch (err) {
+        console.error(`Failed to send ${template} to ${u.email}:`, err);
+        failed++;
+      }
+    }
+    return { sent, failed, total: validUsers.length };
+  }
+
+  async broadcastV25Announcement() {
+    const users = await db
+      .select({
+        email: user.email,
+        name: user.name,
+      })
+      .from(user);
+
+    const validUsers = users.filter((u) => u.email?.trim());
+    const results: PromiseSettledResult<unknown>[] = [];
+
+    for (let i = 0; i < validUsers.length; i += this.resendRateLimit) {
+      const batch = validUsers.slice(i, i + this.resendRateLimit);
+      const batchResults = await Promise.allSettled(
+        batch.map((u) => this.sendV25AnnouncementEmail(u.email, u.name)),
+      );
+      results.push(...batchResults);
+      if (i + this.resendRateLimit < validUsers.length) {
+        await this.sleep(2000);
+      }
+    }
+
+    return {
+      sent: results.filter((r) => r.status === 'fulfilled').length,
+      failed: results.filter((r) => r.status === 'rejected').length,
+      total: validUsers.length,
+    };
+  }
+
+  async addResendContact(email: string, name: string) {
+    const contact = await this.resend.contacts.create({
+      email: email,
+      firstName: name,
+      lastName: '',
+      unsubscribed: false,
+      audienceId: this.audienceId,
+    });
+    return contact;
+  }
+
+  private getFollowerNFTEmailTemplate(
+    followerName: string,
+    userName: string,
+    nftTitle: string,
+    nftDescription: string,
+    imageUrl?: string,
+  ): string {
+    const mascotMood = this.mascotMoods.nftAward;
+    const mascotUrl = this.mascotImageUrls[mascotMood];
+
+    return `
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -323,13 +463,17 @@ export class ResendService {
               <td align="center" style="padding:40px 20px;">
                 <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="background-color:#FFFFFF;border-radius:16px;max-width:600px;border:1px solid #EDF3FC;">
                   
-                  ${mascotUrl ? `
+                  ${
+                    mascotUrl
+                      ? `
                   <tr>
                     <td style="padding:40px 30px 20px;text-align:center;">
                       <img src="${mascotUrl}" alt="Eddie" style="width:120px;height:auto;display:block;margin:0 auto;" />
                     </td>
                   </tr>
-                  ` : ''}
+                  `
+                      : ''
+                  }
     
                   <tr>
                     <td style="padding:0 30px 30px;text-align:center;">
@@ -350,7 +494,9 @@ export class ResendService {
                     </td>
                   </tr>
     
-                  ${imageUrl ? `
+                  ${
+                    imageUrl
+                      ? `
                   <tr>
                     <td style="padding:0 30px 30px;">
                       <div style="text-align:center;">
@@ -358,7 +504,9 @@ export class ResendService {
                       </div>
                     </td>
                   </tr>
-                  ` : ''}
+                  `
+                      : ''
+                  }
     
                   <tr>
                     <td style="padding:0 30px 30px;">
@@ -406,13 +554,19 @@ export class ResendService {
         </body>
         </html>
         `;
-    }
+  }
 
-    private getFollowerLevelUpEmailTemplate(followerName: string, leveledUpUserName: string, newLevel: number, levelTitle: string, xpTotal: number): string {
-      const mascotMood = this.mascotMoods.levelUp;
-      const mascotUrl = this.mascotImageUrls[mascotMood];
-    
-      return `
+  private getFollowerLevelUpEmailTemplate(
+    followerName: string,
+    leveledUpUserName: string,
+    newLevel: number,
+    levelTitle: string,
+    xpTotal: number,
+  ): string {
+    const mascotMood = this.mascotMoods.levelUp;
+    const mascotUrl = this.mascotImageUrls[mascotMood];
+
+    return `
       <!DOCTYPE html>
       <html lang="en">
       <head>
@@ -426,13 +580,17 @@ export class ResendService {
             <td align="center" style="padding:40px 20px;">
               <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="background-color:#FFFFFF;border-radius:16px;max-width:600px;border:1px solid #EDF3FC;">
                 
-                ${mascotUrl ? `
+                ${
+                  mascotUrl
+                    ? `
                 <tr>
                   <td style="padding:40px 30px 20px;text-align:center;">
                     <img src="${mascotUrl}" alt="Eddie" style="width:120px;height:auto;display:block;margin:0 auto;" />
                   </td>
                 </tr>
-                ` : ''}
+                `
+                    : ''
+                }
     
                 <tr>
                   <td style="padding:0 30px 30px;text-align:center;">
@@ -502,14 +660,20 @@ export class ResendService {
       </body>
       </html>
       `;
-    }
-    
+  }
 
-    private getRoadmapReminderEmailTemplate(name: string, roadmapTopic: string, roadmapTitle: string, roadmapStepTitle: string, roadmapStepDescription: string, roadmapStepTime: number): string {
-        const mascotMood = this.mascotMoods.roadmapReminder;
-        const mascotUrl = this.mascotImageUrls[mascotMood];
-        
-        return `
+  private getRoadmapReminderEmailTemplate(
+    name: string,
+    roadmapTopic: string,
+    roadmapTitle: string,
+    roadmapStepTitle: string,
+    roadmapStepDescription: string,
+    roadmapStepTime: number,
+  ): string {
+    const mascotMood = this.mascotMoods.roadmapReminder;
+    const mascotUrl = this.mascotImageUrls[mascotMood];
+
+    return `
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -523,13 +687,17 @@ export class ResendService {
               <td align="center" style="padding:40px 20px;">
                 <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="background-color:#FFFFFF;border-radius:16px;max-width:600px;border:1px solid #EDF3FC;">
                   
-                  ${mascotUrl ? `
+                  ${
+                    mascotUrl
+                      ? `
                   <tr>
                     <td style="padding:40px 30px 20px;text-align:center;">
                       <img src="${mascotUrl}" alt="Eddie" style="width:120px;height:auto;display:block;margin:0 auto;" />
                     </td>
                   </tr>
-                  ` : ''}
+                  `
+                      : ''
+                  }
                   
                   <tr>
                     <td style="padding:0 30px 30px;text-align:center;">
@@ -574,13 +742,16 @@ export class ResendService {
         </body>
         </html>
         `;
-    }
+  }
 
-    private getRoadmapGeneratedEmailTemplate(name: string, roadmapTitle: string): string {
-        const mascotMood = this.mascotMoods.roadmapGenerated;
-        const mascotUrl = this.mascotImageUrls[mascotMood];
-        
-        return `
+  private getRoadmapGeneratedEmailTemplate(
+    name: string,
+    roadmapTitle: string,
+  ): string {
+    const mascotMood = this.mascotMoods.roadmapGenerated;
+    const mascotUrl = this.mascotImageUrls[mascotMood];
+
+    return `
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -594,13 +765,17 @@ export class ResendService {
               <td align="center" style="padding:40px 20px;">
                 <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="background-color:#FFFFFF;border-radius:16px;max-width:600px;border:1px solid #EDF3FC;">
                   
-                  ${mascotUrl ? `
+                  ${
+                    mascotUrl
+                      ? `
                   <tr>
                     <td style="padding:40px 30px 20px;text-align:center;">
                       <img src="${mascotUrl}" alt="Eddie" style="width:120px;height:auto;display:block;margin:0 auto;" />
                     </td>
                   </tr>
-                  ` : ''}
+                  `
+                      : ''
+                  }
                   
                   <tr>
                     <td style="padding:0 30px 30px;text-align:center;">
@@ -662,13 +837,17 @@ export class ResendService {
         </body>
         </html>
         `;
-    }
+  }
 
-    private getWelcomeEmailTemplate(name: string, username: string, referralCode: string): string {
-        const mascotMood = this.mascotMoods.welcome;
-        const mascotUrl = this.mascotImageUrls[mascotMood];
-        
-        return `
+  private getWelcomeEmailTemplate(
+    name: string,
+    username: string,
+    referralCode: string,
+  ): string {
+    const mascotMood = this.mascotMoods.welcome;
+    const mascotUrl = this.mascotImageUrls[mascotMood];
+
+    return `
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -682,13 +861,17 @@ export class ResendService {
               <td align="center" style="padding:40px 20px;">
                 <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="background-color:#FFFFFF;border-radius:16px;max-width:600px;border:1px solid #EDF3FC;">
                   
-                  ${mascotUrl ? `
+                  ${
+                    mascotUrl
+                      ? `
                   <tr>
                     <td style="padding:40px 30px 20px;text-align:center;">
                       <img src="${mascotUrl}" alt="Eddie" style="width:120px;height:auto;display:block;margin:0 auto;" />
                     </td>
                   </tr>
-                  ` : ''}
+                  `
+                      : ''
+                  }
                   
                   <tr>
                     <td style="padding:0 30px 30px;text-align:center;">
@@ -749,13 +932,18 @@ export class ResendService {
         </body>
         </html>
         `;
-    }
+  }
 
-    private getNFTAwardEmailTemplate(name: string, nftTitle: string, nftDescription: string, imageUrl?: string): string {
-        const mascotMood = this.mascotMoods.nftAward;
-        const mascotUrl = this.mascotImageUrls[mascotMood];
-        
-        return `
+  private getNFTAwardEmailTemplate(
+    name: string,
+    nftTitle: string,
+    nftDescription: string,
+    imageUrl?: string,
+  ): string {
+    const mascotMood = this.mascotMoods.nftAward;
+    const mascotUrl = this.mascotImageUrls[mascotMood];
+
+    return `
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -769,13 +957,17 @@ export class ResendService {
               <td align="center" style="padding:40px 20px;">
                 <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="background-color:#FFFFFF;border-radius:16px;max-width:600px;border:1px solid #EDF3FC;">
                   
-                  ${mascotUrl ? `
+                  ${
+                    mascotUrl
+                      ? `
                   <tr>
                     <td style="padding:40px 30px 20px;text-align:center;">
                       <img src="${mascotUrl}" alt="Eddie" style="width:120px;height:auto;display:block;margin:0 auto;" />
                     </td>
                   </tr>
-                  ` : ''}
+                  `
+                      : ''
+                  }
                   
                   <tr>
                     <td style="padding:0 30px 30px;text-align:center;">
@@ -791,7 +983,9 @@ export class ResendService {
                     </td>
                   </tr>
                   
-                  ${imageUrl ? `
+                  ${
+                    imageUrl
+                      ? `
                   <tr>
                     <td style="padding:0 30px 30px;">
                       <div style="text-align:center;">
@@ -799,7 +993,9 @@ export class ResendService {
                       </div>
                     </td>
                   </tr>
-                  ` : ''}
+                  `
+                      : ''
+                  }
                   
                   <tr>
                     <td style="padding:0 30px 30px;">
@@ -854,5 +1050,5 @@ export class ResendService {
         </body>
         </html>
         `;
-    }
+  }
 }

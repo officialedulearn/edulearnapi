@@ -90,7 +90,7 @@ export class RedisService {
   async removeUserFromAllRooms(userId: string): Promise<void> {
     // Get all room keys
     const roomKeys = await this.redis.keys('room:*:online');
-    
+
     // Remove user from each room
     const pipeline = this.redis.multi();
     for (const key of roomKeys) {
@@ -123,7 +123,11 @@ export class RedisService {
   /**
    * Set typing indicator with TTL (3 seconds)
    */
-  async setTyping(communityId: string, userId: string, ttl: number = 3): Promise<void> {
+  async setTyping(
+    communityId: string,
+    userId: string,
+    ttl: number = 3,
+  ): Promise<void> {
     const key = `typing:${communityId}:${userId}`;
     await this.redis.setEx(key, ttl, '1');
   }
@@ -143,7 +147,7 @@ export class RedisService {
   async getTypingUsers(communityId: string): Promise<string[]> {
     const pattern = `typing:${communityId}:*`;
     const keys = await this.redis.keys(pattern);
-    
+
     // Extract userIds from keys
     return keys.map((key) => {
       const parts = key.split(':');
@@ -165,7 +169,7 @@ export class RedisService {
   async clearRoomTyping(communityId: string): Promise<void> {
     const pattern = `typing:${communityId}:*`;
     const keys = await this.redis.keys(pattern);
-    
+
     if (keys.length > 0) {
       await this.redis.del(keys);
     }

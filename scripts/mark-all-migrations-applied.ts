@@ -20,21 +20,26 @@ async function markAllMigrationsApplied() {
   try {
     console.log('🔧 Marking all existing migrations as applied...\n');
 
-    const journalPath = path.join(__dirname, '../lib/db/migrations/meta/_journal.json');
+    const journalPath = path.join(
+      __dirname,
+      '../lib/db/migrations/meta/_journal.json',
+    );
     const journal = JSON.parse(fs.readFileSync(journalPath, 'utf-8'));
 
     console.log(`Found ${journal.entries.length} migrations in journal\n`);
 
-    const currentMigrations = await db.execute(sql`
+    const currentMigrations = (await db.execute(sql`
       SELECT id, hash FROM drizzle.__drizzle_migrations ORDER BY id;
-    `) as any[];
+    `)) as any[];
 
-    console.log(`Currently ${currentMigrations.length} migrations recorded in database\n`);
+    console.log(
+      `Currently ${currentMigrations.length} migrations recorded in database\n`,
+    );
 
     let addedCount = 0;
     for (const entry of journal.entries) {
       const exists = currentMigrations.some((m: any) => m.id === entry.idx);
-      
+
       if (!exists) {
         const hash = entry.tag;
         await db.execute(sql`
@@ -42,17 +47,23 @@ async function markAllMigrationsApplied() {
           VALUES (${entry.idx}, ${hash}, ${entry.when})
           ON CONFLICT (id) DO UPDATE SET hash = EXCLUDED.hash;
         `);
-        console.log(`✓ Marked migration ${entry.idx} (${entry.tag}) as applied`);
+        console.log(
+          `✓ Marked migration ${entry.idx} (${entry.tag}) as applied`,
+        );
         addedCount++;
       } else {
-        const currentHash = currentMigrations.find((m: any) => m.id === entry.idx)?.hash;
+        const currentHash = currentMigrations.find(
+          (m: any) => m.id === entry.idx,
+        )?.hash;
         if (currentHash !== entry.tag) {
           await db.execute(sql`
             UPDATE drizzle.__drizzle_migrations 
             SET hash = ${entry.tag}
             WHERE id = ${entry.idx};
           `);
-          console.log(`✓ Updated hash for migration ${entry.idx} (${entry.tag})`);
+          console.log(
+            `✓ Updated hash for migration ${entry.idx} (${entry.tag})`,
+          );
           addedCount++;
         }
       }

@@ -5,4 +5,3 @@ export class FollowUserDto {
   @IsNotEmpty()
   userId: string;
 }
-

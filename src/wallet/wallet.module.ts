@@ -8,13 +8,13 @@ import { SocialModule } from 'src/social/social.module';
 
 @Module({
   imports: [
-    forwardRef(() => AuthModule), 
-    forwardRef(() => TwitterModule), 
+    forwardRef(() => AuthModule),
+    forwardRef(() => TwitterModule),
     forwardRef(() => ResendModule),
     forwardRef(() => SocialModule),
   ],
   providers: [WalletService],
   controllers: [WalletController],
-  exports: [WalletService]
+  exports: [WalletService],
 })
 export class WalletModule {}

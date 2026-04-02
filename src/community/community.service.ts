@@ -1,11 +1,11 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { eq, and, desc, sql, ilike, or } from 'drizzle-orm';
 import db from '../../drizzle';
-import { 
-  community, 
-  roomMessage, 
-  messageReaction, 
-  mention, 
+import {
+  community,
+  roomMessage,
+  messageReaction,
+  mention,
   community_members,
   community_join_request,
   user,
@@ -24,19 +24,16 @@ export class CommunityService {
   constructor(
     private readonly notificationsService: NotificationsService,
     @Inject(forwardRef(() => AuthService))
-    private readonly authService: AuthService
+    private readonly authService: AuthService,
   ) {}
-    
+
   async createCommunity(data: {
     title: string;
     inviteCode: string;
     visibility?: 'public' | 'private';
     imageUrl?: string;
   }): Promise<Community> {
-    const [newCommunity] = await db
-      .insert(community)
-      .values(data)
-      .returning();
+    const [newCommunity] = await db.insert(community).values(data).returning();
     return newCommunity;
   }
 
@@ -49,7 +46,9 @@ export class CommunityService {
     return result || null;
   }
 
-  async getCommunityByInviteCode(inviteCode: string): Promise<Community | null> {
+  async getCommunityByInviteCode(
+    inviteCode: string,
+  ): Promise<Community | null> {
     const [result] = await db
       .select()
       .from(community)
@@ -67,10 +66,7 @@ export class CommunityService {
   }
 
   async getAllCommunities(): Promise<Community[]> {
-    return await db
-      .select()
-      .from(community)
-      .orderBy(desc(community.createdAt));
+    return await db.select().from(community).orderBy(desc(community.createdAt));
   }
 
   async updateCommunity(
@@ -80,7 +76,7 @@ export class CommunityService {
       visibility: 'public' | 'private';
       imageUrl: string;
       inviteCode: string;
-    }>
+    }>,
   ): Promise<Community> {
     const [updated] = await db
       .update(community)
@@ -90,12 +86,10 @@ export class CommunityService {
     return updated;
   }
 
-  
   async deleteCommunity(communityId: string): Promise<void> {
     await db.delete(community).where(eq(community.id, communityId));
   }
 
- 
   async addMemberToCommunity(data: {
     userId: string;
     communityId: string;
@@ -149,23 +143,25 @@ export class CommunityService {
       .where(
         and(
           eq(community_members.userId, userId),
-          eq(community_members.communityId, communityId)
-        )
+          eq(community_members.communityId, communityId),
+        ),
       )
       .limit(1);
     return !!result;
   }
 
-  
-  async getMemberRole(userId: string, communityId: string): Promise<'mod' | 'member' | null> {
+  async getMemberRole(
+    userId: string,
+    communityId: string,
+  ): Promise<'mod' | 'member' | null> {
     const [result] = await db
       .select()
       .from(community_members)
       .where(
         and(
           eq(community_members.userId, userId),
-          eq(community_members.communityId, communityId)
-        )
+          eq(community_members.communityId, communityId),
+        ),
       )
       .limit(1);
     return result?.role || null;
@@ -174,7 +170,7 @@ export class CommunityService {
   async updateMemberRole(
     userId: string,
     communityId: string,
-    role: 'mod' | 'member'
+    role: 'mod' | 'member',
   ): Promise<CommunityMembers> {
     const [updated] = await db
       .update(community_members)
@@ -182,26 +178,27 @@ export class CommunityService {
       .where(
         and(
           eq(community_members.userId, userId),
-          eq(community_members.communityId, communityId)
-        )
+          eq(community_members.communityId, communityId),
+        ),
       )
       .returning();
     return updated;
   }
 
- 
-  async removeMemberFromCommunity(userId: string, communityId: string): Promise<void> {
+  async removeMemberFromCommunity(
+    userId: string,
+    communityId: string,
+  ): Promise<void> {
     await db
       .delete(community_members)
       .where(
         and(
           eq(community_members.userId, userId),
-          eq(community_members.communityId, communityId)
-        )
+          eq(community_members.communityId, communityId),
+        ),
       );
   }
 
- 
   async getCommunityMemberCount(communityId: string): Promise<number> {
     const result = await db
       .select({ count: sql<number>`count(*)` })
@@ -269,15 +266,15 @@ export class CommunityService {
       .where(
         and(
           eq(community_join_request.communityId, communityId),
-          eq(community_join_request.status, 'pending')
-        )
+          eq(community_join_request.status, 'pending'),
+        ),
       )
       .orderBy(desc(community_join_request.createdAt));
   }
 
   async getUserJoinRequest(
     userId: string,
-    communityId: string
+    communityId: string,
   ): Promise<CommunityJoinRequest | null> {
     const [request] = await db
       .select()
@@ -285,8 +282,8 @@ export class CommunityService {
       .where(
         and(
           eq(community_join_request.userId, userId),
-          eq(community_join_request.communityId, communityId)
-        )
+          eq(community_join_request.communityId, communityId),
+        ),
       )
       .orderBy(desc(community_join_request.createdAt))
       .limit(1);
@@ -295,7 +292,7 @@ export class CommunityService {
 
   async updateJoinRequestStatus(
     requestId: string,
-    status: 'approved' | 'rejected'
+    status: 'approved' | 'rejected',
   ): Promise<CommunityJoinRequest> {
     const [updated] = await db
       .update(community_join_request)
@@ -306,7 +303,9 @@ export class CommunityService {
   }
 
   async deleteJoinRequest(requestId: string): Promise<void> {
-    await db.delete(community_join_request).where(eq(community_join_request.id, requestId));
+    await db
+      .delete(community_join_request)
+      .where(eq(community_join_request.id, requestId));
   }
   async createMessage(data: {
     roomId: string;
@@ -314,10 +313,7 @@ export class CommunityService {
     content: string;
   }): Promise<RoomMessage> {
     try {
-      const [message] = await db
-        .insert(roomMessage)
-        .values(data)
-        .returning();
+      const [message] = await db.insert(roomMessage).values(data).returning();
       return message;
     } catch (error) {
       console.error('Error creating message:', error);
@@ -327,7 +323,11 @@ export class CommunityService {
       throw error;
     }
   }
-  async getRoomMessages(roomId: string, limit: number = 50, offset: number = 0) {
+  async getRoomMessages(
+    roomId: string,
+    limit: number = 50,
+    offset: number = 0,
+  ) {
     return await db
       .select({
         id: roomMessage.id,
@@ -370,7 +370,10 @@ export class CommunityService {
     return message || null;
   }
 
-  async updateMessage(messageId: string, content: string): Promise<RoomMessage> {
+  async updateMessage(
+    messageId: string,
+    content: string,
+  ): Promise<RoomMessage> {
     const [updated] = await db
       .update(roomMessage)
       .set({ content })
@@ -379,10 +382,12 @@ export class CommunityService {
     return updated;
   }
   async deleteMessage(messageId: string): Promise<void> {
-    await db.delete(messageReaction).where(eq(messageReaction.messageId, messageId));
-    
+    await db
+      .delete(messageReaction)
+      .where(eq(messageReaction.messageId, messageId));
+
     await db.delete(mention).where(eq(mention.messageId, messageId));
-    
+
     await db.delete(roomMessage).where(eq(roomMessage.id, messageId));
   }
   async getRoomMessageCount(roomId: string): Promise<number> {
@@ -422,7 +427,7 @@ export class CommunityService {
 
   async getUserReaction(
     messageId: string,
-    userId: string
+    userId: string,
   ): Promise<MessageReaction | null> {
     const [reaction] = await db
       .select()
@@ -430,8 +435,8 @@ export class CommunityService {
       .where(
         and(
           eq(messageReaction.messageId, messageId),
-          eq(messageReaction.userId, userId)
-        )
+          eq(messageReaction.userId, userId),
+        ),
       )
       .limit(1);
     return reaction || null;
@@ -443,8 +448,8 @@ export class CommunityService {
       .where(
         and(
           eq(messageReaction.messageId, messageId),
-          eq(messageReaction.userId, userId)
-        )
+          eq(messageReaction.userId, userId),
+        ),
       );
   }
 
@@ -505,8 +510,8 @@ export class CommunityService {
         .where(
           and(
             eq(community_members.communityId, communityId),
-            eq(community_members.role, 'mod')
-          )
+            eq(community_members.role, 'mod'),
+          ),
         );
       await db
         .update(community_members)
@@ -514,12 +519,12 @@ export class CommunityService {
         .where(
           and(
             eq(community_members.communityId, communityId),
-            eq(community_members.userId, highestXpUser.userId)
-          )
+            eq(community_members.userId, highestXpUser.userId),
+          ),
         );
 
       console.log(
-        `✅ User ${highestXpUser.userId} is now mod of community ${communityId} (XP: ${highestXpUser.xp})`
+        `✅ User ${highestXpUser.userId} is now mod of community ${communityId} (XP: ${highestXpUser.xp})`,
       );
     } catch (error) {
       console.error('Error checking and updating community mod:', error);
@@ -546,8 +551,8 @@ export class CommunityService {
       .where(
         and(
           eq(community_members.communityId, communityId),
-          eq(community_members.role, 'mod')
-        )
+          eq(community_members.role, 'mod'),
+        ),
       )
       .limit(1);
 
@@ -573,8 +578,8 @@ export class CommunityService {
       .where(
         and(
           eq(community_members.communityId, communityId),
-          eq(community_members.role, 'mod')
-        )
+          eq(community_members.role, 'mod'),
+        ),
       );
   }
 
@@ -594,13 +599,21 @@ export class CommunityService {
 
     try {
       const message = await this.getMessageById(data.messageId);
-      const community = data.communityId ? await this.getCommunityById(data.communityId) : null;
-      const mentionedBy = data.mentionedByUserId ? await db.select().from(user).where(eq(user.id, data.mentionedByUserId)).limit(1) : null;
-      
+      const community = data.communityId
+        ? await this.getCommunityById(data.communityId)
+        : null;
+      const mentionedBy = data.mentionedByUserId
+        ? await db
+            .select()
+            .from(user)
+            .where(eq(user.id, data.mentionedByUserId))
+            .limit(1)
+        : null;
+
       const mentionedByUser = mentionedBy?.[0];
       const communityTitle = community?.title || 'Community';
       const mentionedByName = mentionedByUser?.name || 'Someone';
-      
+
       await this.notificationsService.createNotification({
         title: `${mentionedByName} mentioned you`,
         content: `You were mentioned in ${communityTitle}: ${message.content.substring(0, 100)}${message.content.length > 100 ? '...' : ''}`,
@@ -653,7 +666,7 @@ export class CommunityService {
       .orderBy(desc(roomMessage.createdAt))
       .limit(limit);
   }
-  
+
   async deleteMention(mentionId: string): Promise<void> {
     await db.delete(mention).where(eq(mention.id, mentionId));
   }
@@ -662,10 +675,12 @@ export class CommunityService {
     await db.delete(mention).where(eq(mention.messageId, messageId));
   }
 
-  async findUsersByUsernames(usernames: string[]): Promise<{ username: string; userId: string }[]> {
+  async findUsersByUsernames(
+    usernames: string[],
+  ): Promise<{ username: string; userId: string }[]> {
     if (usernames.length === 0) return [];
-    
-    const conditions = usernames.map(u => eq(user.username, u));
+
+    const conditions = usernames.map((u) => eq(user.username, u));
     const results = await db
       .select({
         id: user.id,
@@ -673,13 +688,15 @@ export class CommunityService {
       })
       .from(user)
       .where(or(...conditions));
-    
+
     return results
       .filter((u): u is { id: string; username: string } => u.username != null)
-      .map(u => ({ username: u.username, userId: u.id }));
+      .map((u) => ({ username: u.username, userId: u.id }));
   }
 
-  async findUserByUsername(username: string): Promise<{ id: string; username: string } | null> {
+  async findUserByUsername(
+    username: string,
+  ): Promise<{ id: string; username: string } | null> {
     const [result] = await db
       .select({
         id: user.id,

@@ -5,10 +5,7 @@ import { RewardsModule } from '../rewards/rewards.module';
 import { WalletModule } from '../wallet/wallet.module';
 
 @Module({
-  imports: [
-    forwardRef(() => RewardsModule),
-    forwardRef(() => WalletModule),
-  ],
+  imports: [forwardRef(() => RewardsModule), forwardRef(() => WalletModule)],
   providers: [SubscriptionService],
   controllers: [SubscriptionController],
   exports: [SubscriptionService],

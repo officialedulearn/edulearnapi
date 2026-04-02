@@ -22,11 +22,11 @@ async function checkMigrations() {
     console.log('🔍 Checking migration discrepancies...\n');
 
     // Get migrations from DB
-    const dbMigrations = await db.execute(sql`
+    const dbMigrations = (await db.execute(sql`
       SELECT id, hash, created_at 
       FROM drizzle.__drizzle_migrations 
       ORDER BY id;
-    `) as any[];
+    `)) as any[];
 
     // Get migrations from journal
     const journalMigrations = journal.entries;
@@ -47,12 +47,16 @@ async function checkMigrations() {
 
     // Find discrepancies
     console.log('\n=== Discrepancies ===');
-    
+
     const dbIds = dbMigrations.map((m: any) => m.id);
     const journalIds = journalMigrations.map((m: any) => m.idx);
 
-    const inDbNotInJournal = dbIds.filter((id: number) => !journalIds.includes(id));
-    const inJournalNotInDb = journalIds.filter((id: number) => !dbIds.includes(id));
+    const inDbNotInJournal = dbIds.filter(
+      (id: number) => !journalIds.includes(id),
+    );
+    const inJournalNotInDb = journalIds.filter(
+      (id: number) => !dbIds.includes(id),
+    );
 
     if (inDbNotInJournal.length > 0) {
       console.log('\nMigrations in DB but NOT in journal:');

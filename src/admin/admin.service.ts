@@ -1,9 +1,24 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { sql, eq, gte, lte, and, or, desc, count } from 'drizzle-orm';
 import db from '../../drizzle';
-import { user, xpActivity, reward, userReward, premiumTransactions, totalVolumes, chat, community, community_members, feedback } from '../../lib/db/schema';
+import {
+  user,
+  xpActivity,
+  reward,
+  userReward,
+  premiumTransactions,
+  totalVolumes,
+  chat,
+  community,
+  community_members,
+  feedback,
+} from '../../lib/db/schema';
 import { NotificationsService } from '../common/services/notifications.service';
 import { ResendService } from '../resend/resend.service';
+import {
+  NFT_LISTING_BROADCAST_DATA,
+  type NftListingBroadcastData,
+} from '../emails/nft-listing-announcement.config';
 import { ExpoPushService } from '../common/services/expo-push.service';
 
 export interface SignupStats {
@@ -55,15 +70,17 @@ export class AdminService {
       try {
         return await queryFn();
       } catch (error: any) {
-        const isConnectionError = 
+        const isConnectionError =
           error?.cause?.code === 'XX000' ||
           error?.cause?.message?.includes('Tenant or user not found') ||
           error?.code === 'ECONNRESET' ||
           error?.message?.includes('connection');
 
         if (isConnectionError && i < retries - 1) {
-          this.logger.warn(`Database connection error, retrying... (${i + 1}/${retries})`);
-          await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
+          this.logger.warn(
+            `Database connection error, retrying... (${i + 1}/${retries})`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay * (i + 1)));
           continue;
         }
         throw error;
@@ -77,17 +94,19 @@ export class AdminService {
     const end = endDate || new Date();
 
     const users = await this.retryQuery(() =>
-      db.select({
-        id: user.id,
-        lastLoggedIn: user.lastLoggedIn,
-      }).from(user)
+      db
+        .select({
+          id: user.id,
+          lastLoggedIn: user.lastLoggedIn,
+        })
+        .from(user),
     );
 
     const dailyMap = new Map<string, number>();
     const weeklyMap = new Map<string, number>();
     const monthlyMap = new Map<string, number>();
 
-    users.forEach(u => {
+    users.forEach((u) => {
       const date = new Date(u.lastLoggedIn);
       if (date >= start && date <= end) {
         const dayKey = date.toISOString().split('T')[0];
@@ -123,31 +142,40 @@ export class AdminService {
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    const [users, activities, rewards, chats, volumes] = await this.retryQuery(() =>
-      Promise.all([
-        db.select().from(user),
-        db.select().from(xpActivity),
-        db.select().from(reward),
-        db.select().from(chat),
-        db.select().from(totalVolumes).limit(1),
-      ])
+    const [users, activities, rewards, chats, volumes] = await this.retryQuery(
+      () =>
+        Promise.all([
+          db.select().from(user),
+          db.select().from(xpActivity),
+          db.select().from(reward),
+          db.select().from(chat),
+          db.select().from(totalVolumes).limit(1),
+        ]),
     );
 
     const totalUsers = users.length;
-    const premiumUsers = users.filter(u => u.isPremium).length;
+    const premiumUsers = users.filter((u) => u.isPremium).length;
     const totalXP = users.reduce((sum, u) => sum + u.xp, 0);
     const totalQuizzes = users.reduce((sum, u) => sum + u.quizCompleted, 0);
 
-    const activeToday = users.filter(u => new Date(u.lastLoggedIn) >= oneDayAgo).length;
-    const activeWeek = users.filter(u => new Date(u.lastLoggedIn) >= oneWeekAgo).length;
-    const activeMonth = users.filter(u => new Date(u.lastLoggedIn) >= oneMonthAgo).length;
+    const activeToday = users.filter(
+      (u) => new Date(u.lastLoggedIn) >= oneDayAgo,
+    ).length;
+    const activeWeek = users.filter(
+      (u) => new Date(u.lastLoggedIn) >= oneWeekAgo,
+    ).length;
+    const activeMonth = users.filter(
+      (u) => new Date(u.lastLoggedIn) >= oneMonthAgo,
+    ).length;
 
     return {
       totalUsers,
       premiumUsers,
-      premiumConversionRate: totalUsers > 0 ? (premiumUsers / totalUsers) * 100 : 0,
+      premiumConversionRate:
+        totalUsers > 0 ? (premiumUsers / totalUsers) * 100 : 0,
       totalQuizzesCompleted: totalQuizzes,
-      averageQuizzesPerUser: totalUsers > 0 ? Math.round(totalQuizzes / totalUsers) : 0,
+      averageQuizzesPerUser:
+        totalUsers > 0 ? Math.round(totalQuizzes / totalUsers) : 0,
       totalXPEarned: totalXP,
       averageXPPerUser: totalUsers > 0 ? Math.round(totalXP / totalUsers) : 0,
       totalChats: chats.length,
@@ -161,22 +189,28 @@ export class AdminService {
 
   async getActivityTrends(days: number = 30): Promise<ActivityTrend[]> {
     const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-    
+
     const activities = await this.retryQuery(() =>
-      db.select().from(xpActivity)
-        .where(gte(xpActivity.createdAt, startDate))
+      db.select().from(xpActivity).where(gte(xpActivity.createdAt, startDate)),
     );
 
-    const trendsMap = new Map<string, { quiz: number; chat: number; streak: number }>();
+    const trendsMap = new Map<
+      string,
+      { quiz: number; chat: number; streak: number }
+    >();
 
-    activities.forEach(activity => {
+    activities.forEach((activity) => {
       const dateKey = new Date(activity.createdAt).toISOString().split('T')[0];
-      const existing = trendsMap.get(dateKey) || { quiz: 0, chat: 0, streak: 0 };
-      
+      const existing = trendsMap.get(dateKey) || {
+        quiz: 0,
+        chat: 0,
+        streak: 0,
+      };
+
       if (activity.type === 'quiz') existing.quiz++;
       else if (activity.type === 'chat') existing.chat++;
       else if (activity.type === 'streak') existing.streak++;
-      
+
       trendsMap.set(dateKey, existing);
     });
 
@@ -185,11 +219,16 @@ export class AdminService {
       .sort((a, b) => a.date.localeCompare(b.date));
   }
 
-  async broadcastNotification(title: string, content: string): Promise<{ sent: number; failed: number }> {
-    const users = await db.select({
-      id: user.id,
-      expoPushToken: user.expoPushToken,
-    }).from(user);
+  async broadcastNotification(
+    title: string,
+    content: string,
+  ): Promise<{ sent: number; failed: number }> {
+    const users = await db
+      .select({
+        id: user.id,
+        expoPushToken: user.expoPushToken,
+      })
+      .from(user);
 
     let sent = 0;
     let failed = 0;
@@ -211,7 +250,11 @@ export class AdminService {
     return { sent, failed };
   }
 
-  async sendNotificationToUsers(userIds: string[], title: string, content: string): Promise<{ sent: number; failed: number }> {
+  async sendNotificationToUsers(
+    userIds: string[],
+    title: string,
+    content: string,
+  ): Promise<{ sent: number; failed: number }> {
     let sent = 0;
     let failed = 0;
 
@@ -224,7 +267,10 @@ export class AdminService {
         });
         sent++;
       } catch (error) {
-        this.logger.error(`Failed to send notification to user ${userId}`, error);
+        this.logger.error(
+          `Failed to send notification to user ${userId}`,
+          error,
+        );
         failed++;
       }
     }
@@ -232,8 +278,13 @@ export class AdminService {
     return { sent, failed };
   }
 
-  async broadcastEmail(subject: string, htmlContent: string): Promise<{ sent: number; failed: number }> {
-    const htmlWithUnsubscribe = htmlContent.includes('{{{RESEND_UNSUBSCRIBE_URL}}}')
+  async broadcastEmail(
+    subject: string,
+    htmlContent: string,
+  ): Promise<{ sent: number; failed: number }> {
+    const htmlWithUnsubscribe = htmlContent.includes(
+      '{{{RESEND_UNSUBSCRIBE_URL}}}',
+    )
       ? htmlContent
       : htmlContent.replace(
           '</body>',
@@ -245,7 +296,11 @@ export class AdminService {
     return { sent: total, failed: 0 };
   }
 
-  async sendEmailToUsers(emails: string[], subject: string, htmlContent: string): Promise<{ sent: number; failed: number }> {
+  async sendEmailToUsers(
+    emails: string[],
+    subject: string,
+    htmlContent: string,
+  ): Promise<{ sent: number; failed: number }> {
     let sent = 0;
     let failed = 0;
 
@@ -262,7 +317,11 @@ export class AdminService {
     return { sent, failed };
   }
 
-  async broadcastV25Announcement(): Promise<{ sent: number; failed: number; total: number }> {
+  async broadcastV25Announcement(): Promise<{
+    sent: number;
+    failed: number;
+    total: number;
+  }> {
     try {
       return await this.resendService.broadcastV25Announcement();
     } catch (error) {
@@ -271,9 +330,15 @@ export class AdminService {
     }
   }
 
-  async sendV25AnnouncementTest(email: string, name?: string): Promise<{ sent: boolean }> {
+  async sendV25AnnouncementTest(
+    email: string,
+    name?: string,
+  ): Promise<{ sent: boolean }> {
     try {
-      await this.resendService.sendV25AnnouncementEmail(email, name || 'Test User');
+      await this.resendService.sendV25AnnouncementEmail(
+        email,
+        name || 'Test User',
+      );
       return { sent: true };
     } catch (error) {
       this.logger.error('Failed to send v2.5 announcement test', error);
@@ -285,15 +350,24 @@ export class AdminService {
     template: string,
     params: { name?: string; referralCode?: string; referralCount?: number },
   ): Promise<{ html: string }> {
-    const valid = ['come-back-soon', 'refer-friends', 'streak-reminder', 'eddy-tip', 'referral-superstar'];
+    const valid = [
+      'come-back-soon',
+      'refer-friends',
+      'streak-reminder',
+      'eddy-tip',
+      'referral-superstar',
+    ];
     if (!valid.includes(template)) {
       throw new NotFoundException(`Unknown template: ${template}`);
     }
-    const html = await this.resendService.getEngagementPreviewHtml(template as any, {
-      name: params.name || 'Test User',
-      referralCode: params.referralCode,
-      referralCount: params.referralCount,
-    });
+    const html = await this.resendService.getEngagementPreviewHtml(
+      template as any,
+      {
+        name: params.name || 'Test User',
+        referralCode: params.referralCode,
+        referralCount: params.referralCount,
+      },
+    );
     return { html };
   }
 
@@ -302,7 +376,13 @@ export class AdminService {
     email: string,
     params: { name?: string; referralCode?: string; referralCount?: number },
   ): Promise<{ sent: boolean }> {
-    const valid = ['come-back-soon', 'refer-friends', 'streak-reminder', 'eddy-tip', 'referral-superstar'];
+    const valid = [
+      'come-back-soon',
+      'refer-friends',
+      'streak-reminder',
+      'eddy-tip',
+      'referral-superstar',
+    ];
     if (!valid.includes(template)) {
       throw new NotFoundException(`Unknown template: ${template}`);
     }
@@ -314,28 +394,70 @@ export class AdminService {
     return { sent: true };
   }
 
-  async broadcastEngagement(template: string): Promise<{ sent: number; failed: number; total: number }> {
-    const valid = ['come-back-soon', 'refer-friends', 'streak-reminder', 'eddy-tip', 'referral-superstar'];
+  async broadcastEngagement(
+    template: string,
+  ): Promise<{ sent: number; failed: number; total: number }> {
+    const valid = [
+      'come-back-soon',
+      'refer-friends',
+      'streak-reminder',
+      'eddy-tip',
+      'referral-superstar',
+    ];
     if (!valid.includes(template)) {
       throw new NotFoundException(`Unknown template: ${template}`);
     }
     return await this.resendService.broadcastEngagement(template as any);
   }
 
+  getNftListingBroadcastConfig(): NftListingBroadcastData {
+    return { ...NFT_LISTING_BROADCAST_DATA };
+  }
+
+  async getNftListingAnnouncementPreview(
+    partial?: Partial<NftListingBroadcastData>,
+  ): Promise<{ html: string }> {
+    const html = await this.resendService.renderNftListingAnnouncementHtml(
+      partial,
+      false,
+    );
+    return { html };
+  }
+
+  async sendNftListingAnnouncementTest(
+    email: string,
+    partial?: Partial<NftListingBroadcastData>,
+  ): Promise<{ sent: boolean }> {
+    await this.resendService.sendNftListingAnnouncementTest(
+      email.trim(),
+      partial,
+    );
+    return { sent: true };
+  }
+
+  async broadcastNftListingAnnouncement(
+    partial?: Partial<NftListingBroadcastData>,
+  ): Promise<{ sent: number; failed: number; total: number }> {
+    return await this.resendService.broadcastNftListingAnnouncement(partial);
+  }
+
   async getAllUsersForAdmin() {
     return await this.retryQuery(() =>
-      db.select({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        username: user.username,
-        xp: user.xp,
-        level: user.level,
-        isPremium: user.isPremium,
-        verified: user.verified,
-        lastLoggedIn: user.lastLoggedIn,
-        expoPushToken: user.expoPushToken,
-      }).from(user).orderBy(desc(user.lastLoggedIn))
+      db
+        .select({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          username: user.username,
+          xp: user.xp,
+          level: user.level,
+          isPremium: user.isPremium,
+          verified: user.verified,
+          lastLoggedIn: user.lastLoggedIn,
+          expoPushToken: user.expoPushToken,
+        })
+        .from(user)
+        .orderBy(desc(user.lastLoggedIn)),
     );
   }
 
@@ -346,20 +468,23 @@ export class AdminService {
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const [users, activities] = await this.retryQuery(() =>
-      Promise.all([
-        db.select().from(user),
-        db.select().from(xpActivity),
-      ])
+      Promise.all([db.select().from(user), db.select().from(xpActivity)]),
     );
 
-    const dau = users.filter(u => new Date(u.lastLoggedIn) >= oneDayAgo).length;
-    const wau = users.filter(u => new Date(u.lastLoggedIn) >= sevenDaysAgo).length;
-    const mau = users.filter(u => new Date(u.lastLoggedIn) >= thirtyDaysAgo).length;
+    const dau = users.filter(
+      (u) => new Date(u.lastLoggedIn) >= oneDayAgo,
+    ).length;
+    const wau = users.filter(
+      (u) => new Date(u.lastLoggedIn) >= sevenDaysAgo,
+    ).length;
+    const mau = users.filter(
+      (u) => new Date(u.lastLoggedIn) >= thirtyDaysAgo,
+    ).length;
 
     const featureUsage = {
-      quiz: activities.filter(a => a.type === 'quiz').length,
-      chat: activities.filter(a => a.type === 'chat').length,
-      streak: activities.filter(a => a.type === 'streak').length,
+      quiz: activities.filter((a) => a.type === 'quiz').length,
+      chat: activities.filter((a) => a.type === 'chat').length,
+      streak: activities.filter((a) => a.type === 'streak').length,
     };
 
     return {
@@ -368,17 +493,20 @@ export class AdminService {
       mau,
       featureUsage,
       totalUsers: users.length,
-      activeRate: users.length > 0 ? ((mau / users.length) * 100).toFixed(1) : '0',
+      activeRate:
+        users.length > 0 ? ((mau / users.length) * 100).toFixed(1) : '0',
     };
   }
 
   async getRetentionMetrics() {
     const users = await this.retryQuery(() => db.select().from(user));
-    const activities = await this.retryQuery(() => db.select().from(xpActivity));
+    const activities = await this.retryQuery(() =>
+      db.select().from(xpActivity),
+    );
 
     const weeklySignups = new Map<string, string[]>();
 
-    users.forEach(u => {
+    users.forEach((u) => {
       const signupDate = new Date(u.lastLoggedIn);
       const weekKey = this.getWeekKey(signupDate);
       if (!weeklySignups.has(weekKey)) {
@@ -387,27 +515,37 @@ export class AdminService {
       weeklySignups.get(weekKey)!.push(u.id);
     });
 
-    const retentionData: { cohort: string; totalUsers: number; retained: number; retentionRate: string }[] = [];
+    const retentionData: {
+      cohort: string;
+      totalUsers: number;
+      retained: number;
+      retentionRate: string;
+    }[] = [];
     const sortedWeeks = Array.from(weeklySignups.keys()).sort().slice(-8);
 
     for (const weekKey of sortedWeeks) {
       const userIds = weeklySignups.get(weekKey) || [];
       const cohortStart = this.getDateFromWeekKey(weekKey);
-      const oneWeekLater = new Date(cohortStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const oneWeekLater = new Date(
+        cohortStart.getTime() + 7 * 24 * 60 * 60 * 1000,
+      );
 
       const activeUserIds = new Set(
         activities
-          .filter(a => new Date(a.createdAt) >= oneWeekLater)
-          .map(a => a.userId)
+          .filter((a) => new Date(a.createdAt) >= oneWeekLater)
+          .map((a) => a.userId),
       );
 
-      const retained = userIds.filter(id => activeUserIds.has(id)).length;
+      const retained = userIds.filter((id) => activeUserIds.has(id)).length;
 
       retentionData.push({
         cohort: weekKey,
         totalUsers: userIds.length,
         retained,
-        retentionRate: userIds.length > 0 ? ((retained / userIds.length) * 100).toFixed(1) : '0',
+        retentionRate:
+          userIds.length > 0
+            ? ((retained / userIds.length) * 100).toFixed(1)
+            : '0',
       });
     }
 
@@ -422,7 +560,8 @@ export class AdminService {
 
   private getWeekNumber(date: Date): number {
     const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
-    const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000;
+    const pastDaysOfYear =
+      (date.getTime() - firstDayOfYear.getTime()) / 86400000;
     return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
   }
 
@@ -437,14 +576,11 @@ export class AdminService {
 
   async getContentAnalytics() {
     const [chats, users] = await this.retryQuery(() =>
-      Promise.all([
-        db.select().from(chat),
-        db.select().from(user),
-      ])
+      Promise.all([db.select().from(chat), db.select().from(user)]),
     );
 
     const topicCounts = new Map<string, number>();
-    chats.forEach(c => {
+    chats.forEach((c) => {
       const topic = this.extractSimpleTopic(c.title);
       topicCounts.set(topic, (topicCounts.get(topic) || 0) + 1);
     });
@@ -455,7 +591,8 @@ export class AdminService {
       .slice(0, 10);
 
     const totalQuizzes = users.reduce((sum, u) => sum + u.quizCompleted, 0);
-    const avgQuizPerUser = users.length > 0 ? (totalQuizzes / users.length).toFixed(1) : '0';
+    const avgQuizPerUser =
+      users.length > 0 ? (totalQuizzes / users.length).toFixed(1) : '0';
 
     return {
       topTopics,
@@ -466,14 +603,28 @@ export class AdminService {
   }
 
   private extractSimpleTopic(title: string): string {
-    const keywords = ['javascript', 'python', 'react', 'solana', 'web3', 'typescript', 'blockchain', 'crypto', 'defi', 'nft', 'rust', 'nextjs', 'nodejs'];
+    const keywords = [
+      'javascript',
+      'python',
+      'react',
+      'solana',
+      'web3',
+      'typescript',
+      'blockchain',
+      'crypto',
+      'defi',
+      'nft',
+      'rust',
+      'nextjs',
+      'nodejs',
+    ];
     const lower = title.toLowerCase();
 
     for (const keyword of keywords) {
       if (lower.includes(keyword)) return keyword;
     }
 
-    const words = title.split(/\s+/).filter(w => w.length > 3);
+    const words = title.split(/\s+/).filter((w) => w.length > 3);
     return words[0]?.toLowerCase() || 'other';
   }
 
@@ -482,17 +633,29 @@ export class AdminService {
       Promise.all([
         db.select().from(user),
         db.select().from(totalVolumes).limit(1),
-      ])
+      ]),
     );
 
-    const premiumUsers = users.filter(u => u.isPremium).length;
+    const premiumUsers = users.filter((u) => u.isPremium).length;
     const totalRevenue = volumes[0]?.totalRevenue || '0.00';
-    const conversionRate = users.length > 0 ? ((premiumUsers / users.length) * 100).toFixed(1) : '0';
-    const arpu = users.length > 0 ? (parseFloat(totalRevenue) / users.length).toFixed(2) : '0.00';
-    const arppu = premiumUsers > 0 ? (parseFloat(totalRevenue) / premiumUsers).toFixed(2) : '0.00';
+    const conversionRate =
+      users.length > 0 ? ((premiumUsers / users.length) * 100).toFixed(1) : '0';
+    const arpu =
+      users.length > 0
+        ? (parseFloat(totalRevenue) / users.length).toFixed(2)
+        : '0.00';
+    const arppu =
+      premiumUsers > 0
+        ? (parseFloat(totalRevenue) / premiumUsers).toFixed(2)
+        : '0.00';
 
-    const totalReferrals = users.reduce((sum, u) => sum + (u.referralCount || 0), 0);
-    const usersWithReferrals = users.filter(u => (u.referralCount || 0) > 0).length;
+    const totalReferrals = users.reduce(
+      (sum, u) => sum + (u.referralCount || 0),
+      0,
+    );
+    const usersWithReferrals = users.filter(
+      (u) => (u.referralCount || 0) > 0,
+    ).length;
 
     return {
       totalRevenue,
@@ -530,10 +693,16 @@ export class AdminService {
     adminEmail: string;
   }) {
     const adminUser = await this.retryQuery(() =>
-      db.select({ id: user.id, email: user.email, username: user.username })
+      db
+        .select({ id: user.id, email: user.email, username: user.username })
         .from(user)
-        .where(or(eq(user.username, data.adminEmail), eq(user.email, data.adminEmail)))
-        .limit(1)
+        .where(
+          or(
+            eq(user.username, data.adminEmail),
+            eq(user.email, data.adminEmail),
+          ),
+        )
+        .limit(1),
     );
 
     if (!adminUser.length) {
@@ -556,7 +725,9 @@ export class AdminService {
       role: 'mod',
     });
 
-    this.logger.log(`Created community "${data.title}" with admin ${data.adminEmail}`);
+    this.logger.log(
+      `Created community "${data.title}" with admin ${data.adminEmail}`,
+    );
 
     return {
       community: newCommunity,
@@ -570,20 +741,23 @@ export class AdminService {
 
   async getAllCommunities() {
     return await this.retryQuery(() =>
-      db.select({
-        id: community.id,
-        title: community.title,
-        inviteCode: community.inviteCode,
-        visibility: community.visibility,
-        imageUrl: community.imageUrl,
-        createdAt: community.createdAt,
-      }).from(community).orderBy(desc(community.createdAt))
+      db
+        .select({
+          id: community.id,
+          title: community.title,
+          inviteCode: community.inviteCode,
+          visibility: community.visibility,
+          imageUrl: community.imageUrl,
+          createdAt: community.createdAt,
+        })
+        .from(community)
+        .orderBy(desc(community.createdAt)),
     );
   }
 
   async getCommunityWithMembers(communityId: string) {
     const communityData = await this.retryQuery(() =>
-      db.select().from(community).where(eq(community.id, communityId)).limit(1)
+      db.select().from(community).where(eq(community.id, communityId)).limit(1),
     );
 
     if (!communityData.length) {
@@ -591,19 +765,20 @@ export class AdminService {
     }
 
     const members = await this.retryQuery(() =>
-      db.select({
-        id: community_members.id,
-        role: community_members.role,
-        user: {
-          id: user.id,
-          username: user.username,
-          name: user.name,
-          email: user.email,
-        },
-      })
-      .from(community_members)
-      .innerJoin(user, eq(community_members.userId, user.id))
-      .where(eq(community_members.communityId, communityId))
+      db
+        .select({
+          id: community_members.id,
+          role: community_members.role,
+          user: {
+            id: user.id,
+            username: user.username,
+            name: user.name,
+            email: user.email,
+          },
+        })
+        .from(community_members)
+        .innerJoin(user, eq(community_members.userId, user.id))
+        .where(eq(community_members.communityId, communityId)),
     );
 
     return {
@@ -613,7 +788,9 @@ export class AdminService {
   }
 
   async deleteCommunity(communityId: string) {
-    await db.delete(community_members).where(eq(community_members.communityId, communityId));
+    await db
+      .delete(community_members)
+      .where(eq(community_members.communityId, communityId));
     await db.delete(community).where(eq(community.id, communityId));
     this.logger.log(`Deleted community ${communityId}`);
     return { success: true };
@@ -621,16 +798,21 @@ export class AdminService {
 
   async getAllFeedback() {
     return await this.retryQuery(() =>
-      db.select().from(feedback).orderBy(desc(feedback.createdAt))
+      db.select().from(feedback).orderBy(desc(feedback.createdAt)),
     );
   }
-  async updateFeedbackStatus(id: string, status: 'pending' | 'reviewed' | 'resolved') {
-    const updatedFeedback = await db.update(feedback).set({ status }).where(eq(feedback.id, id)).returning();
+  async updateFeedbackStatus(
+    id: string,
+    status: 'pending' | 'reviewed' | 'resolved',
+  ) {
+    const updatedFeedback = await db
+      .update(feedback)
+      .set({ status })
+      .where(eq(feedback.id, id))
+      .returning();
     if (!updatedFeedback.length) {
       throw new NotFoundException(`Feedback with id ${id} not found`);
     }
     return updatedFeedback[0];
   }
 }
-
-

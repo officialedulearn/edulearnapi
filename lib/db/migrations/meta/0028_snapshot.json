@@ -61,12 +61,8 @@
           "name": "chat_userId_user_id_fk",
           "tableFrom": "chat",
           "tableTo": "user",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["userId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -76,9 +72,7 @@
         "chat_id_unique": {
           "name": "chat_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "policies": {},
@@ -117,9 +111,7 @@
         "claim_wallet_unique": {
           "name": "claim_wallet_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "wallet"
-          ]
+          "columns": ["wallet"]
         }
       },
       "policies": {},
@@ -171,12 +163,8 @@
           "name": "earning_userId_user_id_fk",
           "tableFrom": "earning",
           "tableTo": "user",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["userId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -229,12 +217,8 @@
           "name": "message_chatId_chat_id_fk",
           "tableFrom": "message",
           "tableTo": "chat",
-          "columnsFrom": [
-            "chatId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chatId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -288,12 +272,8 @@
           "name": "premium_transactions_user_id_user_id_fk",
           "tableFrom": "premium_transactions",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -303,9 +283,7 @@
         "premium_transactions_signature_unique": {
           "name": "premium_transactions_signature_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "signature"
-          ]
+          "columns": ["signature"]
         }
       },
       "policies": {},
@@ -368,9 +346,7 @@
         "reward_ipfs_unique": {
           "name": "reward_ipfs_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "ipfs"
-          ]
+          "columns": ["ipfs"]
         }
       },
       "policies": {},
@@ -432,12 +408,8 @@
           "name": "roadmap_step_roadmapId_roadmap_id_fk",
           "tableFrom": "roadmap_step",
           "tableTo": "roadmap",
-          "columnsFrom": [
-            "roadmapId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["roadmapId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -503,12 +475,8 @@
           "name": "roadmap_userId_user_id_fk",
           "tableFrom": "roadmap",
           "tableTo": "user",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["userId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -516,12 +484,8 @@
           "name": "roadmap_chatId_chat_id_fk",
           "tableFrom": "roadmap",
           "tableTo": "chat",
-          "columnsFrom": [
-            "chatId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chatId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -687,30 +651,22 @@
         "user_id_unique": {
           "name": "user_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         },
         "user_address_unique": {
           "name": "user_address_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "address"
-          ]
+          "columns": ["address"]
         },
         "user_email_unique": {
           "name": "user_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         },
         "user_username_unique": {
           "name": "user_username_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "username"
-          ]
+          "columns": ["username"]
         }
       },
       "policies": {},
@@ -759,12 +715,8 @@
           "name": "user_reward_userId_user_id_fk",
           "tableFrom": "user_reward",
           "tableTo": "user",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["userId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -772,12 +724,8 @@
           "name": "user_reward_rewardId_reward_id_fk",
           "tableFrom": "user_reward",
           "tableTo": "reward",
-          "columnsFrom": [
-            "rewardId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["rewardId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -785,19 +733,14 @@
       "compositePrimaryKeys": {
         "user_reward_userId_rewardId_pk": {
           "name": "user_reward_userId_rewardId_pk",
-          "columns": [
-            "userId",
-            "rewardId"
-          ]
+          "columns": ["userId", "rewardId"]
         }
       },
       "uniqueConstraints": {
         "user_reward_signature_unique": {
           "name": "user_reward_signature_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "signature"
-          ]
+          "columns": ["signature"]
         }
       },
       "policies": {},
@@ -853,12 +796,8 @@
           "name": "activity_userId_user_id_fk",
           "tableFrom": "activity",
           "tableTo": "user",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["userId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }

@@ -78,28 +78,42 @@ export class RewardsService {
     } else if (signature instanceof Uint8Array) {
       signatureBase58 = bs58.default.encode(signature);
     } else {
-      throw new Error(`Invalid signature type: expected Uint8Array or string, got ${typeof signature}`);
+      throw new Error(
+        `Invalid signature type: expected Uint8Array or string, got ${typeof signature}`,
+      );
     }
     console.log('Signature:', signatureBase58);
     if (signatureBase58.length < 87 || signatureBase58.length > 88) {
-      throw new Error(`Invalid signature length: ${signatureBase58.length} (expected 87-88 chars). Signature: ${signatureBase58.substring(0, 20)}...`);
+      throw new Error(
+        `Invalid signature length: ${signatureBase58.length} (expected 87-88 chars). Signature: ${signatureBase58.substring(0, 20)}...`,
+      );
     }
-    
+
     for (let i = 0; i < maxRetries; i++) {
       try {
-        const status = await this.connection.getSignatureStatus(signatureBase58, {
-          searchTransactionHistory: false,
-        });
+        const status = await this.connection.getSignatureStatus(
+          signatureBase58,
+          {
+            searchTransactionHistory: false,
+          },
+        );
 
-        if (status?.value?.confirmationStatus === 'confirmed' || 
-            status?.value?.confirmationStatus === 'finalized') {
-          console.log(`✅ Transaction confirmed after ${i + 1} attempts (${(i + 1) * retryDelay / 1000}s)`);
+        if (
+          status?.value?.confirmationStatus === 'confirmed' ||
+          status?.value?.confirmationStatus === 'finalized'
+        ) {
+          console.log(
+            `✅ Transaction confirmed after ${i + 1} attempts (${((i + 1) * retryDelay) / 1000}s)`,
+          );
           return;
         }
 
         if (status?.value?.err) {
           const errorStr = JSON.stringify(status.value.err);
-          if (errorStr.includes('block height exceeded') || errorStr.includes('BlockhashNotFound')) {
+          if (
+            errorStr.includes('block height exceeded') ||
+            errorStr.includes('BlockhashNotFound')
+          ) {
             throw new Error(
               `Transaction expired: Signature ${signatureBase58} has expired (block height exceeded).`,
             );
@@ -111,7 +125,10 @@ export class RewardsService {
           await new Promise((resolve) => setTimeout(resolve, retryDelay));
         }
       } catch (error) {
-        if (error.message.includes('expired') || error.message.includes('block height exceeded')) {
+        if (
+          error.message.includes('expired') ||
+          error.message.includes('block height exceeded')
+        ) {
           throw error;
         }
         if (i === maxRetries - 1) {
@@ -605,13 +622,14 @@ export class RewardsService {
           uri: `${rewardExists[0].ipfs}`,
           owner: publicKey(userExists[0].address as string),
         });
-        
+
         result = await tx.send(umi);
-        
-        signatureBytes = result instanceof Uint8Array 
-          ? result 
-          : new Uint8Array(Object.values(result));
-        
+
+        signatureBytes =
+          result instanceof Uint8Array
+            ? result
+            : new Uint8Array(Object.values(result));
+
         const signatureBase58 = bs58.default.encode(signatureBytes);
         console.log('NFT Mint Signature:', signatureBase58);
         console.log('✅ NFT Mint sent on-chain');
@@ -766,7 +784,7 @@ export class RewardsService {
       if (!rewardId || rewardId.trim().length === 0) {
         throw new Error('Reward ID is required');
       }
-  
+
       const userExists = await db
         .select()
         .from(user)
@@ -776,13 +794,13 @@ export class RewardsService {
           `User with id ${userId} not found. Please verify the user ID is correct`,
         );
       }
-  
+
       if (!userExists[0].address) {
         throw new Error(
           'User wallet address not found. Please ensure the user has a valid wallet address',
         );
       }
-  
+
       const rewardExists = await db
         .select()
         .from(reward)
@@ -792,7 +810,7 @@ export class RewardsService {
           `Reward with id ${rewardId} not found. Please verify the reward ID is correct`,
         );
       }
-  
+
       const userRewardCheck = await db
         .select()
         .from(userReward)
@@ -804,20 +822,20 @@ export class RewardsService {
           `User has not been awarded the reward "${rewardExists[0].title}". You must be awarded a reward before you can claim it`,
         );
       }
-  
+
       if (userRewardCheck[0].signature) {
         throw new Error(
           `Reward "${rewardExists[0].title}" has already been claimed. Badge signature: ${userRewardCheck[0].signature}`,
         );
       }
-  
+
       const adminSecretKey = process.env.ADMIN_WALLET_SECRET_KEY;
       if (!adminSecretKey) {
         throw new Error(
           'Admin wallet secret key not configured. Please contact support',
         );
       }
-  
+
       let adminKeypair: Keypair;
       try {
         adminKeypair = Keypair.fromSecretKey(
@@ -828,7 +846,7 @@ export class RewardsService {
           'Invalid admin wallet secret key configuration. Please contact support',
         );
       }
-  
+
       let userPublicKey: PublicKey;
       try {
         userPublicKey = new PublicKey(userExists[0].address as string);
@@ -838,9 +856,11 @@ export class RewardsService {
         );
       }
       try {
-        const adminBalance = await this.connection.getBalance(adminKeypair.publicKey);
+        const adminBalance = await this.connection.getBalance(
+          adminKeypair.publicKey,
+        );
         const adminBalanceInSol = adminBalance / LAMPORTS_PER_SOL;
-  
+
         if (adminBalanceInSol < this.REQUIRED_SOL) {
           throw new Error(
             `Admin wallet has insufficient SOL balance. Admin has ${adminBalanceInSol.toFixed(4)} SOL but needs at least ${this.REQUIRED_SOL} SOL for gas fees. Please top up the admin wallet.`,
@@ -857,13 +877,13 @@ export class RewardsService {
           `Failed to check admin wallet balance: ${balanceError.message || 'Network error occurred'}`,
         );
       }
-  
+
       if (!rewardExists[0].ipfs) {
         throw new Error(
           `Reward "${rewardExists[0].title}" does not have an IPFS URI configured. Cannot mint Badge without metadata URI`,
         );
       }
-  
+
       let umi;
       let mint;
       let result;
@@ -876,22 +896,23 @@ export class RewardsService {
 
         const signer = createSignerFromKeypair(umi, adminUmiKeypair);
         umi.use(keypairIdentity(signer));
-  
+
         mint = generateSigner(umi);
-  
+
         const tx = create(umi, {
           asset: mint,
           name: rewardExists[0].title,
           uri: `${rewardExists[0].ipfs}`,
           owner: publicKey(userExists[0].address as string),
         });
-        
+
         result = await tx.send(umi);
-        
-        signatureBytes = result instanceof Uint8Array 
-          ? result 
-          : new Uint8Array(Object.values(result));
-        
+
+        signatureBytes =
+          result instanceof Uint8Array
+            ? result
+            : new Uint8Array(Object.values(result));
+
         const signatureBase58 = bs58.default.encode(signatureBytes);
         console.log('Badge Mint Signature (Admin paid):', signatureBase58);
       } catch (nftError) {
@@ -916,9 +937,9 @@ export class RewardsService {
           `Failed to mint Badge: ${nftError.message || 'Unknown error occurred during Badge creation'}`,
         );
       }
-  
+
       const signatureBase58 = bs58.default.encode(signatureBytes);
-      
+
       try {
         await db
           .update(userReward)
@@ -931,8 +952,7 @@ export class RewardsService {
               eq(userReward.rewardId, rewardId),
             ),
           );
-        
-        
+
         console.log('✅ Badge Mint sent on-chain (Admin paid)');
       } catch (dbError) {
         console.error('Error updating user reward record:', dbError.message);
@@ -947,15 +967,20 @@ export class RewardsService {
         rewardExists[0].description,
         rewardExists[0].imageUrl || '',
       );
-  
-      this.resendService.sendEmail(
-        userExists[0].email,
-        '🎉 Congratulations! You Received an Badge Certificate!',
-        html,
-      ).catch(emailError => {
-        console.error('Failed to send NFT claim email (non-blocking):', emailError.message);
-      });
-  
+
+      this.resendService
+        .sendEmail(
+          userExists[0].email,
+          '🎉 Congratulations! You Received an Badge Certificate!',
+          html,
+        )
+        .catch((emailError) => {
+          console.error(
+            'Failed to send NFT claim email (non-blocking):',
+            emailError.message,
+          );
+        });
+
       return {
         signature: signatureBase58,
         message: 'Badge successfully claimed and sent to user wallet',
@@ -1134,9 +1159,12 @@ export class RewardsService {
     }
   }
 
-  async getClaimStatus(userId: string, rewardId: string): Promise<{ 
-    claimed: boolean; 
-    signature?: string; 
+  async getClaimStatus(
+    userId: string,
+    rewardId: string,
+  ): Promise<{
+    claimed: boolean;
+    signature?: string;
     awarded: boolean;
   }> {
     try {

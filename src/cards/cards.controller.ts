@@ -5,7 +5,7 @@ import { Response } from 'express';
 @Controller('cards')
 export class CardsController {
   constructor(private readonly cardsService: CardsService) {}
-  
+
   @Get('og')
   async og(
     @Query('title') title: string,
@@ -14,7 +14,12 @@ export class CardsController {
     @Query('theme') theme: 'light' | 'dark',
     @Res() res: Response,
   ) {
-    const png = await this.cardsService.generateOg({ title, subtitle, mascotUrl: mascot, theme });
+    const png = await this.cardsService.generateOg({
+      title,
+      subtitle,
+      mascotUrl: mascot,
+      theme,
+    });
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'public, max-age=3600');
     res.send(png);
@@ -62,7 +67,10 @@ export class CardsController {
     @Query('theme') theme: 'light' | 'dark',
     @Res() res: Response,
   ) {
-    const png = await this.cardsService.generateProfileSummaryCard({ userId, theme });
+    const png = await this.cardsService.generateProfileSummaryCard({
+      userId,
+      theme,
+    });
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'public, max-age=300');
     res.send(png);
@@ -76,11 +84,11 @@ export class CardsController {
     @Query('nftTitle') nftTitle: string,
     @Res() res: Response,
   ) {
-    const png = await this.cardsService.generateNFTMintCard({ 
-      userId, 
-      theme, 
-      nftImageUrl, 
-      nftTitle 
+    const png = await this.cardsService.generateNFTMintCard({
+      userId,
+      theme,
+      nftImageUrl,
+      nftTitle,
     });
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'public, max-age=300');
@@ -93,8 +101,8 @@ export class CardsController {
     @Query('theme') theme: 'light' | 'dark',
     @Res() res: Response,
   ) {
-    const png = await this.cardsService.generateRoadmapProgressCard({ 
-      roadmapId, 
+    const png = await this.cardsService.generateRoadmapProgressCard({
+      roadmapId,
       theme,
     });
     res.setHeader('Content-Type', 'image/png');

@@ -40,8 +40,10 @@ async function seedCommunities() {
     console.log('🌱 Starting community seed process...\n');
 
     for (const communityData of communitiesData) {
-      console.log(`Checking if community "${communityData.title}" already exists...`);
-      
+      console.log(
+        `Checking if community "${communityData.title}" already exists...`,
+      );
+
       const existing = await db
         .select()
         .from(community)
@@ -49,20 +51,24 @@ async function seedCommunities() {
         .limit(1);
 
       if (existing.length > 0) {
-        console.log(`✅ Community "${communityData.title}" already exists (ID: ${existing[0].id})`);
+        console.log(
+          `✅ Community "${communityData.title}" already exists (ID: ${existing[0].id})`,
+        );
         console.log(`   Invite Code: ${existing[0].inviteCode}`);
         console.log(`   Visibility: ${existing[0].visibility}\n`);
         continue;
       }
 
       console.log(`Creating community "${communityData.title}"...`);
-      
+
       const [newCommunity] = await db
         .insert(community)
         .values(communityData)
         .returning();
 
-      console.log(`✅ Community "${communityData.title}" created successfully!`);
+      console.log(
+        `✅ Community "${communityData.title}" created successfully!`,
+      );
       console.log(`   ID: ${newCommunity.id}`);
       console.log(`   Invite Code: ${newCommunity.inviteCode}`);
       console.log(`   Visibility: ${newCommunity.visibility}`);
@@ -75,7 +81,6 @@ async function seedCommunities() {
     communitiesData.forEach((c) => {
       console.log(`- ${c.title} (${c.inviteCode}) - ${c.visibility}`);
     });
-
   } catch (error) {
     console.error('❌ Error seeding communities:', error);
     throw error;
@@ -91,4 +96,3 @@ seedCommunities()
     console.error('\n❌ Failed:', error);
     process.exit(1);
   });
-

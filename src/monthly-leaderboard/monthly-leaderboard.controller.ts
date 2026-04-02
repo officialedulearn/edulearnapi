@@ -26,12 +26,8 @@ export class MonthlyLeaderboardController {
     @Res() res: Response,
   ) {
     const now = new Date();
-    const year = yearStr
-      ? parseInt(yearStr, 10)
-      : now.getFullYear();
-    const month = monthStr
-      ? parseInt(monthStr, 10)
-      : now.getMonth() + 1;
+    const year = yearStr ? parseInt(yearStr, 10) : now.getFullYear();
+    const month = monthStr ? parseInt(monthStr, 10) : now.getMonth() + 1;
     const mock = mockStr === '1' || mockStr === 'true';
 
     const png = await this.monthlyLeaderboardService.buildPreviewPng({
@@ -49,13 +45,14 @@ export class MonthlyLeaderboardController {
   @UseGuards(AdminApiKeyGuard)
   async postTest(
     @Body()
-    body: { year?: number; month?: number },
+    body: {
+      year?: number;
+      month?: number;
+    },
   ) {
     const now = new Date();
-    const year =
-      body?.year ?? now.getFullYear();
-    const month =
-      body?.month ?? now.getMonth() + 1;
+    const year = body?.year ?? now.getFullYear();
+    const month = body?.month ?? now.getMonth() + 1;
     await this.monthlyLeaderboardService.postMonthToX(year, month);
     return { ok: true, year, month };
   }

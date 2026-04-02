@@ -22,15 +22,22 @@ export class CardsService implements OnModuleInit {
   private isWarmedUp = false;
 
   private readonly mascotUrls = {
-    streak: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/streak.png',
-    earnings: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/Celebrate.png',
-    level: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/proud.png',
-    profile: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/proud.png',
-    nftMint: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/proud.png',
-    roadmap: 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/proud.png',
+    streak:
+      'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/streak.png',
+    earnings:
+      'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/Celebrate.png',
+    level:
+      'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/proud.png',
+    profile:
+      'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/proud.png',
+    nftMint:
+      'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/proud.png',
+    roadmap:
+      'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/proud.png',
   };
 
-  private readonly eduLearnLogoUrl = 'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/logo.png';
+  private readonly eduLearnLogoUrl =
+    'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/logo.png';
 
   async onModuleInit() {
     this.warmUpCache();
@@ -56,7 +63,9 @@ export class CardsService implements OnModuleInit {
     }
   }
 
-  private getHighQualityImageUrl(url: string | null | undefined): string | undefined {
+  private getHighQualityImageUrl(
+    url: string | null | undefined,
+  ): string | undefined {
     if (!url || typeof url !== 'string') return undefined;
     return url
       .replace(/_normal(\.[a-z]+)$/i, '_400x400$1')
@@ -66,34 +75,52 @@ export class CardsService implements OnModuleInit {
 
   private async loadFonts() {
     if (this.regular && this.bold) return;
-    
+
     try {
-      const regularPath = path.join(process.cwd(), 'public/fonts/Satoshi-Regular.otf');
-      const boldPath = path.join(process.cwd(), 'public/fonts/Satoshi-Bold.otf');
-      
+      const regularPath = path.join(
+        process.cwd(),
+        'public/fonts/Satoshi-Regular.otf',
+      );
+      const boldPath = path.join(
+        process.cwd(),
+        'public/fonts/Satoshi-Bold.otf',
+      );
+
       this.regular = fs.readFileSync(regularPath);
       this.bold = fs.readFileSync(boldPath);
       console.log('Loaded Satoshi fonts successfully');
     } catch (satoshiError) {
       console.error('Satoshi fonts not found, trying Urbanist...');
       try {
-        const regularPath = path.join(process.cwd(), 'node_modules/@fontsource/urbanist/files/urbanist-latin-400-normal.woff2');
-        const boldPath = path.join(process.cwd(), 'node_modules/@fontsource/urbanist/files/urbanist-latin-900-normal.woff2');
-        
+        const regularPath = path.join(
+          process.cwd(),
+          'node_modules/@fontsource/urbanist/files/urbanist-latin-400-normal.woff2',
+        );
+        const boldPath = path.join(
+          process.cwd(),
+          'node_modules/@fontsource/urbanist/files/urbanist-latin-900-normal.woff2',
+        );
+
         const regularWoff2 = fs.readFileSync(regularPath);
         const boldWoff2 = fs.readFileSync(boldPath);
-        
+
         this.regular = Buffer.from(await decompress(regularWoff2));
         this.bold = Buffer.from(await decompress(boldWoff2));
         console.log('Loaded Urbanist fonts as fallback');
       } catch (urbanistError) {
         console.error('Urbanist not found, falling back to Inter');
-        const regularPath = path.join(process.cwd(), 'node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2');
-        const boldPath = path.join(process.cwd(), 'node_modules/@fontsource/inter/files/inter-latin-900-normal.woff2');
-        
+        const regularPath = path.join(
+          process.cwd(),
+          'node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2',
+        );
+        const boldPath = path.join(
+          process.cwd(),
+          'node_modules/@fontsource/inter/files/inter-latin-900-normal.woff2',
+        );
+
         const regularWoff2 = fs.readFileSync(regularPath);
         const boldWoff2 = fs.readFileSync(boldPath);
-        
+
         this.regular = Buffer.from(await decompress(regularWoff2));
         this.bold = Buffer.from(await decompress(boldWoff2));
         console.log('Loaded Inter fonts as final fallback');
@@ -132,13 +159,13 @@ export class CardsService implements OnModuleInit {
 
   private async toDataUrl(url?: string): Promise<string | undefined> {
     if (!url) return undefined;
-    
+
     if (this.imageCache.has(url)) {
       return this.imageCache.get(url);
     }
-    
+
     try {
-      const res = await axios.get(url, { 
+      const res = await axios.get(url, {
         responseType: 'arraybuffer',
         timeout: 5000,
         maxRedirects: 2,
@@ -146,20 +173,19 @@ export class CardsService implements OnModuleInit {
       const mime = res.headers['content-type'] || 'image/png';
       const base64 = Buffer.from(res.data).toString('base64');
       const dataUrl = `data:${mime};base64,${base64}`;
-      
+
       this.imageCache.set(url, dataUrl);
-      
+
       if (this.imageCache.size > 100) {
         const firstKey = this.imageCache.keys().next().value;
         this.imageCache.delete(firstKey);
       }
-      
+
       return dataUrl;
     } catch (error) {
       console.error(`Failed to fetch image from ${url}:`, error.message);
       return undefined;
     }
-    
   }
 
   async generateOg(params?: {
@@ -247,7 +273,8 @@ export class CardsService implements OnModuleInit {
                   {
                     type: 'p',
                     props: {
-                      children: params?.subtitle ?? 'AI-powered learning platform',
+                      children:
+                        params?.subtitle ?? 'AI-powered learning platform',
                       style: {
                         fontFamily: 'Inter',
                         fontSize: 24,
@@ -332,26 +359,30 @@ export class CardsService implements OnModuleInit {
   }): Promise<Buffer> {
     const startTime = Date.now();
     console.log(`[StreakCard] Starting generation for user ${params.userId}`);
-    
+
     const [userData] = await Promise.all([
       db.select().from(user).where(eq(user.id, params.userId)).limit(1),
       this.loadFonts(),
     ]);
-    console.log(`[StreakCard] DB + Fonts loaded in ${Date.now() - startTime}ms`);
-    
+    console.log(
+      `[StreakCard] DB + Fonts loaded in ${Date.now() - startTime}ms`,
+    );
+
     if (!userData[0]) throw new Error('User not found');
-    
+
     const u = userData[0];
     const theme = this.getTheme(params?.theme ?? 'dark');
     const highQualityAvatar = this.getHighQualityImageUrl(u.profilePictureURL);
-    
+
     const imageStartTime = Date.now();
     const [avatarDataUrl, mascotDataUrl, logoDataUrl] = await Promise.all([
       this.toDataUrl(highQualityAvatar),
       this.toDataUrl(this.mascotUrls.streak),
       this.toDataUrl(this.eduLearnLogoUrl),
     ]);
-    console.log(`[StreakCard] Images loaded in ${Date.now() - imageStartTime}ms`);
+    console.log(
+      `[StreakCard] Images loaded in ${Date.now() - imageStartTime}ms`,
+    );
 
     const svg = await satori(
       {
@@ -435,35 +466,37 @@ export class CardsService implements OnModuleInit {
                               marginBottom: '20px',
                             },
                             children: [
-                              avatarDataUrl ? {
-                                type: 'img',
-                                props: {
-                                  src: avatarDataUrl,
-                                  style: {
-                                    width: '80px',
-                                    height: '80px',
-                                    borderRadius: '50%',
-                                    border: `4px solid ${theme.success}`,
-                                    objectFit: 'cover',
+                              avatarDataUrl
+                                ? {
+                                    type: 'img',
+                                    props: {
+                                      src: avatarDataUrl,
+                                      style: {
+                                        width: '80px',
+                                        height: '80px',
+                                        borderRadius: '50%',
+                                        border: `4px solid ${theme.success}`,
+                                        objectFit: 'cover',
+                                      },
+                                    },
+                                  }
+                                : {
+                                    type: 'div',
+                                    props: {
+                                      style: {
+                                        width: '80px',
+                                        height: '80px',
+                                        borderRadius: '50%',
+                                        background: theme.card,
+                                        border: `4px solid ${theme.success}`,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: 40,
+                                      },
+                                      children: '👤',
+                                    },
                                   },
-                                },
-                              } : {
-                                type: 'div',
-                                props: {
-                                  style: {
-                                    width: '80px',
-                                    height: '80px',
-                                    borderRadius: '50%',
-                                    background: theme.card,
-                                    border: `4px solid ${theme.success}`,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: 40,
-                                  },
-                                  children: '👤',
-                                },
-                              },
                               {
                                 type: 'div',
                                 props: {
@@ -653,27 +686,29 @@ export class CardsService implements OnModuleInit {
                       ],
                     },
                   },
-                  mascotDataUrl ? {
-                    type: 'img',
-                    props: {
-                      src: mascotDataUrl,
-                      style: {
-                        width: '420px',
-                        height: '420px',
-                        objectFit: 'contain',
-                        marginRight: '-40px',
+                  mascotDataUrl
+                    ? {
+                        type: 'img',
+                        props: {
+                          src: mascotDataUrl,
+                          style: {
+                            width: '420px',
+                            height: '420px',
+                            objectFit: 'contain',
+                            marginRight: '-40px',
+                          },
+                        },
+                      }
+                    : {
+                        type: 'div',
+                        props: {
+                          style: {
+                            fontSize: 400,
+                            lineHeight: 1,
+                          },
+                          children: '🔥',
+                        },
                       },
-                    },
-                  } : {
-                    type: 'div',
-                    props: {
-                      style: {
-                        fontSize: 400,
-                        lineHeight: 1,
-                      },
-                      children: '🔥',
-                    },
-                  },
                 ],
               },
             },
@@ -693,7 +728,9 @@ export class CardsService implements OnModuleInit {
 
     const renderStartTime = Date.now();
     const png = new Resvg(svg).render().asPng();
-    console.log(`[StreakCard] PNG rendered in ${Date.now() - renderStartTime}ms`);
+    console.log(
+      `[StreakCard] PNG rendered in ${Date.now() - renderStartTime}ms`,
+    );
     console.log(`[StreakCard] Total time: ${Date.now() - startTime}ms`);
     return Buffer.from(png);
   }
@@ -703,10 +740,14 @@ export class CardsService implements OnModuleInit {
     theme?: 'light' | 'dark';
   }): Promise<Buffer> {
     await this.loadFonts();
-    
-    const userData = await db.select().from(user).where(eq(user.id, params.userId)).limit(1);
+
+    const userData = await db
+      .select()
+      .from(user)
+      .where(eq(user.id, params.userId))
+      .limit(1);
     if (!userData[0]) throw new Error('User not found');
-    
+
     const u = userData[0];
     const theme = this.getTheme(params?.theme ?? 'dark');
     const highQualityAvatar = this.getHighQualityImageUrl(u.profilePictureURL);
@@ -797,35 +838,37 @@ export class CardsService implements OnModuleInit {
                               marginBottom: '20px',
                             },
                             children: [
-                              avatarDataUrl ? {
-                                type: 'img',
-                                props: {
-                                  src: avatarDataUrl,
-                                  style: {
-                                    width: '80px',
-                                    height: '80px',
-                                    borderRadius: '50%',
-                                    border: `4px solid ${theme.success}`,
-                                    objectFit: 'cover',
+                              avatarDataUrl
+                                ? {
+                                    type: 'img',
+                                    props: {
+                                      src: avatarDataUrl,
+                                      style: {
+                                        width: '80px',
+                                        height: '80px',
+                                        borderRadius: '50%',
+                                        border: `4px solid ${theme.success}`,
+                                        objectFit: 'cover',
+                                      },
+                                    },
+                                  }
+                                : {
+                                    type: 'div',
+                                    props: {
+                                      style: {
+                                        width: '80px',
+                                        height: '80px',
+                                        borderRadius: '50%',
+                                        background: theme.card,
+                                        border: `4px solid ${theme.success}`,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: 40,
+                                      },
+                                      children: '👤',
+                                    },
                                   },
-                                },
-                              } : {
-                                type: 'div',
-                                props: {
-                                  style: {
-                                    width: '80px',
-                                    height: '80px',
-                                    borderRadius: '50%',
-                                    background: theme.card,
-                                    border: `4px solid ${theme.success}`,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: 40,
-                                  },
-                                  children: '👤',
-                                },
-                              },
                               {
                                 type: 'div',
                                 props: {
@@ -929,7 +972,9 @@ export class CardsService implements OnModuleInit {
                                     {
                                       type: 'div',
                                       props: {
-                                        children: (u.referralCount || 0).toString(),
+                                        children: (
+                                          u.referralCount || 0
+                                        ).toString(),
                                         style: {
                                           fontFamily: 'Satoshi',
                                           fontSize: 44,
@@ -1001,27 +1046,29 @@ export class CardsService implements OnModuleInit {
                       ],
                     },
                   },
-                  mascotDataUrl ? {
-                    type: 'img',
-                    props: {
-                      src: mascotDataUrl,
-                      style: {
-                        width: '400px',
-                        height: '400px',
-                        objectFit: 'contain',
-                        marginRight: '-40px',
+                  mascotDataUrl
+                    ? {
+                        type: 'img',
+                        props: {
+                          src: mascotDataUrl,
+                          style: {
+                            width: '400px',
+                            height: '400px',
+                            objectFit: 'contain',
+                            marginRight: '-40px',
+                          },
+                        },
+                      }
+                    : {
+                        type: 'div',
+                        props: {
+                          style: {
+                            fontSize: 380,
+                            lineHeight: 1,
+                          },
+                          children: '💰',
+                        },
                       },
-                    },
-                  } : {
-                    type: 'div',
-                    props: {
-                      style: {
-                        fontSize: 380,
-                        lineHeight: 1,
-                      },
-                      children: '💰',
-                    },
-                  },
                 ],
               },
             },
@@ -1047,10 +1094,14 @@ export class CardsService implements OnModuleInit {
     theme?: 'light' | 'dark';
   }): Promise<Buffer> {
     await this.loadFonts();
-    
-    const userData = await db.select().from(user).where(eq(user.id, params.userId)).limit(1);
+
+    const userData = await db
+      .select()
+      .from(user)
+      .where(eq(user.id, params.userId))
+      .limit(1);
     if (!userData[0]) throw new Error('User not found');
-    
+
     const u = userData[0];
     const theme = this.getTheme(params?.theme ?? 'dark');
     const highQualityAvatar = this.getHighQualityImageUrl(u.profilePictureURL);
@@ -1145,35 +1196,37 @@ export class CardsService implements OnModuleInit {
                         gap: '24px',
                       },
                       children: [
-                        avatarDataUrl ? {
-                          type: 'img',
-                          props: {
-                            src: avatarDataUrl,
-                            style: {
-                              width: '200px',
-                              height: '200px',
-                              borderRadius: '50%',
-                              border: `5px solid ${theme.success}`,
-                              objectFit: 'cover',
+                        avatarDataUrl
+                          ? {
+                              type: 'img',
+                              props: {
+                                src: avatarDataUrl,
+                                style: {
+                                  width: '200px',
+                                  height: '200px',
+                                  borderRadius: '50%',
+                                  border: `5px solid ${theme.success}`,
+                                  objectFit: 'cover',
+                                },
+                              },
+                            }
+                          : {
+                              type: 'div',
+                              props: {
+                                style: {
+                                  width: '200px',
+                                  height: '200px',
+                                  borderRadius: '50%',
+                                  background: theme.card,
+                                  border: `5px solid ${theme.success}`,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: 100,
+                                },
+                                children: '👤',
+                              },
                             },
-                          },
-                        } : {
-                          type: 'div',
-                          props: {
-                            style: {
-                              width: '200px',
-                              height: '200px',
-                              borderRadius: '50%',
-                              background: theme.card,
-                              border: `5px solid ${theme.success}`,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: 100,
-                            },
-                            children: '👤',
-                          },
-                        },
                         {
                           type: 'div',
                           props: {
@@ -1436,27 +1489,33 @@ export class CardsService implements OnModuleInit {
     theme?: 'light' | 'dark';
   }): Promise<Buffer> {
     const startTime = Date.now();
-    console.log(`[ProfileSummaryCard] Starting generation for user ${params.userId}`);
-    
+    console.log(
+      `[ProfileSummaryCard] Starting generation for user ${params.userId}`,
+    );
+
     const [userData] = await Promise.all([
       db.select().from(user).where(eq(user.id, params.userId)).limit(1),
       this.loadFonts(),
     ]);
-    console.log(`[ProfileSummaryCard] DB + Fonts loaded in ${Date.now() - startTime}ms`);
-    
+    console.log(
+      `[ProfileSummaryCard] DB + Fonts loaded in ${Date.now() - startTime}ms`,
+    );
+
     if (!userData[0]) throw new Error('User not found');
-    
+
     const u = userData[0];
     const theme = this.getTheme(params?.theme ?? 'dark');
     const highQualityAvatar = this.getHighQualityImageUrl(u.profilePictureURL);
-    
+
     const imageStartTime = Date.now();
     const [avatarDataUrl, mascotDataUrl, logoDataUrl] = await Promise.all([
       this.toDataUrl(highQualityAvatar),
       this.toDataUrl(this.mascotUrls.profile),
       this.toDataUrl(this.eduLearnLogoUrl),
     ]);
-    console.log(`[ProfileSummaryCard] Images loaded in ${Date.now() - imageStartTime}ms`);
+    console.log(
+      `[ProfileSummaryCard] Images loaded in ${Date.now() - imageStartTime}ms`,
+    );
 
     const levelEmojis: Record<string, string> = {
       novice: '🌱',
@@ -1574,35 +1633,37 @@ export class CardsService implements OnModuleInit {
                   border: `2px solid ${theme.border}`,
                 },
                 children: [
-                  avatarDataUrl ? {
-                    type: 'img',
-                    props: {
-                      src: avatarDataUrl,
-                      style: {
-                        width: '140px',
-                        height: '140px',
-                        borderRadius: '50%',
-                        border: `5px solid ${theme.success}`,
-                        objectFit: 'cover',
+                  avatarDataUrl
+                    ? {
+                        type: 'img',
+                        props: {
+                          src: avatarDataUrl,
+                          style: {
+                            width: '140px',
+                            height: '140px',
+                            borderRadius: '50%',
+                            border: `5px solid ${theme.success}`,
+                            objectFit: 'cover',
+                          },
+                        },
+                      }
+                    : {
+                        type: 'div',
+                        props: {
+                          style: {
+                            width: '140px',
+                            height: '140px',
+                            borderRadius: '50%',
+                            background: theme.secondary,
+                            border: `5px solid ${theme.success}`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 70,
+                          },
+                          children: '👤',
+                        },
                       },
-                    },
-                  } : {
-                    type: 'div',
-                    props: {
-                      style: {
-                        width: '140px',
-                        height: '140px',
-                        borderRadius: '50%',
-                        background: theme.secondary,
-                        border: `5px solid ${theme.success}`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 70,
-                      },
-                      children: '👤',
-                    },
-                  },
                   {
                     type: 'div',
                     props: {
@@ -1639,17 +1700,19 @@ export class CardsService implements OnModuleInit {
                       ],
                     },
                   },
-                  mascotDataUrl ? {
-                    type: 'img',
-                    props: {
-                      src: mascotDataUrl,
-                      style: {
-                        width: '160px',
-                        height: '160px',
-                        objectFit: 'contain',
-                      },
-                    },
-                  } : null,
+                  mascotDataUrl
+                    ? {
+                        type: 'img',
+                        props: {
+                          src: mascotDataUrl,
+                          style: {
+                            width: '160px',
+                            height: '160px',
+                            objectFit: 'contain',
+                          },
+                        },
+                      }
+                    : null,
                 ],
               },
             },
@@ -2018,12 +2081,16 @@ export class CardsService implements OnModuleInit {
         ],
       },
     );
-    
-    console.log(`[ProfileSummaryCard] SVG generated in ${Date.now() - startTime}ms`);
+
+    console.log(
+      `[ProfileSummaryCard] SVG generated in ${Date.now() - startTime}ms`,
+    );
 
     const renderStartTime = Date.now();
     const png = new Resvg(svg).render().asPng();
-    console.log(`[ProfileSummaryCard] PNG rendered in ${Date.now() - renderStartTime}ms`);
+    console.log(
+      `[ProfileSummaryCard] PNG rendered in ${Date.now() - renderStartTime}ms`,
+    );
     console.log(`[ProfileSummaryCard] Total time: ${Date.now() - startTime}ms`);
     return Buffer.from(png);
   }
@@ -2036,27 +2103,32 @@ export class CardsService implements OnModuleInit {
   }): Promise<Buffer> {
     const startTime = Date.now();
     console.log(`[NFTMintCard] Starting generation for user ${params.userId}`);
-    
+
     const [userData] = await Promise.all([
       db.select().from(user).where(eq(user.id, params.userId)).limit(1),
       this.loadFonts(),
     ]);
-    console.log(`[NFTMintCard] DB + Fonts loaded in ${Date.now() - startTime}ms`);
-    
+    console.log(
+      `[NFTMintCard] DB + Fonts loaded in ${Date.now() - startTime}ms`,
+    );
+
     if (!userData[0]) throw new Error('User not found');
-    
+
     const u = userData[0];
     const theme = this.getTheme(params?.theme ?? 'dark');
     const highQualityAvatar = this.getHighQualityImageUrl(u.profilePictureURL);
-    
+
     const imageStartTime = Date.now();
-    const [avatarDataUrl, mascotDataUrl, logoDataUrl, nftDataUrl] = await Promise.all([
-      this.toDataUrl(highQualityAvatar),
-      this.toDataUrl(this.mascotUrls.profile),
-      this.toDataUrl(this.eduLearnLogoUrl),
-      this.toDataUrl(params.nftImageUrl),
-    ]);
-    console.log(`[NFTMintCard] Images loaded in ${Date.now() - imageStartTime}ms`);
+    const [avatarDataUrl, mascotDataUrl, logoDataUrl, nftDataUrl] =
+      await Promise.all([
+        this.toDataUrl(highQualityAvatar),
+        this.toDataUrl(this.mascotUrls.profile),
+        this.toDataUrl(this.eduLearnLogoUrl),
+        this.toDataUrl(params.nftImageUrl),
+      ]);
+    console.log(
+      `[NFTMintCard] Images loaded in ${Date.now() - imageStartTime}ms`,
+    );
 
     const svg = await satori(
       {
@@ -2133,35 +2205,37 @@ export class CardsService implements OnModuleInit {
                         marginBottom: '10px',
                       },
                       children: [
-                        avatarDataUrl ? {
-                          type: 'img',
-                          props: {
-                            src: avatarDataUrl,
-                            style: {
-                              width: '80px',
-                              height: '80px',
-                              borderRadius: '50%',
-                              border: `4px solid ${theme.success}`,
-                              objectFit: 'cover',
+                        avatarDataUrl
+                          ? {
+                              type: 'img',
+                              props: {
+                                src: avatarDataUrl,
+                                style: {
+                                  width: '80px',
+                                  height: '80px',
+                                  borderRadius: '50%',
+                                  border: `4px solid ${theme.success}`,
+                                  objectFit: 'cover',
+                                },
+                              },
+                            }
+                          : {
+                              type: 'div',
+                              props: {
+                                style: {
+                                  width: '80px',
+                                  height: '80px',
+                                  borderRadius: '50%',
+                                  background: theme.card,
+                                  border: `4px solid ${theme.success}`,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: 40,
+                                },
+                                children: '👤',
+                              },
                             },
-                          },
-                        } : {
-                          type: 'div',
-                          props: {
-                            style: {
-                              width: '80px',
-                              height: '80px',
-                              borderRadius: '50%',
-                              background: theme.card,
-                              border: `4px solid ${theme.success}`,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: 40,
-                            },
-                            children: '👤',
-                          },
-                        },
                         {
                           type: 'div',
                           props: {
@@ -2269,30 +2343,32 @@ export class CardsService implements OnModuleInit {
                               overflow: 'hidden',
                               boxShadow: `0 10px 40px rgba(0, 255, 128, 0.3)`,
                             },
-                            children: nftDataUrl ? [
-                              {
-                                type: 'img',
-                                props: {
-                                  src: nftDataUrl,
-                                  style: {
-                                    width: '100%',
-                                    height: '100%',
-                                    objectFit: 'cover',
+                            children: nftDataUrl
+                              ? [
+                                  {
+                                    type: 'img',
+                                    props: {
+                                      src: nftDataUrl,
+                                      style: {
+                                        width: '100%',
+                                        height: '100%',
+                                        objectFit: 'cover',
+                                      },
+                                    },
                                   },
-                                },
-                              },
-                            ] : [
-                              {
-                                type: 'div',
-                                props: {
-                                  style: {
-                                    fontSize: 140,
-                                    lineHeight: 1,
+                                ]
+                              : [
+                                  {
+                                    type: 'div',
+                                    props: {
+                                      style: {
+                                        fontSize: 140,
+                                        lineHeight: 1,
+                                      },
+                                      children: '🎨',
+                                    },
                                   },
-                                  children: '🎨',
-                                },
-                              },
-                            ],
+                                ],
                           },
                         },
                         // Proud Mascot
@@ -2420,7 +2496,9 @@ export class CardsService implements OnModuleInit {
 
     const renderStartTime = Date.now();
     const png = new Resvg(svg).render().asPng();
-    console.log(`[NFTMintCard] PNG rendered in ${Date.now() - renderStartTime}ms`);
+    console.log(
+      `[NFTMintCard] PNG rendered in ${Date.now() - renderStartTime}ms`,
+    );
     console.log(`[NFTMintCard] Total time: ${Date.now() - startTime}ms`);
     return Buffer.from(png);
   }
@@ -2430,35 +2508,49 @@ export class CardsService implements OnModuleInit {
     theme?: 'light' | 'dark';
   }): Promise<Buffer> {
     const startTime = Date.now();
-    console.log(`[RoadmapProgressCard] Starting generation for roadmap ${params.roadmapId}`);
-    
-    const [roadmapData] = await db.select().from(roadmap).where(eq(roadmap.id, params.roadmapId)).limit(1);
+    console.log(
+      `[RoadmapProgressCard] Starting generation for roadmap ${params.roadmapId}`,
+    );
+
+    const [roadmapData] = await db
+      .select()
+      .from(roadmap)
+      .where(eq(roadmap.id, params.roadmapId))
+      .limit(1);
     if (!roadmapData) throw new Error('Roadmap not found');
 
-    const steps = await db.select().from(roadMapStep).where(eq(roadMapStep.roadmapId, params.roadmapId)).orderBy(asc(roadMapStep.createdAt));
-    
+    const steps = await db
+      .select()
+      .from(roadMapStep)
+      .where(eq(roadMapStep.roadmapId, params.roadmapId))
+      .orderBy(asc(roadMapStep.createdAt));
+
     const totalSteps = steps.length;
-    const completedSteps = steps.filter(step => step.done === true).length;
+    const completedSteps = steps.filter((step) => step.done === true).length;
 
     const [userData] = await Promise.all([
       db.select().from(user).where(eq(user.id, roadmapData.userId)).limit(1),
       this.loadFonts(),
     ]);
-    console.log(`[RoadmapProgressCard] DB + Fonts loaded in ${Date.now() - startTime}ms`);
-    
+    console.log(
+      `[RoadmapProgressCard] DB + Fonts loaded in ${Date.now() - startTime}ms`,
+    );
+
     if (!userData[0]) throw new Error('User not found');
-    
+
     const u = userData[0];
     const theme = this.getTheme(params?.theme ?? 'dark');
     const highQualityAvatar = this.getHighQualityImageUrl(u.profilePictureURL);
-    
+
     const imageStartTime = Date.now();
     const [avatarDataUrl, mascotDataUrl, logoDataUrl] = await Promise.all([
       this.toDataUrl(highQualityAvatar),
       this.toDataUrl(this.mascotUrls.roadmap),
       this.toDataUrl(this.eduLearnLogoUrl),
     ]);
-    console.log(`[RoadmapProgressCard] Images loaded in ${Date.now() - imageStartTime}ms`);
+    console.log(
+      `[RoadmapProgressCard] Images loaded in ${Date.now() - imageStartTime}ms`,
+    );
 
     const progressPercentage = Math.round((completedSteps / totalSteps) * 100);
 
@@ -2496,17 +2588,21 @@ export class CardsService implements OnModuleInit {
                         gap: '16px',
                       },
                       children: [
-                        ...(logoDataUrl ? [{
-                          type: 'img',
-                          props: {
-                            src: logoDataUrl,
-                            style: {
-                              width: '100px',
-                              height: '100px',
-                              objectFit: 'contain',
-                            },
-                          },
-                        }] : []),
+                        ...(logoDataUrl
+                          ? [
+                              {
+                                type: 'img',
+                                props: {
+                                  src: logoDataUrl,
+                                  style: {
+                                    width: '100px',
+                                    height: '100px',
+                                    objectFit: 'contain',
+                                  },
+                                },
+                              },
+                            ]
+                          : []),
                       ],
                     },
                   },
@@ -2548,38 +2644,41 @@ export class CardsService implements OnModuleInit {
                               marginBottom: '10px',
                             },
                             children: [
-                              avatarDataUrl ? {
-                                type: 'img',
-                                props: {
-                                  src: avatarDataUrl,
-                                  style: {
-                                    width: '80px',
-                                    height: '80px',
-                                    borderRadius: '50%',
-                                    border: `4px solid ${theme.success}`,
-                                    objectFit: 'cover',
+                              avatarDataUrl
+                                ? {
+                                    type: 'img',
+                                    props: {
+                                      src: avatarDataUrl,
+                                      style: {
+                                        width: '80px',
+                                        height: '80px',
+                                        borderRadius: '50%',
+                                        border: `4px solid ${theme.success}`,
+                                        objectFit: 'cover',
+                                      },
+                                    },
+                                  }
+                                : {
+                                    type: 'div',
+                                    props: {
+                                      style: {
+                                        width: '80px',
+                                        height: '80px',
+                                        borderRadius: '50%',
+                                        background: theme.success,
+                                        border: `4px solid ${theme.success}`,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: 32,
+                                        fontFamily: 'Satoshi',
+                                        fontWeight: 700,
+                                        color: '#ffffff',
+                                      },
+                                      children:
+                                        u.name?.charAt(0)?.toUpperCase() || 'U',
+                                    },
                                   },
-                                },
-                              } : {
-                                type: 'div',
-                                props: {
-                                  style: {
-                                    width: '80px',
-                                    height: '80px',
-                                    borderRadius: '50%',
-                                    background: theme.success,
-                                    border: `4px solid ${theme.success}`,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: 32,
-                                    fontFamily: 'Satoshi',
-                                    fontWeight: 700,
-                                    color: '#ffffff',
-                                  },
-                                  children: u.name?.charAt(0)?.toUpperCase() || 'U',
-                                },
-                              },
                               {
                                 type: 'div',
                                 props: {
@@ -2762,18 +2861,22 @@ export class CardsService implements OnModuleInit {
                     },
                   },
                   // Mascot on the right
-                  ...(mascotDataUrl ? [{
-                    type: 'img',
-                    props: {
-                      src: mascotDataUrl,
-                      style: {
-                        width: '380px',
-                        height: '380px',
-                        objectFit: 'contain',
-                        marginRight: '-20px',
-                      },
-                    },
-                  }] : []),
+                  ...(mascotDataUrl
+                    ? [
+                        {
+                          type: 'img',
+                          props: {
+                            src: mascotDataUrl,
+                            style: {
+                              width: '380px',
+                              height: '380px',
+                              objectFit: 'contain',
+                              marginRight: '-20px',
+                            },
+                          },
+                        },
+                      ]
+                    : []),
                 ],
               },
             },
@@ -2789,12 +2892,18 @@ export class CardsService implements OnModuleInit {
         ],
       },
     );
-    console.log(`[RoadmapProgressCard] SVG generated in ${Date.now() - startTime}ms`);
+    console.log(
+      `[RoadmapProgressCard] SVG generated in ${Date.now() - startTime}ms`,
+    );
 
     const renderStartTime = Date.now();
     const png = new Resvg(svg).render().asPng();
-    console.log(`[RoadmapProgressCard] PNG rendered in ${Date.now() - renderStartTime}ms`);
-    console.log(`[RoadmapProgressCard] Total time: ${Date.now() - startTime}ms`);
+    console.log(
+      `[RoadmapProgressCard] PNG rendered in ${Date.now() - renderStartTime}ms`,
+    );
+    console.log(
+      `[RoadmapProgressCard] Total time: ${Date.now() - startTime}ms`,
+    );
     return Buffer.from(png);
   }
 
@@ -2905,11 +3014,35 @@ export class CardsService implements OnModuleInit {
       return Buffer.from(new Resvg(svgEmpty).render().asPng());
     }
 
-    const rankColors: Record<1 | 2 | 3, string> = {
-      1: '#FFD700',
-      2: '#B8BCC8',
-      3: '#CD7F32',
-    };
+    const themeIsDark = (params.theme ?? 'dark') === 'dark';
+
+    const podiumPalette = themeIsDark
+      ? {
+          firstBg: '#00FF80',
+          secondBg: '#2E3033',
+          thirdBg: '#2E3033',
+          firstText: '#000000',
+          secondText: '#E0E0E0',
+          thirdText: '#E0E0E0',
+          firstMuted: '#000000',
+          secondMuted: '#A0A0A0',
+          thirdMuted: '#A0A0A0',
+          avatarRing: '#FFFFFF',
+          placeholderFill: '#131313',
+        }
+      : {
+          firstBg: '#000000',
+          secondBg: '#EDF3FC',
+          thirdBg: '#F5F3FF',
+          firstText: '#00FF66',
+          secondText: '#2D3C52',
+          thirdText: '#2D3C52',
+          firstMuted: '#00FF66',
+          secondMuted: '#61728C',
+          thirdMuted: '#61728C',
+          avatarRing: '#FFFFFF',
+          placeholderFill: '#EDF3FC',
+        };
 
     const entries = params.entries.slice(0, 3);
     const rowsResolved = await Promise.all(
@@ -2921,179 +3054,245 @@ export class CardsService implements OnModuleInit {
       })),
     );
 
-    const rowNodes = rowsResolved.map((e) => ({
+    type ResolvedEntry = (typeof rowsResolved)[0];
+    const byRank: Partial<Record<1 | 2 | 3, ResolvedEntry>> = {};
+    for (const row of rowsResolved) {
+      byRank[row.rank] = row;
+    }
+
+    const medalEmoji: Record<1 | 2 | 3, string> = {
+      1: '🥇',
+      2: '🥈',
+      3: '🥉',
+    };
+
+    const slotLayout = {
+      1: {
+        width: 224,
+        height: 312,
+        paddingTop: 26,
+        paddingX: 12,
+        zIndex: 2,
+        boxShadow: '0 10px 24px rgba(0,0,0,0.35)',
+      },
+      2: {
+        width: 200,
+        height: 280,
+        paddingTop: 22,
+        paddingX: 12,
+        zIndex: 1,
+        boxShadow: '0 8px 16px rgba(0,0,0,0.22)',
+      },
+      3: {
+        width: 192,
+        height: 272,
+        paddingTop: 22,
+        paddingX: 12,
+        zIndex: 1,
+        boxShadow: '0 8px 16px rgba(0,0,0,0.22)',
+      },
+    } as const;
+
+    const buildPodiumSlot = (rank: 1 | 2 | 3, e: ResolvedEntry | undefined) => {
+      if (!e) return null;
+      const layout = slotLayout[rank];
+      const bg =
+        rank === 1
+          ? podiumPalette.firstBg
+          : rank === 2
+            ? podiumPalette.secondBg
+            : podiumPalette.thirdBg;
+      const nameColor =
+        rank === 1
+          ? podiumPalette.firstText
+          : rank === 2
+            ? podiumPalette.secondText
+            : podiumPalette.thirdText;
+      const xpColor =
+        rank === 1
+          ? podiumPalette.firstMuted
+          : rank === 2
+            ? podiumPalette.secondMuted
+            : podiumPalette.thirdMuted;
+      const subColor = xpColor;
+
+      const avatarNode = e.avatarDataUrl
+        ? {
+            type: 'img',
+            props: {
+              src: e.avatarDataUrl,
+              style: {
+                width: '56px',
+                height: '56px',
+                borderRadius: '28px',
+                objectFit: 'cover' as const,
+              },
+            },
+          }
+        : {
+            type: 'div',
+            props: {
+              style: {
+                width: '56px',
+                height: '56px',
+                borderRadius: '28px',
+                background: podiumPalette.placeholderFill,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontFamily: 'Satoshi',
+                fontSize: 22,
+                color: xpColor,
+              },
+              children: '?',
+            },
+          };
+
+      return {
+        type: 'div',
+        props: {
+          style: {
+            position: 'relative' as const,
+            display: 'flex',
+            flexDirection: 'column' as const,
+            alignItems: 'center' as const,
+            width: `${layout.width}px`,
+            minWidth: `${layout.width}px`,
+            height: `${layout.height}px`,
+            background: bg,
+            borderRadius: '20px',
+            paddingTop: `${layout.paddingTop}px`,
+            paddingLeft: `${layout.paddingX}px`,
+            paddingRight: `${layout.paddingX}px`,
+            paddingBottom: '14px',
+            boxSizing: 'border-box' as const,
+            zIndex: layout.zIndex,
+            boxShadow: layout.boxShadow,
+            alignSelf: 'flex-end' as const,
+          },
+          children: [
+            {
+              type: 'div',
+              props: {
+                style: {
+                  position: 'absolute' as const,
+                  top: '-28px',
+                  fontSize: 44,
+                  lineHeight: 1,
+                  zIndex: 3,
+                },
+                children: medalEmoji[rank],
+              },
+            },
+            {
+              type: 'div',
+              props: {
+                style: {
+                  background: podiumPalette.avatarRing,
+                  borderRadius: '999px',
+                  padding: '4px',
+                  marginTop: '4px',
+                  display: 'flex',
+                },
+                children: [avatarNode],
+              },
+            },
+            {
+              type: 'div',
+              props: {
+                children: e.name || e.username,
+                style: {
+                  display: 'flex',
+                  fontFamily: 'Satoshi',
+                  fontSize: rank === 1 ? 16 : 14,
+                  fontWeight: 700,
+                  color: nameColor,
+                  marginTop: '10px',
+                  textAlign: 'center' as const,
+                  maxWidth: '100%',
+                },
+              },
+            },
+            {
+              type: 'div',
+              props: {
+                children: `@${e.username}`,
+                style: {
+                  display: 'flex',
+                  fontFamily: 'Satoshi',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: subColor,
+                  marginTop: '4px',
+                  textAlign: 'center' as const,
+                  maxWidth: '100%',
+                },
+              },
+            },
+            {
+              type: 'div',
+              props: {
+                style: {
+                  display: 'flex',
+                  flexDirection: 'row' as const,
+                  alignItems: 'center' as const,
+                  marginTop: '8px',
+                  gap: '6px',
+                },
+                children: [
+                  {
+                    type: 'div',
+                    props: {
+                      children: '★',
+                      style: {
+                        fontSize: 14,
+                        color: xpColor,
+                      },
+                    },
+                  },
+                  {
+                    type: 'div',
+                    props: {
+                      children: `${e.xp.toLocaleString()} ${xpPillLabel}`,
+                      style: {
+                        display: 'flex',
+                        fontFamily: 'Satoshi',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: xpColor,
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      };
+    };
+
+    const podiumSlots = [
+      buildPodiumSlot(2, byRank[2]),
+      buildPodiumSlot(1, byRank[1]),
+      buildPodiumSlot(3, byRank[3]),
+    ].filter((n) => n !== null);
+
+    const podiumRow = {
       type: 'div',
       props: {
         style: {
           display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          background: theme.card,
-          border: `3px solid ${rankColors[e.rank]}`,
-          borderRadius: '20px',
-          padding: '22px 26px',
-          marginBottom: '18px',
+          flexDirection: 'row' as const,
+          justifyContent: 'center' as const,
+          alignItems: 'flex-end' as const,
+          gap: '10px',
           width: '100%',
-          boxSizing: 'border-box' as const,
+          marginTop: '8px',
+          marginBottom: '24px',
         },
-        children: [
-          {
-            type: 'div',
-            props: {
-              style: {
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: '20px',
-                flex: 1,
-                minWidth: 0,
-              },
-              children: [
-                {
-                  type: 'div',
-                  props: {
-                    style: {
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontFamily: 'Satoshi',
-                      fontSize: 36,
-                      fontWeight: 700,
-                      color: rankColors[e.rank],
-                      width: '56px',
-                      textAlign: 'center' as const,
-                    },
-                    children: `${e.rank}`,
-                  },
-                },
-                e.avatarDataUrl
-                  ? {
-                      type: 'img',
-                      props: {
-                        src: e.avatarDataUrl,
-                        style: {
-                          width: '72px',
-                          height: '72px',
-                          borderRadius: '50%',
-                          border: `3px solid ${rankColors[e.rank]}`,
-                          objectFit: 'cover' as const,
-                        },
-                      },
-                    }
-                  : {
-                      type: 'div',
-                      props: {
-                        style: {
-                          width: '72px',
-                          height: '72px',
-                          borderRadius: '50%',
-                          background: theme.secondary,
-                          border: `3px solid ${rankColors[e.rank]}`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontFamily: 'Satoshi',
-                          fontSize: 28,
-                          color: theme.mutedForeground,
-                        },
-                        children: '?',
-                      },
-                    },
-                {
-                  type: 'div',
-                  props: {
-                    style: {
-                      display: 'flex',
-                      flexDirection: 'column',
-                      minWidth: 0,
-                      flex: 1,
-                    },
-                    children: [
-                      {
-                        type: 'div',
-                        props: {
-                          children: e.name || e.username,
-                          style: {
-                            display: 'flex',
-                            fontFamily: 'Satoshi',
-                            fontSize: 26,
-                            fontWeight: 700,
-                            color: theme.foreground,
-                            whiteSpace: 'nowrap' as const,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          },
-                        },
-                      },
-                      {
-                        type: 'div',
-                        props: {
-                          children: `@${e.username}`,
-                          style: {
-                            display: 'flex',
-                            fontFamily: 'Satoshi',
-                            fontSize: 18,
-                            color: theme.mutedForeground,
-                            marginTop: 4,
-                            whiteSpace: 'nowrap' as const,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          },
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-          {
-            type: 'div',
-            props: {
-              style: {
-                background: theme.secondary,
-                border: `2px solid ${theme.success}`,
-                borderRadius: '14px',
-                padding: '14px 22px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-              },
-              children: [
-                {
-                  type: 'div',
-                  props: {
-                    children: e.xp.toLocaleString(),
-                    style: {
-                      display: 'flex',
-                      fontFamily: 'Satoshi',
-                      fontSize: 32,
-                      fontWeight: 700,
-                      color: theme.success,
-                    },
-                  },
-                },
-                {
-                  type: 'div',
-                  props: {
-                    children: xpPillLabel,
-                    style: {
-                      display: 'flex',
-                      fontFamily: 'Satoshi',
-                      fontSize: 14,
-                      color: theme.mutedForeground,
-                      marginTop: 4,
-                      fontWeight: 600,
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        ],
+        children: podiumSlots,
       },
-    }));
+    };
 
     const svg = await satori(
       {
@@ -3221,7 +3420,7 @@ export class CardsService implements OnModuleInit {
                             },
                           },
                         },
-                        ...rowNodes,
+                        podiumRow,
                         {
                           type: 'div',
                           props: {

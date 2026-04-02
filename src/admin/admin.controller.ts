@@ -1,6 +1,19 @@
-import { Controller, Get, Post, Delete, Body, Query, Param, UseGuards, BadRequestException, NotFoundException, Put } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Body,
+  Query,
+  Param,
+  UseGuards,
+  BadRequestException,
+  NotFoundException,
+  Put,
+} from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { AdminApiKeyGuard } from '../auth/guards/admin-api-key.guard';
+import type { NftListingBroadcastData } from '../emails/nft-listing-announcement.config';
 
 @Controller('admin')
 @UseGuards(AdminApiKeyGuard)
@@ -65,7 +78,10 @@ export class AdminController {
     if (!body.title || !body.content) {
       throw new BadRequestException('Title and content are required');
     }
-    return await this.adminService.broadcastNotification(body.title, body.content);
+    return await this.adminService.broadcastNotification(
+      body.title,
+      body.content,
+    );
   }
 
   @Get('feedback')
@@ -81,7 +97,10 @@ export class AdminController {
     if (!body.status) {
       throw new BadRequestException('Status is required');
     }
-    return await this.adminService.updateFeedbackStatus(id, body.status as 'pending' | 'reviewed' | 'resolved');
+    return await this.adminService.updateFeedbackStatus(
+      id,
+      body.status as 'pending' | 'reviewed' | 'resolved',
+    );
   }
 
   @Post('notifications/send')
@@ -94,17 +113,22 @@ export class AdminController {
     if (!body.title || !body.content) {
       throw new BadRequestException('Title and content are required');
     }
-    return await this.adminService.sendNotificationToUsers(body.userIds, body.title, body.content);
+    return await this.adminService.sendNotificationToUsers(
+      body.userIds,
+      body.title,
+      body.content,
+    );
   }
 
   @Post('emails/broadcast')
-  async broadcastEmail(
-    @Body() body: { subject: string; htmlContent: string },
-  ) {
+  async broadcastEmail(@Body() body: { subject: string; htmlContent: string }) {
     if (!body.subject || !body.htmlContent) {
       throw new BadRequestException('Subject and HTML content are required');
     }
-    return await this.adminService.broadcastEmail(body.subject, body.htmlContent);
+    return await this.adminService.broadcastEmail(
+      body.subject,
+      body.htmlContent,
+    );
   }
 
   @Post('emails/send')
@@ -117,7 +141,11 @@ export class AdminController {
     if (!body.subject || !body.htmlContent) {
       throw new BadRequestException('Subject and HTML content are required');
     }
-    return await this.adminService.sendEmailToUsers(body.emails, body.subject, body.htmlContent);
+    return await this.adminService.sendEmailToUsers(
+      body.emails,
+      body.subject,
+      body.htmlContent,
+    );
   }
 
   @Post('emails/v25-announcement')
@@ -155,21 +183,64 @@ export class AdminController {
   @Post('emails/engagement/:template/test')
   async sendEngagementTest(
     @Param('template') template: string,
-    @Body() body: { email: string; name?: string; referralCode?: string; referralCount?: number },
+    @Body()
+    body: {
+      email: string;
+      name?: string;
+      referralCode?: string;
+      referralCount?: number;
+    },
   ) {
     if (!body.email?.trim()) {
       throw new BadRequestException('Email is required');
     }
-    return await this.adminService.sendEngagementTest(template, body.email.trim(), {
-      name: body.name,
-      referralCode: body.referralCode,
-      referralCount: body.referralCount,
-    });
+    return await this.adminService.sendEngagementTest(
+      template,
+      body.email.trim(),
+      {
+        name: body.name,
+        referralCode: body.referralCode,
+        referralCount: body.referralCount,
+      },
+    );
   }
 
   @Post('emails/engagement/:template/broadcast')
   async broadcastEngagement(@Param('template') template: string) {
     return await this.adminService.broadcastEngagement(template);
+  }
+
+  @Get('emails/nft-listing/config')
+  getNftListingBroadcastConfig() {
+    return this.adminService.getNftListingBroadcastConfig();
+  }
+
+  @Post('emails/nft-listing/preview')
+  async getNftListingAnnouncementPreview(
+    @Body() body?: Partial<NftListingBroadcastData>,
+  ) {
+    return await this.adminService.getNftListingAnnouncementPreview(body);
+  }
+
+  @Post('emails/nft-listing/test')
+  async sendNftListingAnnouncementTest(
+    @Body() body: { email: string } & Partial<NftListingBroadcastData>,
+  ) {
+    if (!body.email?.trim()) {
+      throw new BadRequestException('Email is required');
+    }
+    const { email, ...partial } = body;
+    return await this.adminService.sendNftListingAnnouncementTest(
+      email.trim(),
+      partial,
+    );
+  }
+
+  @Post('emails/nft-listing/broadcast')
+  async broadcastNftListingAnnouncement(
+    @Body() body?: Partial<NftListingBroadcastData>,
+  ) {
+    return await this.adminService.broadcastNftListingAnnouncement(body);
   }
 
   @Get('communities')
@@ -179,7 +250,8 @@ export class AdminController {
 
   @Get('communities/:communityId')
   async getCommunityById(@Param('communityId') communityId: string) {
-    const community = await this.adminService.getCommunityWithMembers(communityId);
+    const community =
+      await this.adminService.getCommunityWithMembers(communityId);
     if (!community) {
       throw new NotFoundException(`Community with id ${communityId} not found`);
     }
@@ -188,10 +260,11 @@ export class AdminController {
 
   @Post('communities')
   async createCommunity(
-    @Body() body: { 
-      title: string; 
-      inviteCode: string; 
-      visibility?: 'public' | 'private'; 
+    @Body()
+    body: {
+      title: string;
+      inviteCode: string;
+      visibility?: 'public' | 'private';
       imageUrl?: string;
       adminEmail: string;
     },
@@ -205,7 +278,9 @@ export class AdminController {
     try {
       return await this.adminService.createCommunityWithAdmin(body);
     } catch (error: any) {
-      throw new BadRequestException(error.message || 'Failed to create community');
+      throw new BadRequestException(
+        error.message || 'Failed to create community',
+      );
     }
   }
 
@@ -213,8 +288,4 @@ export class AdminController {
   async deleteCommunity(@Param('communityId') communityId: string) {
     return await this.adminService.deleteCommunity(communityId);
   }
-
-
 }
-
-

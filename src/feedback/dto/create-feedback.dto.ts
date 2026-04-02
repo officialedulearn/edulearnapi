@@ -1,4 +1,11 @@
-import { IsNotEmpty, IsString, IsOptional, IsEnum, MaxLength, MinLength } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsEnum,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class CreateFeedbackDto {
   @IsNotEmpty()
@@ -21,6 +28,3 @@ export class UpdateFeedbackStatusDto {
   @IsEnum(['pending', 'reviewed', 'resolved'])
   status: 'pending' | 'reviewed' | 'resolved';
 }
-
-
-

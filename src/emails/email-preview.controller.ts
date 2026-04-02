@@ -7,20 +7,24 @@ import { ReferFriendsEmail } from './templates/ReferFriendsEmail';
 import { StreakReminderEmail } from './templates/StreakReminderEmail';
 import { EddyWeeklyTipEmail } from './templates/EddyWeeklyTipEmail';
 import { ReferralSuperstarEmail } from './templates/ReferralSuperstarEmail';
+import { NftListingAnnouncementEmail } from './templates/NftListingAnnouncementEmail';
+import { mergeNftListingBroadcastData } from './nft-listing-announcement.config';
 
 @Controller('emails/preview')
 export class EmailPreviewController {
   @Get('v25-announcement')
   async previewV25Announcement(@Query('name') name?: string) {
     const html = await render(
-      React.createElement(V25AnnouncementEmail, { name: name || 'Test User' })
+      React.createElement(V25AnnouncementEmail, { name: name || 'Test User' }),
     );
     return html;
   }
 
   @Get('come-back-soon')
   async previewComeBackSoon(@Query('name') name?: string) {
-    return render(React.createElement(ComeBackSoonEmail, { name: name || 'Test User' }));
+    return render(
+      React.createElement(ComeBackSoonEmail, { name: name || 'Test User' }),
+    );
   }
 
   @Get('refer-friends')
@@ -38,12 +42,22 @@ export class EmailPreviewController {
 
   @Get('streak-reminder')
   async previewStreakReminder(@Query('name') name?: string) {
-    return render(React.createElement(StreakReminderEmail, { name: name || 'Test User' }));
+    return render(
+      React.createElement(StreakReminderEmail, { name: name || 'Test User' }),
+    );
   }
 
   @Get('eddy-tip')
   async previewEddyTip(@Query('name') name?: string) {
-    return render(React.createElement(EddyWeeklyTipEmail, { name: name || 'Test User' }));
+    return render(
+      React.createElement(EddyWeeklyTipEmail, { name: name || 'Test User' }),
+    );
+  }
+
+  @Get('nft-listing')
+  async previewNftListing() {
+    const data = mergeNftListingBroadcastData();
+    return render(React.createElement(NftListingAnnouncementEmail, data));
   }
 
   @Get('referral-superstar')

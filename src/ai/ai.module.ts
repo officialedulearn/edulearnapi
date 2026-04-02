@@ -5,11 +5,28 @@ import { ChatModule } from 'src/chat/chat.module';
 import { AuthModule } from 'src/auth/auth.module';
 import { RewardsModule } from 'src/rewards/rewards.module';
 import { RoadmapModule } from 'src/roadmap/roadmap.module';
+import { GeminiClientService } from './gemini-client.service';
+import { NftRewardService } from './nft-reward.service';
+import { QuizGenerationService } from './quiz-generation.service';
+import { FlashcardService } from './flashcard.service';
+import { SpeechTranscriptionService } from './speech-transcription.service';
 
 @Module({
-  imports: [ChatModule, forwardRef(() => AuthModule), RewardsModule, forwardRef(() => RoadmapModule)],
+  imports: [
+    ChatModule,
+    forwardRef(() => AuthModule),
+    RewardsModule,
+    forwardRef(() => RoadmapModule),
+  ],
   controllers: [AiController],
-  providers: [AiService],
-  exports: [AiService]
+  providers: [
+    GeminiClientService,
+    NftRewardService,
+    QuizGenerationService,
+    FlashcardService,
+    SpeechTranscriptionService,
+    AiService,
+  ],
+  exports: [AiService, NftRewardService],
 })
 export class AiModule {}

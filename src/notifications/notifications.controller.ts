@@ -24,10 +24,11 @@ export class NotificationsController {
     @Query('order') order?: 'asc' | 'desc',
   ) {
     const userId = await getDatabaseUserId(req.user);
-    const notifications = await this.notificationsService.getUserNotificationsByCreatedAt(
-      userId,
-      order || 'desc',
-    );
+    const notifications =
+      await this.notificationsService.getUserNotificationsByCreatedAt(
+        userId,
+        order || 'desc',
+      );
     return { notifications };
   }
 
@@ -42,10 +43,3 @@ export class NotificationsController {
     return { message: 'Notification deleted successfully' };
   }
 }
-
-
-
-
-
-
-

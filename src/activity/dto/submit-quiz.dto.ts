@@ -28,4 +28,3 @@ export class SubmitQuizDto {
   @Type(() => QuizAnswerDto)
   answers: QuizAnswerDto[];
 }
-

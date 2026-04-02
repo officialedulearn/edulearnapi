@@ -3,15 +3,15 @@ import { ResendService } from './resend.service';
 
 @Controller('resend')
 export class ResendController {
-    constructor(private readonly resendService: ResendService) {}
+  constructor(private readonly resendService: ResendService) {}
 
-    @Get('add-users')
-    async addUsersToContactList() {
-        return await this.resendService.addAllUsersToResendContactList();
-    }
+  @Get('add-users')
+  async addUsersToContactList() {
+    return await this.resendService.addAllUsersToResendContactList();
+  }
 
-    @Get('users-not-in-contacts')
-    async getUsersNotInContacts() {
-        return await this.resendService.getUsersNotInResendContacts();
-    }
+  @Get('users-not-in-contacts')
+  async getUsersNotInContacts() {
+    return await this.resendService.getUsersNotInResendContacts();
+  }
 }

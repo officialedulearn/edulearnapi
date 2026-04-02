@@ -15,7 +15,6 @@ export class ExpoPushService {
     this.expo = new Expo();
   }
 
-
   async sendPushNotification(
     expoPushToken: string,
     title: string,
@@ -23,7 +22,9 @@ export class ExpoPushService {
     data?: PushNotificationData,
   ): Promise<boolean> {
     if (!Expo.isExpoPushToken(expoPushToken)) {
-      console.error(`Push token ${expoPushToken} is not a valid Expo push token`);
+      console.error(
+        `Push token ${expoPushToken} is not a valid Expo push token`,
+      );
       return false;
     }
 
@@ -39,7 +40,7 @@ export class ExpoPushService {
     try {
       const ticketChunk = await this.expo.sendPushNotificationsAsync([message]);
       console.log('Push notification sent:', ticketChunk);
-      
+
       return this.checkTicketSuccess(ticketChunk[0]);
     } catch (error) {
       console.error('Error sending push notification:', error);
@@ -84,11 +85,11 @@ export class ExpoPushService {
     try {
       // Expo recommends chunking push notifications
       const chunks = this.expo.chunkPushNotifications(messages);
-      
+
       for (const chunk of chunks) {
         try {
           const ticketChunk = await this.expo.sendPushNotificationsAsync(chunk);
-          
+
           ticketChunk.forEach((ticket) => {
             if (this.checkTicketSuccess(ticket)) {
               successCount++;
@@ -102,7 +103,9 @@ export class ExpoPushService {
         }
       }
 
-      console.log(`Bulk push notifications sent: ${successCount} success, ${failedCount} failed`);
+      console.log(
+        `Bulk push notifications sent: ${successCount} success, ${failedCount} failed`,
+      );
       return { success: successCount, failed: failedCount };
     } catch (error) {
       console.error('Error in bulk push notification:', error);
@@ -145,17 +148,17 @@ export class ExpoPushService {
     const reminders = {
       daily: {
         title: '📚 Daily Learning Reminder',
-        body: 'Keep your streak alive! Complete today\'s lesson.',
+        body: "Keep your streak alive! Complete today's lesson.",
         data: { screen: 'home' },
       },
       quiz: {
         title: '🎯 Quiz Time!',
-        body: 'Test your knowledge with today\'s quiz.',
+        body: "Test your knowledge with today's quiz.",
         data: { screen: 'quiz' },
       },
       streak: {
-        title: '🔥 Don\'t Break Your Streak!',
-        body: 'You\'re doing great! Keep learning to maintain your streak.',
+        title: "🔥 Don't Break Your Streak!",
+        body: "You're doing great! Keep learning to maintain your streak.",
         data: { screen: 'profile' },
       },
     };
@@ -169,4 +172,3 @@ export class ExpoPushService {
     );
   }
 }
-

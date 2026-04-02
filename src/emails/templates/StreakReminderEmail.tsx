@@ -10,12 +10,19 @@ interface StreakReminderEmailProps {
   useResendFirstName?: boolean;
 }
 
-export const StreakReminderEmail = ({ name = 'Learner', useResendUnsubscribe, useResendFirstName }: StreakReminderEmailProps) => {
+export const StreakReminderEmail = ({
+  name = 'Learner',
+  useResendUnsubscribe,
+  useResendFirstName,
+}: StreakReminderEmailProps) => {
   const mascotUrl = MASCOT_URLS.proud;
   const displayName = useResendFirstName ? '{{{FIRST_NAME|Learner}}}' : name;
 
   return (
-    <EmailLayout previewText="Don't break your streak! Eddy is rooting for you." useResendUnsubscribe={useResendUnsubscribe}>
+    <EmailLayout
+      previewText="Don't break your streak! Eddy is rooting for you."
+      useResendUnsubscribe={useResendUnsubscribe}
+    >
       <HeroSection
         mascotUrl={mascotUrl}
         headline="Don't Break Your Streak! 🔥"
@@ -35,7 +42,8 @@ export const StreakReminderEmail = ({ name = 'Learner', useResendUnsubscribe, us
             fontFamily: `'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`,
           }}
         >
-          Hey {displayName}! Consistency is key. Open the app, complete a quick activity, and Eddy will celebrate with you.
+          Hey {displayName}! Consistency is key. Open the app, complete a quick
+          activity, and Eddy will celebrate with you.
         </Text>
       </Section>
     </EmailLayout>

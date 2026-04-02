@@ -71,7 +71,7 @@ TWITTER_REDIRECT_URI=your_redirect_uri
 
 **⚠️ Common Issues:**
 
-- **401 Unauthorized Error**: 
+- **401 Unauthorized Error**:
   - Your app must have "Read and Write" permissions
   - If you changed permissions, you MUST regenerate the Access Token and Access Token Secret
   - Make sure all 4 credentials (API Key, API Secret, Access Token, Access Token Secret) are correctly copied to your `.env` file
@@ -120,11 +120,13 @@ POST /ai/marketplace-stream
 ### Authentication
 
 **Required Header:**
+
 ```
 x-marketplace-key: YOUR_MARKETPLACE_API_KEY
 ```
 
 The marketplace API key should be set in your `.env` file:
+
 ```env
 MARKETPLACE_API_KEY=your_secure_marketplace_key
 ```
@@ -181,7 +183,7 @@ const response = await fetch('http://your-api-url/ai/marketplace-stream', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'x-marketplace-key': 'YOUR_MARKETPLACE_KEY'
+    'x-marketplace-key': 'YOUR_MARKETPLACE_KEY',
   },
   body: JSON.stringify({
     messages: [
@@ -190,11 +192,11 @@ const response = await fetch('http://your-api-url/ai/marketplace-stream', {
         chatId: 'chat-123',
         role: 'user',
         content: [{ type: 'text', text: 'Explain Solana DeFi' }],
-        createdAt: new Date().toISOString()
-      }
+        createdAt: new Date().toISOString(),
+      },
     ],
-    chatId: 'chat-123'
-  })
+    chatId: 'chat-123',
+  }),
 });
 
 const reader = response.body.getReader();
@@ -203,10 +205,10 @@ const decoder = new TextDecoder();
 while (true) {
   const { done, value } = await reader.read();
   if (done) break;
-  
+
   const chunk = decoder.decode(value);
   const lines = chunk.split('\n');
-  
+
   for (const line of lines) {
     if (line.startsWith('data: ')) {
       const data = JSON.parse(line.slice(6));
@@ -265,13 +267,13 @@ A test HTML file is included at `api/test-marketplace-stream.html` for manual te
 
 ### Error Responses
 
-| Status Code | Description |
-|-------------|-------------|
-| 200 | Success - SSE stream initiated |
-| 400 | Bad request - Invalid message format |
-| 401 | Unauthorized - Invalid or missing marketplace API key |
-| 404 | Not found - Marketplace user not configured |
-| 500 | Internal server error |
+| Status Code | Description                                           |
+| ----------- | ----------------------------------------------------- |
+| 200         | Success - SSE stream initiated                        |
+| 400         | Bad request - Invalid message format                  |
+| 401         | Unauthorized - Invalid or missing marketplace API key |
+| 404         | Not found - Marketplace user not configured           |
+| 500         | Internal server error                                 |
 
 ### Conversation History
 
@@ -284,21 +286,23 @@ The endpoint supports conversation history by including previous messages in the
       "id": "1",
       "chatId": "chat-123",
       "role": "user",
-      "content": [{"type": "text", "text": "What is Solana?"}],
+      "content": [{ "type": "text", "text": "What is Solana?" }],
       "createdAt": "2024-01-15T10:30:00.000Z"
     },
     {
       "id": "2",
       "chatId": "chat-123",
       "role": "assistant",
-      "content": [{"type": "text", "text": "Solana is a high-performance blockchain..."}],
+      "content": [
+        { "type": "text", "text": "Solana is a high-performance blockchain..." }
+      ],
       "createdAt": "2024-01-15T10:30:15.000Z"
     },
     {
       "id": "3",
       "chatId": "chat-123",
       "role": "user",
-      "content": [{"type": "text", "text": "Tell me about PDAs"}],
+      "content": [{ "type": "text", "text": "Tell me about PDAs" }],
       "createdAt": "2024-01-15T10:31:00.000Z"
     }
   ],

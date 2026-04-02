@@ -56,19 +56,29 @@ export class SubscriptionController {
         this.logger.error(
           'REVENUECAT_WEBHOOK_SECRET not configured in environment variables',
         );
-        throw new UnauthorizedException('Webhook authentication not configured');
+        throw new UnauthorizedException(
+          'Webhook authentication not configured',
+        );
       }
 
-      this.logger.debug(`Expected auth format: Bearer ${expectedAuth.substring(0, 10)}...`);
-      this.logger.debug(`Received auth header: ${authHeader ? authHeader.substring(0, 20) + '...' : 'MISSING'}`);
+      this.logger.debug(
+        `Expected auth format: Bearer ${expectedAuth.substring(0, 10)}...`,
+      );
+      this.logger.debug(
+        `Received auth header: ${authHeader ? authHeader.substring(0, 20) + '...' : 'MISSING'}`,
+      );
 
       if (!authHeader) {
-        this.logger.warn('Unauthorized webhook attempt: No authorization header provided');
+        this.logger.warn(
+          'Unauthorized webhook attempt: No authorization header provided',
+        );
         throw new UnauthorizedException('Authorization header is required');
       }
 
       if (authHeader !== `Bearer ${expectedAuth}`) {
-        this.logger.warn('Unauthorized webhook attempt: Invalid authorization header');
+        this.logger.warn(
+          'Unauthorized webhook attempt: Invalid authorization header',
+        );
         throw new UnauthorizedException('Invalid authorization header');
       }
 
@@ -86,10 +96,11 @@ export class SubscriptionController {
 
       if (isStreakShield) {
         if (type === 'INITIAL_PURCHASE' || type === 'NON_RENEWING_PURCHASE') {
-          const result = await this.subscriptionService.handleStreakShieldPurchase(
-            app_user_id,
-            product_id,
-          );
+          const result =
+            await this.subscriptionService.handleStreakShieldPurchase(
+              app_user_id,
+              product_id,
+            );
           return { received: true, type: 'streak_shield', ...result };
         }
         return { received: true };
@@ -97,17 +108,24 @@ export class SubscriptionController {
 
       if (isQuizRefresh) {
         if (type === 'INITIAL_PURCHASE' || type === 'NON_RENEWING_PURCHASE') {
-          const result = await this.subscriptionService.handleQuizRefreshPurchase(
-            app_user_id,
-          );
+          const result =
+            await this.subscriptionService.handleQuizRefreshPurchase(
+              app_user_id,
+            );
           return { received: true, type: 'quiz_refresh', ...result };
         }
         return { received: true };
       }
 
       if (isBadgeClaim) {
-        this.logger.log(`Badge claim purchase detected for user ${app_user_id}, product: ${product_id}`);
-        const result = await this.subscriptionService.handleBadgeClaim(app_user_id, product_id as string, payload);
+        this.logger.log(
+          `Badge claim purchase detected for user ${app_user_id}, product: ${product_id}`,
+        );
+        const result = await this.subscriptionService.handleBadgeClaim(
+          app_user_id,
+          product_id as string,
+          payload,
+        );
         return { received: true, type: 'badge_claim', ...result };
       }
 
@@ -150,7 +168,9 @@ export class SubscriptionController {
           break;
 
         case 'NON_RENEWING_PURCHASE':
-          this.logger.log(`NON_RENEWING_PURCHASE for non-badge product: ${product_id}`);
+          this.logger.log(
+            `NON_RENEWING_PURCHASE for non-badge product: ${product_id}`,
+          );
           await this.subscriptionService.handleInitialPurchase(
             app_user_id,
             expirationDate,
@@ -182,9 +202,8 @@ export class SubscriptionController {
     @Param('userId') userId: string,
   ) {
     await verifyUserAuthorization(req.user, userId, 'streak shield purchase');
-    const result = await this.subscriptionService.purchaseStreakShieldViaApi(
-      userId,
-    );
+    const result =
+      await this.subscriptionService.purchaseStreakShieldViaApi(userId);
     return { ...result, success: true };
   }
 
@@ -195,9 +214,8 @@ export class SubscriptionController {
     @Param('userId') userId: string,
   ) {
     await verifyUserAuthorization(req.user, userId, 'quiz refresh purchase');
-    const result = await this.subscriptionService.purchaseQuizRefreshViaApi(
-      userId,
-    );
+    const result =
+      await this.subscriptionService.purchaseQuizRefreshViaApi(userId);
     return { ...result, success: true };
   }
 }

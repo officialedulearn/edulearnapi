@@ -1,4 +1,10 @@
-import { Injectable, BadRequestException, Inject, forwardRef, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  Inject,
+  forwardRef,
+  Logger,
+} from '@nestjs/common';
 import axios from 'axios';
 import { AuthService } from 'src/auth/auth.service';
 import * as crypto from 'crypto';
@@ -9,42 +15,49 @@ import { user, userReward } from '../../lib/db/schema';
 
 @Injectable()
 export class TwitterService {
-    private readonly logger = new Logger(TwitterService.name);
-    private botClient: TwitterApi; 
-    private writeClient: TwitterApi; 
+  private readonly logger = new Logger(TwitterService.name);
+  private botClient: TwitterApi;
+  private writeClient: TwitterApi;
 
-    constructor(
-        @Inject(forwardRef(() => AuthService))
-        private authService: AuthService
-    ) {
-        if (process.env.TWITTER_BEARER_TOKEN) {
-            this.botClient = new TwitterApi(process.env.TWITTER_BEARER_TOKEN);
-        }
-        
-        if (process.env.TWITTER_API_KEY && 
-            process.env.TWITTER_API_SECRET && 
-            process.env.TWITTER_ACCESS_TOKEN && 
-            process.env.TWITTER_ACCESS_TOKEN_SECRET) {
-            this.writeClient = new TwitterApi({
-                appKey: process.env.TWITTER_API_KEY,
-                appSecret: process.env.TWITTER_API_SECRET,
-                accessToken: process.env.TWITTER_ACCESS_TOKEN,
-                accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET,
-            });
-        }
+  constructor(
+    @Inject(forwardRef(() => AuthService))
+    private authService: AuthService,
+  ) {
+    if (process.env.TWITTER_BEARER_TOKEN) {
+      this.botClient = new TwitterApi(process.env.TWITTER_BEARER_TOKEN);
     }
 
-    private clientId = process.env.TWITTER_CLIENT_ID;
-    private clientSecret = process.env.TWITTER_CLIENT_SECRET;
-    private redirectUri = process.env.TWITTER_REDIRECT_URI;
-    private apiKey = process.env.TWITTER_API_KEY || process.env.TWITTER_CLIENT_ID;
-    private apiSecret = process.env.TWITTER_API_SECRET || process.env.TWITTER_CLIENT_SECRET;
-    private accessToken = process.env.TWITTER_ACCESS_TOKEN;
-    private accessTokenSecret = process.env.TWITTER_ACCESS_TOKEN_SECRET;
+    if (
+      process.env.TWITTER_API_KEY &&
+      process.env.TWITTER_API_SECRET &&
+      process.env.TWITTER_ACCESS_TOKEN &&
+      process.env.TWITTER_ACCESS_TOKEN_SECRET
+    ) {
+      this.writeClient = new TwitterApi({
+        appKey: process.env.TWITTER_API_KEY,
+        appSecret: process.env.TWITTER_API_SECRET,
+        accessToken: process.env.TWITTER_ACCESS_TOKEN,
+        accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET,
+      });
+    }
+  }
 
-  generateAuthUrl(redirectUri?: string): { url: string; codeVerifier: string; codeChallenge: string } {
+  private clientId = process.env.TWITTER_CLIENT_ID;
+  private clientSecret = process.env.TWITTER_CLIENT_SECRET;
+  private redirectUri = process.env.TWITTER_REDIRECT_URI;
+  private apiKey = process.env.TWITTER_API_KEY || process.env.TWITTER_CLIENT_ID;
+  private apiSecret =
+    process.env.TWITTER_API_SECRET || process.env.TWITTER_CLIENT_SECRET;
+  private accessToken = process.env.TWITTER_ACCESS_TOKEN;
+  private accessTokenSecret = process.env.TWITTER_ACCESS_TOKEN_SECRET;
+
+  generateAuthUrl(redirectUri?: string): {
+    url: string;
+    codeVerifier: string;
+    codeChallenge: string;
+  } {
     const finalRedirectUri = redirectUri || this.redirectUri || '';
-    
+
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
     const codeChallenge = crypto
       .createHash('sha256')
@@ -62,106 +75,136 @@ export class TwitterService {
     });
 
     const url = `https://twitter.com/i/oauth2/authorize?${params.toString()}`;
-    
+
     return {
       url,
       codeVerifier,
-      codeChallenge
+      codeChallenge,
     };
   }
 
-  async getAccessToken(code: string, providedRedirectUri?: string, providedCodeVerifier?: string) {
+  async getAccessToken(
+    code: string,
+    providedRedirectUri?: string,
+    providedCodeVerifier?: string,
+  ) {
     try {
       const finalRedirectUri = providedRedirectUri || this.redirectUri || '';
-      
+
       if (!providedCodeVerifier) {
-        throw new BadRequestException('Code verifier is required for PKCE flow');
+        throw new BadRequestException(
+          'Code verifier is required for PKCE flow',
+        );
       }
-      
+
       const params = new URLSearchParams({
         code,
-        grant_type: "authorization_code",
+        grant_type: 'authorization_code',
         client_id: this.clientId || '',
         redirect_uri: finalRedirectUri,
         code_verifier: providedCodeVerifier,
       });
 
-      const credentials = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
-  
-       
+      const credentials = Buffer.from(
+        `${this.clientId}:${this.clientSecret}`,
+      ).toString('base64');
+
       const res = await axios.post(
-        "https://api.twitter.com/2/oauth2/token",
+        'https://api.twitter.com/2/oauth2/token',
         params,
-        { 
-          headers: { 
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Authorization": `Basic ${credentials}`,
-          } 
-        }
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Authorization: `Basic ${credentials}`,
+          },
+        },
       );
-      
+
       if (!res.data || !res.data.access_token) {
         console.error('Twitter token response error:', res.data);
-        throw new BadRequestException('Failed to get access token from Twitter');
+        throw new BadRequestException(
+          'Failed to get access token from Twitter',
+        );
       }
-      
+
       return res.data.access_token;
     } catch (error) {
-      console.error('Error getting Twitter access token:', error.response?.data || error.message);
+      console.error(
+        'Error getting Twitter access token:',
+        error.response?.data || error.message,
+      );
       throw new BadRequestException(
-        error.response?.data?.error_description || 
-        error.response?.data?.error || 
-        'Failed to exchange code for access token'
+        error.response?.data?.error_description ||
+          error.response?.data?.error ||
+          'Failed to exchange code for access token',
       );
     }
   }
 
   async getUserProfile(accessToken: string, userCaller: string) {
     try {
-      const res = await axios.get("https://api.twitter.com/2/users/me", {
+      const res = await axios.get('https://api.twitter.com/2/users/me', {
         headers: { Authorization: `Bearer ${accessToken}` },
         params: {
-          'user.fields': 'profile_image_url,name,username'
-        }
+          'user.fields': 'profile_image_url,name,username',
+        },
       });
-      
+
       if (!res.data || !res.data.data) {
-        throw new BadRequestException('Failed to fetch user profile from Twitter');
+        throw new BadRequestException(
+          'Failed to fetch user profile from Twitter',
+        );
       }
-      
+
       const user = await this.authService.getUserByEmail(userCaller);
 
       if (!user) {
         throw new BadRequestException('User not found');
       }
 
-      if(res.data.data.username !== user?.username) {
+      if (res.data.data.username !== user?.username) {
         await this.authService.editUser({
-          name: res.data.data.name, 
-          email: userCaller, 
+          name: res.data.data.name,
+          email: userCaller,
           username: res.data.data.username,
-          learning: user.learning || ''
+          learning: user.learning || '',
         });
       }
-      
+
       await this.authService.verifyUser(userCaller);
-      console.log('Updating user profile picture:', res.data.data.profile_image_url);
-      await this.authService.updateUserProfilePicture(userCaller, res.data.data.profile_image_url);
-      return res.data.data; 
+      console.log(
+        'Updating user profile picture:',
+        res.data.data.profile_image_url,
+      );
+      await this.authService.updateUserProfilePicture(
+        userCaller,
+        res.data.data.profile_image_url,
+      );
+      return res.data.data;
     } catch (error) {
-      console.error('Error getting Twitter user profile:', error.response?.data || error.message);
+      console.error(
+        'Error getting Twitter user profile:',
+        error.response?.data || error.message,
+      );
       throw new BadRequestException('Failed to fetch Twitter profile');
     }
   }
 
   async uploadMedia(imageUrl: string): Promise<string> {
     try {
-      if (!this.apiKey || !this.apiSecret || !this.accessToken || !this.accessTokenSecret) {
+      if (
+        !this.apiKey ||
+        !this.apiSecret ||
+        !this.accessToken ||
+        !this.accessTokenSecret
+      ) {
         throw new BadRequestException('Twitter OAuth 1.0a credentials missing');
       }
 
       this.logger.log('📸 Downloading image from URL...');
-      const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+      const response = await axios.get(imageUrl, {
+        responseType: 'arraybuffer',
+      });
       const buffer = Buffer.from(response.data);
 
       this.logger.log('⬆️ Uploading media to Twitter...');
@@ -172,14 +215,16 @@ export class TwitterService {
         accessSecret: this.accessTokenSecret,
       });
 
-      const mediaId = await client.v1.uploadMedia(buffer, { mimeType: response.headers['content-type'] });
+      const mediaId = await client.v1.uploadMedia(buffer, {
+        mimeType: response.headers['content-type'],
+      });
       this.logger.log('✅ Media uploaded successfully! Media ID:', mediaId);
-      
+
       return mediaId;
     } catch (error) {
       this.logger.error('❌ Error uploading media:', error);
       throw new BadRequestException(
-        error.message || 'Failed to upload media to Twitter'
+        error.message || 'Failed to upload media to Twitter',
       );
     }
   }
@@ -188,7 +233,12 @@ export class TwitterService {
     buffer: Buffer,
     mimeType: string = 'image/png',
   ): Promise<string> {
-    if (!this.apiKey || !this.apiSecret || !this.accessToken || !this.accessTokenSecret) {
+    if (
+      !this.apiKey ||
+      !this.apiSecret ||
+      !this.accessToken ||
+      !this.accessTokenSecret
+    ) {
       throw new BadRequestException('Twitter OAuth 1.0a credentials missing');
     }
     const client = new TwitterApi({
@@ -233,20 +283,34 @@ export class TwitterService {
       reply_settings?: 'following' | 'mentionedUsers';
       share_with_followers?: boolean;
     },
-    retryCount: number = 0
+    retryCount: number = 0,
   ) {
     try {
       // Check if we're rate limited for tweets
-      if (this.tweetRateLimitResetTime && Date.now() < this.tweetRateLimitResetTime) {
-        const waitMinutes = Math.ceil((this.tweetRateLimitResetTime - Date.now()) / 60000);
-        this.logger.warn(`⏳ Tweet rate limited. Waiting ${waitMinutes} more minute(s)...`);
-        throw new BadRequestException(`Tweet rate limited. Please wait ${waitMinutes} minutes before trying again.`);
+      if (
+        this.tweetRateLimitResetTime &&
+        Date.now() < this.tweetRateLimitResetTime
+      ) {
+        const waitMinutes = Math.ceil(
+          (this.tweetRateLimitResetTime - Date.now()) / 60000,
+        );
+        this.logger.warn(
+          `⏳ Tweet rate limited. Waiting ${waitMinutes} more minute(s)...`,
+        );
+        throw new BadRequestException(
+          `Tweet rate limited. Please wait ${waitMinutes} minutes before trying again.`,
+        );
       }
 
-      if (!this.apiKey || !this.apiSecret || !this.accessToken || !this.accessTokenSecret) {
+      if (
+        !this.apiKey ||
+        !this.apiSecret ||
+        !this.accessToken ||
+        !this.accessTokenSecret
+      ) {
         throw new BadRequestException(
           'Twitter OAuth 1.0a credentials missing. Required in .env:\n' +
-          'TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET'
+            'TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET',
         );
       }
 
@@ -269,60 +333,81 @@ export class TwitterService {
 
       if (options) {
         if (options.card_uri) tweetPayload.card_uri = options.card_uri;
-        if (options.community_id) tweetPayload.community_id = options.community_id;
-        if (options.direct_message_deep_link) tweetPayload.direct_message_deep_link = options.direct_message_deep_link;
-        if (options.edit_options) tweetPayload.edit_options = options.edit_options;
-        if (options.for_super_followers_only !== undefined) tweetPayload.for_super_followers_only = options.for_super_followers_only;
+        if (options.community_id)
+          tweetPayload.community_id = options.community_id;
+        if (options.direct_message_deep_link)
+          tweetPayload.direct_message_deep_link =
+            options.direct_message_deep_link;
+        if (options.edit_options)
+          tweetPayload.edit_options = options.edit_options;
+        if (options.for_super_followers_only !== undefined)
+          tweetPayload.for_super_followers_only =
+            options.for_super_followers_only;
         if (options.geo) tweetPayload.geo = options.geo;
         if (options.media) tweetPayload.media = options.media;
-        if (options.nullcast !== undefined) tweetPayload.nullcast = options.nullcast;
+        if (options.nullcast !== undefined)
+          tweetPayload.nullcast = options.nullcast;
         if (options.poll) tweetPayload.poll = options.poll;
-        if (options.quote_tweet_id) tweetPayload.quote_tweet_id = options.quote_tweet_id;
+        if (options.quote_tweet_id)
+          tweetPayload.quote_tweet_id = options.quote_tweet_id;
         if (options.reply) tweetPayload.reply = options.reply;
-        if (options.reply_settings) tweetPayload.reply_settings = options.reply_settings;
-        if (options.share_with_followers !== undefined) tweetPayload.share_with_followers = options.share_with_followers;
+        if (options.reply_settings)
+          tweetPayload.reply_settings = options.reply_settings;
+        if (options.share_with_followers !== undefined)
+          tweetPayload.share_with_followers = options.share_with_followers;
       }
 
       const tweet = await client.v2.tweet(tweetPayload);
 
-      this.logger.log('✅ Tweet posted successfully!')
+      this.logger.log('✅ Tweet posted successfully!');
 
       return tweet.data;
     } catch (error) {
       this.logger.error('❌ Error posting tweet:', error);
 
-    
       if (error.code === 429) {
         const resetTime = error.rateLimit?.reset;
         if (resetTime) {
           this.tweetRateLimitResetTime = resetTime * 1000;
           const resetDate = new Date(this.tweetRateLimitResetTime);
-          const waitMinutes = Math.ceil((this.tweetRateLimitResetTime - Date.now()) / 60000);
-          this.logger.warn(`⏱️ Tweet rate limit reached. Will retry after ${resetDate.toLocaleTimeString()} (in ${waitMinutes} minutes)`);
+          const waitMinutes = Math.ceil(
+            (this.tweetRateLimitResetTime - Date.now()) / 60000,
+          );
+          this.logger.warn(
+            `⏱️ Tweet rate limit reached. Will retry after ${resetDate.toLocaleTimeString()} (in ${waitMinutes} minutes)`,
+          );
         } else {
-          this.tweetRateLimitResetTime = Date.now() + (15 * 60 * 1000);
-          this.logger.warn('⏱️ Tweet rate limit reached. Will retry in 15 minutes');
+          this.tweetRateLimitResetTime = Date.now() + 15 * 60 * 1000;
+          this.logger.warn(
+            '⏱️ Tweet rate limit reached. Will retry in 15 minutes',
+          );
         }
         if (retryCount < 3) {
           const backoffDelay = Math.min(1000 * Math.pow(2, retryCount), 30000);
-          this.logger.log(`🔄 Retrying tweet post in ${backoffDelay}ms (attempt ${retryCount + 1}/3)`);
-          
-          await new Promise(resolve => setTimeout(resolve, backoffDelay));
+          this.logger.log(
+            `🔄 Retrying tweet post in ${backoffDelay}ms (attempt ${retryCount + 1}/3)`,
+          );
+
+          await new Promise((resolve) => setTimeout(resolve, backoffDelay));
           return this.postTweet(text, options, retryCount + 1);
         } else {
-          throw new BadRequestException('Tweet rate limit exceeded. Please try again later.');
+          throw new BadRequestException(
+            'Tweet rate limit exceeded. Please try again later.',
+          );
         }
       }
 
       if (error.code === 401 || error.code === 403) {
-        throw new BadRequestException('Authentication failed. Please check your Twitter credentials.');
+        throw new BadRequestException(
+          'Authentication failed. Please check your Twitter credentials.',
+        );
       }
-      
+
       throw new BadRequestException(
-        error.data?.detail || 
-        error.data?.title ||
-        error.message || 
-        'Failed to post tweet'
+        error.data?.detail ||
+          error.data?.title ||
+          error.message ||
+          'Failed to post tweet',
       );
     }
   }
@@ -347,14 +432,14 @@ export class TwitterService {
   // private processedTweetIds: Set<string> = new Set();
 
   // private async listenToMentionsPolling() {
-  //   const pollInterval = 16 * 60 * 1000; 
-  //   
+  //   const pollInterval = 16 * 60 * 1000;
+  //
   //   this.logger.log('🎧 Now polling for mentions every 16 minutes (Twitter API rate limit)...');
   //   this.logger.warn('⚠️  Note: Twitter Basic/Free tier has very limited rate limits.');
   //   this.logger.warn('⚠️  For real-time responses, you need Elevated or Enterprise access.');
-  //     
+  //
   //   await this.checkForMentions();
-  //   
+  //
   //   setInterval(async () => {
   //     await this.checkForMentions();
   //   }, pollInterval);
@@ -397,14 +482,14 @@ export class TwitterService {
   //       if (tweet.text?.toLowerCase().includes('@edulearnbot score')) {
   //         this.logger.log(`Processing tweet: ${tweet.text}`);
   //         await this.handleScoreRequest(tweet, tweets.includes);
-  //         
+  //
   //         this.processedTweetIds.add(tweet.id);
   //         processedCount++;
-  //         
+  //
   //         if (!this.lastCheckedTweetId || tweet.id > this.lastCheckedTweetId) {
   //           this.lastCheckedTweetId = tweet.id;
   //         }
-  //         
+  //
   //         await new Promise(resolve => setTimeout(resolve, 2000));
   //       }
   //     }
@@ -419,7 +504,7 @@ export class TwitterService {
   //     if (error.code === 429) {
   //       const resetTime = error.rateLimit?.reset;
   //       if (resetTime) {
-  //         this.rateLimitResetTime = resetTime * 1000; 
+  //         this.rateLimitResetTime = resetTime * 1000;
   //         const resetDate = new Date(this.rateLimitResetTime);
   //         const waitMinutes = Math.ceil((this.rateLimitResetTime - Date.now()) / 60000);
   //         this.logger.warn(`⏱️  Rate limit reached. Will retry after ${resetDate.toLocaleTimeString()} (in ${waitMinutes} minutes)`);
@@ -531,7 +616,7 @@ export class TwitterService {
   //         `@${requesterUsername} Warning: @${parentAuthorUsername} detected in the wild without EduLearn powers! 🦸‍♂️ They need to level up ASAP! ⬆️`,
   //         `@${requesterUsername} Plot hole alert! @${parentAuthorUsername} is missing from our learning universe 🌌 - they're probably still using Windows 95! 💻`
   //       ];
-  //       
+  //
   //       const randomResponse = funnyResponses[Math.floor(Math.random() * funnyResponses.length)];
   //       replyText = randomResponse;
   //     }
@@ -541,7 +626,7 @@ export class TwitterService {
   //         in_reply_to_tweet_id: tweet.id
   //       }
   //     });
-  //     
+  //
   //     this.logger.log(`✅ Replied with score to @${requesterUsername}`);
   //   } catch (error) {
   //     this.logger.error('❌ Failed to handle score request:', error);
@@ -557,7 +642,7 @@ export class TwitterService {
   // }> {
   //   try {
   //     this.logger.log(`📊 Calculating score for ${username}`);
-  //   
+  //
   //     const users = await db
   //       .select()
   //       .from(user)

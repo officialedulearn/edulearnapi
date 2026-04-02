@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';              
+import { Module, forwardRef } from '@nestjs/common';
 import { RoadmapController } from './roadmap.controller';
 import { RoadmapService } from './roadmap.service';
 import { AuthModule } from 'src/auth/auth.module';
@@ -7,9 +7,14 @@ import { AiModule } from 'src/ai/ai.module';
 import { RewardsModule } from 'src/rewards/rewards.module';
 
 @Module({
-  imports: [forwardRef(() => AuthModule), ChatModule, forwardRef(() => AiModule), RewardsModule],
+  imports: [
+    forwardRef(() => AuthModule),
+    ChatModule,
+    forwardRef(() => AiModule),
+    RewardsModule,
+  ],
   controllers: [RoadmapController],
   providers: [RoadmapService],
-  exports: [RoadmapService]
+  exports: [RoadmapService],
 })
 export class RoadmapModule {}

@@ -6,13 +6,15 @@ const logger = new Logger('RedisModule');
 
 async function createRedisClient() {
   const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-  
+
   const client = createClient({
     url: redisUrl,
     socket: {
       reconnectStrategy: (retries) => {
         if (retries > 10) {
-          logger.error('Redis connection failed after 10 retries. Please ensure Redis is running.');
+          logger.error(
+            'Redis connection failed after 10 retries. Please ensure Redis is running.',
+          );
           return new Error('Redis connection failed');
         }
         const delay = Math.min(retries * 100, 3000);
@@ -46,8 +48,12 @@ async function createRedisClient() {
     logger.error(`Failed to connect to Redis: ${error.message}`);
     logger.error('Please ensure Redis is running. You can start it with:');
     logger.error('  - Docker: docker run -d -p 6379:6379 redis:alpine');
-    logger.error('  - Windows: Download and run Redis from https://github.com/microsoftarchive/redis/releases');
-    logger.error('  - Or set REDIS_URL environment variable to your Redis instance');
+    logger.error(
+      '  - Windows: Download and run Redis from https://github.com/microsoftarchive/redis/releases',
+    );
+    logger.error(
+      '  - Or set REDIS_URL environment variable to your Redis instance',
+    );
     throw error;
   }
 }
@@ -58,8 +64,8 @@ async function createRedisClient() {
       provide: 'REDIS',
       useFactory: createRedisClient,
     },
-    RedisService
+    RedisService,
   ],
-  exports: ['REDIS', RedisService]
+  exports: ['REDIS', RedisService],
 })
 export class RedisModule {}

@@ -116,7 +116,11 @@ export class QuizzesService {
     };
   }
 
-  async submitAttempt(quizId: string, userId: string, dto: SubmitPublicQuizDto) {
+  async submitAttempt(
+    quizId: string,
+    userId: string,
+    dto: SubmitPublicQuizDto,
+  ) {
     const [quiz] = await db
       .select()
       .from(publicQuiz)

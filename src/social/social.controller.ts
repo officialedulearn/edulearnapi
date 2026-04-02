@@ -66,7 +66,10 @@ export class SocialController {
   @Get('is-following/:userId')
   async isFollowing(@Request() req, @Param('userId') userId: string) {
     const followerId = await getDatabaseUserId(req.user);
-    const isFollowing = await this.socialService.isFollowing(followerId, userId);
+    const isFollowing = await this.socialService.isFollowing(
+      followerId,
+      userId,
+    );
     return { isFollowing };
   }
 
@@ -104,4 +107,3 @@ export class SocialController {
     return preferences;
   }
 }
-

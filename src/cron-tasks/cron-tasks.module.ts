@@ -20,6 +20,6 @@ import { MonthlyLeaderboardModule } from 'src/monthly-leaderboard/monthly-leader
   ],
   providers: [CronTasksService, ExpoPushService],
   controllers: [CronTasksController],
-  exports: [CronTasksService]
+  exports: [CronTasksService],
 })
 export class CronTasksModule {}

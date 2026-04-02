@@ -7,4 +7,3 @@ export class GenerateSuggestionsDto {
   })
   userId: string;
 }
-

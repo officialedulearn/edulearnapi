@@ -7,12 +7,7 @@ import { CommonModule } from '../common/common.module';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [
-    RedisModule,
-    CommonModule,
-    forwardRef(() => AuthModule),
-    
-  ],
+  imports: [RedisModule, CommonModule, forwardRef(() => AuthModule)],
   controllers: [CommunityController],
   providers: [CommunityService, CommunityGateway],
   exports: [CommunityService],

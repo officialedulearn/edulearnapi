@@ -12,7 +12,13 @@ interface HeroSectionProps {
 
 const fontStack = `'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
 
-export const HeroSection = ({ mascotUrl, headline, subheadline, ctaText, ctaLink }: HeroSectionProps) => {
+export const HeroSection = ({
+  mascotUrl,
+  headline,
+  subheadline,
+  ctaText,
+  ctaLink,
+}: HeroSectionProps) => {
   return (
     <Section
       style={{

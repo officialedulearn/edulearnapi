@@ -1,6 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { ExpoPushService } from './services/expo-push.service';
-import {NotificationsService} from "./services/notifications.service"
+import { NotificationsService } from './services/notifications.service';
 
 @Global()
 @Module({

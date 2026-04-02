@@ -18,12 +18,17 @@ interface AuthenticatedSocket extends Socket {
   username?: string;
 }
 
-function displayNameFromJwtPayload(payload: Record<string, unknown>): string | undefined {
+function displayNameFromJwtPayload(
+  payload: Record<string, unknown>,
+): string | undefined {
   const meta = (payload.user_metadata ?? {}) as Record<string, unknown>;
   const email = payload.email;
   const fromEmail =
-    typeof email === 'string' && email.includes('@') ? email.split('@')[0] : undefined;
-  const pick = (v: unknown) => (typeof v === 'string' && v.length > 0 ? v : undefined);
+    typeof email === 'string' && email.includes('@')
+      ? email.split('@')[0]
+      : undefined;
+  const pick = (v: unknown) =>
+    typeof v === 'string' && v.length > 0 ? v : undefined;
   return (
     pick(payload.username) ||
     pick(meta.username) ||
@@ -62,7 +67,9 @@ export class CommunityGateway
         client.handshake.headers?.authorization?.split(' ')[1];
 
       if (!token) {
-        this.logger.warn(`Client ${client.id} connection rejected: No token provided`);
+        this.logger.warn(
+          `Client ${client.id} connection rejected: No token provided`,
+        );
         client.disconnect();
         return;
       }
@@ -74,9 +81,11 @@ export class CommunityGateway
       }
 
       const payload: any = jwt.verify(token, jwtSecret);
-      
+
       if (!payload || !payload.sub) {
-        this.logger.warn(`Client ${client.id} connection rejected: Invalid token`);
+        this.logger.warn(
+          `Client ${client.id} connection rejected: Invalid token`,
+        );
         client.disconnect();
         return;
       }
@@ -88,7 +97,9 @@ export class CommunityGateway
           payload.sub as string,
         );
       } catch (e) {
-        this.logger.warn(`Could not resolve username for socket user ${payload.sub}`);
+        this.logger.warn(
+          `Could not resolve username for socket user ${payload.sub}`,
+        );
       }
       client.username =
         resolvedName ??
@@ -198,9 +209,7 @@ export class CommunityGateway
         onlineCount: roomStats.onlineCount,
       });
 
-      this.logger.log(
-        `User ${client.username} joined room ${communityId}`,
-      );
+      this.logger.log(`User ${client.username} joined room ${communityId}`);
 
       return { success: true, roomStats };
     } catch (error) {
@@ -236,9 +245,7 @@ export class CommunityGateway
         onlineCount: roomStats.onlineCount,
       });
 
-      this.logger.log(
-        `User ${client.username} left room ${communityId}`,
-      );
+      this.logger.log(`User ${client.username} left room ${communityId}`);
 
       return { success: true };
     } catch (error) {
@@ -366,27 +373,29 @@ export class CommunityGateway
       return { success: true, message: fullMessage };
     } catch (error) {
       this.logger.error('Error sending message:', error);
-      
+
       if (error?.cause?.code === 'ECONNRESET' || error?.code === 'ECONNRESET') {
-        this.logger.error('Database connection was reset. This may be a transient issue.');
-        return { 
+        this.logger.error(
+          'Database connection was reset. This may be a transient issue.',
+        );
+        return {
           error: 'Database connection error. Please try again.',
-          retryable: true 
+          retryable: true,
         };
       }
-      
+
       if (error?.query) {
         this.logger.error('Database query failed:', {
           query: error.query,
           params: error.params,
-          cause: error.cause
+          cause: error.cause,
         });
-        return { 
+        return {
           error: 'Failed to save message. Please try again.',
-          retryable: true 
+          retryable: true,
         };
       }
-      
+
       return { error: 'Failed to send message' };
     }
   }
@@ -510,7 +519,7 @@ export class CommunityGateway
       return { error: 'Failed to remove reaction' };
     }
   }
-    
+
   @SubscribeMessage('get_online_users')
   async handleGetOnlineUsers(@ConnectedSocket() client: AuthenticatedSocket) {
     try {
@@ -540,4 +549,3 @@ export class CommunityGateway
     }
   }
 }
-

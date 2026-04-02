@@ -7,17 +7,17 @@ import helmet from 'helmet';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
-    rawBody: true, 
+    rawBody: true,
   });
   app.enableCors({
     origin: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
-  
+
   app.use(helmet());
   app.use(compression());
-  
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -28,43 +28,6 @@ async function bootstrap() {
       },
     }),
   );
-  
-
-  const marketplaceConfig = new DocumentBuilder()
-    .setTitle('EduLearn Marketplace API')
-    .setDescription('API documentation for external marketplace integrations. Use the x-marketplace-key header for authentication.')
-    .setVersion('1.0')
-    .addApiKey(
-      {
-        type: 'apiKey',
-        name: 'x-marketplace-key',
-        in: 'header',
-        description: 'Marketplace API key for external integrations',
-      },
-      'marketplace-key',
-    )
-    .addTag('chat', 'Chat management endpoints')
-    .addTag('ai', 'AI and machine learning endpoints')
-    .build();
-
-  const marketplaceDocument = SwaggerModule.createDocument(app, marketplaceConfig, {
-    include: [],
-    operationIdFactory: (controllerKey: string, methodKey: string) => methodKey,
-    deepScanRoutes: true,
-  });
-
-  const filteredPaths = {};
-  Object.keys(marketplaceDocument.paths).forEach((path) => {
-    if (path.startsWith('/chat') || path.startsWith('/ai')) {
-      filteredPaths[path] = marketplaceDocument.paths[path];
-    }
-  });
-  marketplaceDocument.paths = filteredPaths;
-
-  SwaggerModule.setup('api/marketplace', app, marketplaceDocument, {
-    customSiteTitle: 'EduLearn Marketplace API',
-    customCss: '.swagger-ui .topbar { display: none }',
-  });
 
   const internalConfig = new DocumentBuilder()
     .setTitle('EduLearn API')
@@ -84,14 +47,6 @@ async function bootstrap() {
     .addApiKey(
       {
         type: 'apiKey',
-        name: 'x-marketplace-key',
-        in: 'header',
-      },
-      'marketplace-key',
-    )
-    .addApiKey(
-      {
-        type: 'apiKey',
         name: 'x-api-key',
         in: 'header',
       },
@@ -103,7 +58,7 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, internalDocument, {
     customSiteTitle: 'EduLearn API Documentation',
   });
-  
+
   await app.listen(process.env.PORT ?? 3001, '0.0.0.0');
 }
 bootstrap();

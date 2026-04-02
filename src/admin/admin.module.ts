@@ -11,5 +11,3 @@ import { ResendModule } from '../resend/resend.module';
   exports: [AdminService],
 })
 export class AdminModule {}
-
-

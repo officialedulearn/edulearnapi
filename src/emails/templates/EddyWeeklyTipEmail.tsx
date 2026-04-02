@@ -14,16 +14,25 @@ interface EddyWeeklyTipEmailProps {
 
 const DEFAULT_TIP = {
   title: 'Try the AI Tutor',
-  description: 'Stuck on a concept? Chat with our AI tutor—it explains topics in plain language and adapts to your level. Perfect for quick questions or deep dives.',
+  description:
+    'Stuck on a concept? Chat with our AI tutor—it explains topics in plain language and adapts to your level. Perfect for quick questions or deep dives.',
 };
 
-export const EddyWeeklyTipEmail = ({ name = 'Learner', tip, useResendUnsubscribe, useResendFirstName }: EddyWeeklyTipEmailProps) => {
+export const EddyWeeklyTipEmail = ({
+  name = 'Learner',
+  tip,
+  useResendUnsubscribe,
+  useResendFirstName,
+}: EddyWeeklyTipEmailProps) => {
   const mascotUrl = MASCOT_URLS.mischievous;
   const tipContent = tip ? { title: tip, description: '' } : DEFAULT_TIP;
   const displayName = useResendFirstName ? '{{{FIRST_NAME|Learner}}}' : name;
 
   return (
-    <EmailLayout previewText="Eddy's weekly tip: A quick way to level up your learning." useResendUnsubscribe={useResendUnsubscribe}>
+    <EmailLayout
+      previewText="Eddy's weekly tip: A quick way to level up your learning."
+      useResendUnsubscribe={useResendUnsubscribe}
+    >
       <HeroSection
         mascotUrl={mascotUrl}
         headline="Eddy's Weekly Tip 🐸"
@@ -35,7 +44,10 @@ export const EddyWeeklyTipEmail = ({ name = 'Learner', tip, useResendUnsubscribe
       <Section style={{ padding: '0 24px 40px' }}>
         <FeatureCard
           title={tipContent.title}
-          description={tipContent.description || 'Open the app and explore—Eddy has something new for you!'}
+          description={
+            tipContent.description ||
+            'Open the app and explore—Eddy has something new for you!'
+          }
         />
 
         <Text

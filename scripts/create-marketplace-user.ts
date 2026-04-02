@@ -10,7 +10,7 @@ import { randomUUID } from 'crypto';
 async function createMarketplaceUser() {
   try {
     console.log('Checking if marketplace user already exists...');
-    
+
     const existingUser = await db
       .select()
       .from(user)
@@ -35,32 +35,39 @@ async function createMarketplaceUser() {
 
     const referralCode = generateReferralCode();
 
-    const [newUser] = await db.insert(user).values({
-      id: randomUUID(),
-      name: 'Marketplace Agent',
-      email: 'marketplace@edulearn.com',
-      username: 'marketplace_agent',
-      address: publicKey,
-      encryptedPrivateKey: encryptedSecret,
-      referralCode: referralCode,
-      level: 'novice',
-      xp: 0,
-      credits: '1000000',
-      streak: 1,
-      isPremium: true,
-      quizCompleted: 0,
-      verified: true,
-      imageUploadLimit: 999,
-      quizLimits: 999,
-    }).returning();
+    const [newUser] = await db
+      .insert(user)
+      .values({
+        id: randomUUID(),
+        name: 'Marketplace Agent',
+        email: 'marketplace@edulearn.com',
+        username: 'marketplace_agent',
+        address: publicKey,
+        encryptedPrivateKey: encryptedSecret,
+        referralCode: referralCode,
+        level: 'novice',
+        xp: 0,
+        credits: '1000000',
+        streak: 1,
+        isPremium: true,
+        quizCompleted: 0,
+        verified: true,
+        imageUploadLimit: 999,
+        quizLimits: 999,
+      })
+      .returning();
 
     console.log('✅ Marketplace user created successfully!');
     console.log('User ID:', newUser.id);
     console.log('Email:', newUser.email);
     console.log('Username:', newUser.username);
     console.log('Wallet Address:', newUser.address);
-    console.log('\n📝 Important: Add this user ID to your external applications when making API requests.');
-    console.log('📝 They should use this userId in their requests along with the MARKETPLACE_API_KEY.');
+    console.log(
+      '\n📝 Important: Add this user ID to your external applications when making API requests.',
+    );
+    console.log(
+      '📝 They should use this userId in their requests along with the MARKETPLACE_API_KEY.',
+    );
 
     return newUser;
   } catch (error) {
@@ -78,4 +85,3 @@ createMarketplaceUser()
     console.error('\n❌ Failed:', error);
     process.exit(1);
   });
-

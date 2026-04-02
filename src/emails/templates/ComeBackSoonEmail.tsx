@@ -10,12 +10,19 @@ interface ComeBackSoonEmailProps {
   useResendFirstName?: boolean;
 }
 
-export const ComeBackSoonEmail = ({ name = 'Learner', useResendUnsubscribe, useResendFirstName }: ComeBackSoonEmailProps) => {
+export const ComeBackSoonEmail = ({
+  name = 'Learner',
+  useResendUnsubscribe,
+  useResendFirstName,
+}: ComeBackSoonEmailProps) => {
   const mascotUrl = MASCOT_URLS.curious;
   const displayName = useResendFirstName ? '{{{FIRST_NAME|Learner}}}' : name;
 
   return (
-    <EmailLayout previewText="We miss you! Eddy and EduLearn are waiting for you." useResendUnsubscribe={useResendUnsubscribe}>
+    <EmailLayout
+      previewText="We miss you! Eddy and EduLearn are waiting for you."
+      useResendUnsubscribe={useResendUnsubscribe}
+    >
       <HeroSection
         mascotUrl={mascotUrl}
         headline="We Miss You! 🐸"
@@ -35,7 +42,9 @@ export const ComeBackSoonEmail = ({ name = 'Learner', useResendUnsubscribe, useR
             fontFamily: `'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`,
           }}
         >
-          Hey {displayName}! Quick quizzes, AI tutor chats, and your roadmaps are just a tap away. Eddy is here to cheer you on whenever you're ready.
+          Hey {displayName}! Quick quizzes, AI tutor chats, and your roadmaps
+          are just a tap away. Eddy is here to cheer you on whenever you're
+          ready.
         </Text>
       </Section>
     </EmailLayout>

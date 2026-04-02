@@ -7,5 +7,3 @@ import { CommonModule } from '../common/common.module';
   controllers: [NotificationsController],
 })
 export class NotificationsModule {}
-
-

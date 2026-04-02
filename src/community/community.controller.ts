@@ -28,7 +28,8 @@ export class CommunityController {
   @Post()
   async createCommunity(
     @Request() req,
-    @Body() body: {
+    @Body()
+    body: {
       title: string;
       inviteCode: string;
       visibility?: 'public' | 'private';
@@ -50,9 +51,12 @@ export class CommunityController {
 
   @Get('invite/:inviteCode')
   async getCommunityByInviteCode(@Param('inviteCode') inviteCode: string) {
-    const community = await this.communityService.getCommunityByInviteCode(inviteCode);
+    const community =
+      await this.communityService.getCommunityByInviteCode(inviteCode);
     if (!community) {
-      throw new NotFoundException(`Community with invite code ${inviteCode} not found`);
+      throw new NotFoundException(
+        `Community with invite code ${inviteCode} not found`,
+      );
     }
     return community;
   }
@@ -70,14 +74,18 @@ export class CommunityController {
   async updateCommunity(
     @Request() req,
     @Param('communityId') communityId: string,
-    @Body() body: {
+    @Body()
+    body: {
       title?: string;
       visibility?: 'public' | 'private';
       imageUrl?: string;
       inviteCode?: string;
     },
   ) {
-    const role = await this.communityService.getMemberRole(req.user.sub, communityId);
+    const role = await this.communityService.getMemberRole(
+      req.user.sub,
+      communityId,
+    );
     if (role !== 'mod') {
       throw new ForbiddenException('Only moderators can update the community');
     }
@@ -86,8 +94,14 @@ export class CommunityController {
   }
 
   @Delete(':communityId')
-  async deleteCommunity(@Request() req, @Param('communityId') communityId: string) {
-    const role = await this.communityService.getMemberRole(req.user.sub, communityId);
+  async deleteCommunity(
+    @Request() req,
+    @Param('communityId') communityId: string,
+  ) {
+    const role = await this.communityService.getMemberRole(
+      req.user.sub,
+      communityId,
+    );
     if (role !== 'mod') {
       throw new ForbiddenException('Only moderators can delete the community');
     }
@@ -101,7 +115,10 @@ export class CommunityController {
     @Param('communityId') communityId: string,
     @Body() body: { userId: string; role?: 'mod' | 'member' },
   ) {
-    const role = await this.communityService.getMemberRole(req.user.sub, communityId);
+    const role = await this.communityService.getMemberRole(
+      req.user.sub,
+      communityId,
+    );
     if (role !== 'mod') {
       throw new ForbiddenException('Only moderators can add members');
     }
@@ -120,7 +137,8 @@ export class CommunityController {
 
   @Get(':communityId/members/count')
   async getMemberCount(@Param('communityId') communityId: string) {
-    const count = await this.communityService.getCommunityMemberCount(communityId);
+    const count =
+      await this.communityService.getCommunityMemberCount(communityId);
     return { count };
   }
 
@@ -148,12 +166,19 @@ export class CommunityController {
     @Param('userId') userId: string,
     @Body() body: { role: 'mod' | 'member' },
   ) {
-    const role = await this.communityService.getMemberRole(req.user.sub, communityId);
+    const role = await this.communityService.getMemberRole(
+      req.user.sub,
+      communityId,
+    );
     if (role !== 'mod') {
       throw new ForbiddenException('Only moderators can update member roles');
     }
 
-    return await this.communityService.updateMemberRole(userId, communityId, body.role);
+    return await this.communityService.updateMemberRole(
+      userId,
+      communityId,
+      body.role,
+    );
   }
 
   @Delete(':communityId/members/:userId')
@@ -162,7 +187,10 @@ export class CommunityController {
     @Param('communityId') communityId: string,
     @Param('userId') userId: string,
   ) {
-    const role = await this.communityService.getMemberRole(req.user.sub, communityId);
+    const role = await this.communityService.getMemberRole(
+      req.user.sub,
+      communityId,
+    );
     if (role !== 'mod' && req.user.sub !== userId) {
       throw new ForbiddenException('Only moderators can remove other members');
     }
@@ -182,9 +210,14 @@ export class CommunityController {
       throw new ForbiddenException('User ID is required');
     }
 
-    const isMember = await this.communityService.isUserMember(userId, communityId);
+    const isMember = await this.communityService.isUserMember(
+      userId,
+      communityId,
+    );
     if (isMember) {
-      throw new ForbiddenException('You are already a member of this community');
+      throw new ForbiddenException(
+        'You are already a member of this community',
+      );
     }
 
     return await this.communityService.createJoinRequest({
@@ -204,7 +237,10 @@ export class CommunityController {
       throw new ForbiddenException('User ID is required');
     }
 
-    const role = await this.communityService.getMemberRole(dbUserId, communityId);
+    const role = await this.communityService.getMemberRole(
+      dbUserId,
+      communityId,
+    );
     if (role !== 'mod') {
       throw new ForbiddenException('Only moderators can view join requests');
     }
@@ -216,14 +252,22 @@ export class CommunityController {
   async updateJoinRequestStatus(
     @Request() req,
     @Param('requestId') requestId: string,
-    @Body() body: { status: 'approved' | 'rejected'; communityId: string; userId?: string },
+    @Body()
+    body: {
+      status: 'approved' | 'rejected';
+      communityId: string;
+      userId?: string;
+    },
   ) {
     const dbUserId = body.userId || req.user.sub;
     if (!dbUserId) {
       throw new ForbiddenException('User ID is required');
     }
 
-    const role = await this.communityService.getMemberRole(dbUserId, body.communityId);
+    const role = await this.communityService.getMemberRole(
+      dbUserId,
+      body.communityId,
+    );
     if (role !== 'mod') {
       throw new ForbiddenException('Only moderators can update join requests');
     }
@@ -250,7 +294,10 @@ export class CommunityController {
   }
 
   @Delete('join-requests/:requestId')
-  async deleteJoinRequest(@Request() req, @Param('requestId') requestId: string) {
+  async deleteJoinRequest(
+    @Request() req,
+    @Param('requestId') requestId: string,
+  ) {
     await this.communityService.deleteJoinRequest(requestId);
     return { message: 'Join request deleted successfully' };
   }
@@ -259,14 +306,18 @@ export class CommunityController {
   async createMessage(
     @Request() req,
     @Param('communityId') communityId: string,
-    @Body() body: { content: string; mentionedUserIds?: string[]; userId?: string },
+    @Body()
+    body: { content: string; mentionedUserIds?: string[]; userId?: string },
   ) {
     const dbUserId = body.userId || req.user.sub;
     if (!dbUserId) {
       throw new ForbiddenException('User ID is required');
     }
 
-    const isMember = await this.communityService.isUserMember(dbUserId, communityId);
+    const isMember = await this.communityService.isUserMember(
+      dbUserId,
+      communityId,
+    );
     if (!isMember) {
       throw new ForbiddenException('You must be a member to send messages');
     }
@@ -304,7 +355,10 @@ export class CommunityController {
       throw new ForbiddenException('User ID is required');
     }
 
-    const isMember = await this.communityService.isUserMember(dbUserId, communityId);
+    const isMember = await this.communityService.isUserMember(
+      dbUserId,
+      communityId,
+    );
     if (!isMember) {
       throw new ForbiddenException('You must be a member to view messages');
     }
@@ -349,7 +403,7 @@ export class CommunityController {
     return await this.communityService.updateMessage(messageId, body.content);
   }
 
-  @Delete('messages/:messageId')  
+  @Delete('messages/:messageId')
   async deleteMessage(
     @Request() req,
     @Param('messageId') messageId: string,
@@ -365,7 +419,10 @@ export class CommunityController {
       throw new ForbiddenException('User ID is required');
     }
 
-    const role = await this.communityService.getMemberRole(dbUserId, message.roomId);
+    const role = await this.communityService.getMemberRole(
+      dbUserId,
+      message.roomId,
+    );
     if (message.user.id !== dbUserId && role !== 'mod') {
       throw new ForbiddenException('You can only delete your own messages');
     }
@@ -393,7 +450,8 @@ export class CommunityController {
 
     const message = await this.communityService.getMessageById(messageId);
     if (message && body.communityId) {
-      const reactionCounts = await this.communityService.getReactionCountByType(messageId);
+      const reactionCounts =
+        await this.communityService.getReactionCountByType(messageId);
 
       this.communityGateway.server.to(body.communityId).emit('reaction_added', {
         messageId,
@@ -403,7 +461,8 @@ export class CommunityController {
         timestamp: new Date().toISOString(),
       });
     } else if (message) {
-      const reactionCounts = await this.communityService.getReactionCountByType(messageId);
+      const reactionCounts =
+        await this.communityService.getReactionCountByType(messageId);
       this.communityGateway.server.to(message.roomId).emit('reaction_added', {
         messageId,
         reaction: body.reaction,
@@ -427,21 +486,17 @@ export class CommunityController {
   }
 
   @Delete('messages/:messageId/reactions')
-  async removeReaction(
-    @Request() req,
-    @Param('messageId') messageId: string,
-  ) {
+  async removeReaction(@Request() req, @Param('messageId') messageId: string) {
     await this.communityService.removeReaction(messageId, req.user.sub);
     return { message: 'Reaction removed successfully' };
   }
 
-  
   @Get('messages/:messageId/mentions')
   async getMessageMentions(@Param('messageId') messageId: string) {
     return await this.communityService.getMessageMentions(messageId);
   }
 
-  @Get('user/:userId/mentions') 
+  @Get('user/:userId/mentions')
   async getUserMentions(
     @Request() req,
     @Param('userId') userId: string,
@@ -455,9 +510,7 @@ export class CommunityController {
   }
 
   @Post('resolve-mentions')
-  async resolveMentions(
-    @Body() body: { usernames: string[] },
-  ) {
+  async resolveMentions(@Body() body: { usernames: string[] }) {
     if (!body.usernames || !Array.isArray(body.usernames)) {
       return [];
     }

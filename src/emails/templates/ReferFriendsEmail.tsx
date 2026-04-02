@@ -12,12 +12,20 @@ interface ReferFriendsEmailProps {
   useResendFirstName?: boolean;
 }
 
-export const ReferFriendsEmail = ({ name = 'Learner', referralCode = 'ABC123', useResendUnsubscribe, useResendFirstName }: ReferFriendsEmailProps) => {
+export const ReferFriendsEmail = ({
+  name = 'Learner',
+  referralCode = 'ABC123',
+  useResendUnsubscribe,
+  useResendFirstName,
+}: ReferFriendsEmailProps) => {
   const mascotUrl = MASCOT_URLS.celebrate;
   const displayName = useResendFirstName ? '{{{FIRST_NAME|Learner}}}' : name;
 
   return (
-    <EmailLayout previewText="Share your referral code and earn rewards together!" useResendUnsubscribe={useResendUnsubscribe}>
+    <EmailLayout
+      previewText="Share your referral code and earn rewards together!"
+      useResendUnsubscribe={useResendUnsubscribe}
+    >
       <HeroSection
         mascotUrl={mascotUrl}
         headline="Refer Friends, Earn Together 🎉"
@@ -81,7 +89,8 @@ export const ReferFriendsEmail = ({ name = 'Learner', referralCode = 'ABC123', u
             fontFamily: `'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`,
           }}
         >
-          {displayName}, your friends will love learning with Eddy. Share your code and grow together!
+          {displayName}, your friends will love learning with Eddy. Share your
+          code and grow together!
         </Text>
       </Section>
     </EmailLayout>

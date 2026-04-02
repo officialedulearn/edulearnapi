@@ -63,4 +63,3 @@ export class GenerateMessageDto {
   })
   userId: string;
 }
-

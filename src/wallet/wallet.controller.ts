@@ -18,7 +18,10 @@ import { AuthService } from '../auth/auth.service';
 
 @Controller('wallet')
 export class WalletController {
-  constructor(private walletService: WalletService, private authService: AuthService) {}
+  constructor(
+    private walletService: WalletService,
+    private authService: AuthService,
+  ) {}
 
   @Post('onramp/initiate/:userId')
   @UseGuards(JwtAuthGuard)
@@ -282,15 +285,24 @@ export class WalletController {
         data.amount,
       );
 
-      switch(data.amount) {
+      switch (data.amount) {
         case 1000:
-          await this.authService.incrementCredits(data.userId as unknown as string, 3);
+          await this.authService.incrementCredits(
+            data.userId as unknown as string,
+            3,
+          );
           break;
         case 5000:
-          await this.authService.incrementCredits(data.userId as unknown as string, 10);
+          await this.authService.incrementCredits(
+            data.userId as unknown as string,
+            10,
+          );
           break;
         case 10000:
-          await this.authService.incrementCredits(data.userId as unknown as string, 20);
+          await this.authService.incrementCredits(
+            data.userId as unknown as string,
+            20,
+          );
           break;
         default:
           break;
@@ -351,12 +363,10 @@ export class WalletController {
       });
     } catch (error) {
       console.error('Error decrypting private key', error);
-      return res
-        .status(500)
-        .json({
-          message: error.message || 'Failed to decrypt private key',
-          success: false,
-        });
+      return res.status(500).json({
+        message: error.message || 'Failed to decrypt private key',
+        success: false,
+      });
     }
   }
 }
