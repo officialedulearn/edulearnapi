@@ -56,6 +56,7 @@ export const nftRewards = {
       'User must demonstrate understanding of: Web3 community building strategies, growth hacking in crypto/blockchain spaces, community engagement tactics, storytelling for Web3 projects, user acquisition and retention in decentralized ecosystems, and DAO governance participation. Should show practical knowledge through role-play scenarios and strategic discussions.',
     requiredTopics: [
       'community',
+      'community management',
       'growth',
       'dao',
       'engagement',
