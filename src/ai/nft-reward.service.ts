@@ -138,6 +138,101 @@ export class NftRewardService {
     );
   }
 
+  private extractJsonObjectFromText(text: string): string | null {
+    let s = text.trim();
+    if (s.includes('```json')) {
+      const m = s.match(/```json\s*([\s\S]*?)\s*```/);
+      if (m?.[1]) {
+        s = m[1].trim();
+      }
+    } else if (s.includes('```')) {
+      const m = s.match(/```\s*([\s\S]*?)\s*```/);
+      if (m?.[1]) {
+        s = m[1].trim();
+      }
+    }
+    const start = s.indexOf('{');
+    const end = s.lastIndexOf('}');
+    if (start === -1 || end === -1 || start >= end) {
+      return null;
+    }
+    return s.slice(start, end + 1);
+  }
+
+  private normalizeJsonishQuotes(s: string): string {
+    return s
+      .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+      .replace(/[\u2018\u2019]/g, "'");
+  }
+
+  private stripDisallowedControlChars(s: string): string {
+    let out = '';
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i);
+      if (
+        c === 9 ||
+        c === 10 ||
+        c === 13 ||
+        (c >= 32 && c !== 127 && (c < 128 || c > 159))
+      ) {
+        out += s[i];
+      }
+    }
+    return out;
+  }
+
+  private parseNftSelectionPayload(raw: string): { rewardKey?: string } | null {
+    const trimmed = this.normalizeJsonishQuotes(raw.trim());
+    if (!trimmed) {
+      return null;
+    }
+
+    const attempts: string[] = [trimmed];
+    const extracted = this.extractJsonObjectFromText(trimmed);
+    if (extracted) {
+      attempts.push(extracted);
+    }
+
+    for (const candidate of attempts) {
+      const sanitized = this.stripDisallowedControlChars(candidate);
+      try {
+        const parsed = JSON.parse(sanitized) as unknown;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const first: unknown = parsed[0];
+          if (
+            first !== null &&
+            typeof first === 'object' &&
+            'rewardKey' in first
+          ) {
+            const rk = (first as Record<string, unknown>).rewardKey;
+            if (typeof rk === 'string') {
+              return { rewardKey: rk };
+            }
+          }
+        }
+        if (
+          parsed !== null &&
+          typeof parsed === 'object' &&
+          'rewardKey' in parsed
+        ) {
+          const rk = (parsed as Record<string, unknown>).rewardKey;
+          if (typeof rk === 'string') {
+            return { rewardKey: rk };
+          }
+        }
+      } catch {
+        // try next
+      }
+    }
+
+    const keyMatch = /"rewardKey"\s*:\s*"([^"]+)"/.exec(trimmed);
+    if (keyMatch?.[1]) {
+      return { rewardKey: keyMatch[1] };
+    }
+
+    return null;
+  }
+
   async selectNftForRoadmapWithGemini(
     model: string,
     params: {
@@ -200,11 +295,11 @@ ${catalog}`;
         return null;
       }
 
-      let parsed: { rewardKey?: string };
-      try {
-        parsed = JSON.parse(responseText) as { rewardKey?: string };
-      } catch {
-        this.logger.warn('Failed to parse NFT selection JSON');
+      const parsed = this.parseNftSelectionPayload(responseText);
+      if (!parsed) {
+        this.logger.warn(
+          `Failed to parse NFT selection JSON (first 200 chars): ${responseText.slice(0, 200)}`,
+        );
         return null;
       }
 
