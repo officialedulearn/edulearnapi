@@ -27,6 +27,6 @@ import { SpeechTranscriptionService } from './speech-transcription.service';
     SpeechTranscriptionService,
     AiService,
   ],
-  exports: [AiService, NftRewardService],
+  exports: [AiService, NftRewardService, GeminiClientService],
 })
 export class AiModule {}

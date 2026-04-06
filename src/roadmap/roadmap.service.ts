@@ -64,7 +64,11 @@ export class RoadmapService {
     return newRoadmapStep[0];
   }
 
-  async generateRoadmap(userId: string, topic: string) {
+  async generateRoadmap(
+    userId: string,
+    topic: string,
+    userIntent?: string | null,
+  ) {
     const user = await this.authService.getUserById(userId);
     if (!user) {
       throw new NotFoundException(`User with id ${userId} not found`);
@@ -146,7 +150,7 @@ CRITICAL JSON RULES:
 
       console.log('Raw AI response:', responseText.substring(0, 500));
 
-      let jsonStr = this.extractAndCleanJSON(responseText);
+      const jsonStr = this.extractAndCleanJSON(responseText);
       if (!jsonStr) {
         console.error('No valid JSON found in AI response:', responseText);
         throw new Error('AI service returned invalid format');
@@ -195,7 +199,19 @@ CRITICAL JSON RULES:
       if (roadmapData.steps.length === 0) {
         throw new Error('Roadmap must have at least one step');
       }
-      const claimableNFT = this.nftRewardService.analyzeTopicForNFT(topic);
+      let claimableNFT = this.nftRewardService.analyzeTopicForNFT(topic);
+      if (!claimableNFT) {
+        claimableNFT =
+          await this.nftRewardService.selectNftForRoadmapWithGemini(
+            user.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+            {
+              topic,
+              roadmapTitle: roadmapData.title,
+              roadmapDescription: roadmapData.description,
+              userIntent: userIntent ?? undefined,
+            },
+          );
+      }
 
       const newRoadmap = await this.createRoadmap(
         userId,

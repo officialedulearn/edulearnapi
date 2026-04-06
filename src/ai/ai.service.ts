@@ -371,6 +371,7 @@ export class AiService {
             const roadmapResult = await this.roadmapService.generateRoadmap(
               userId,
               topic.trim(),
+              userIntent,
             );
 
             const stepCount = roadmapResult.steps.length;
@@ -816,6 +817,7 @@ export class AiService {
                     await this.roadmapService.generateRoadmap(
                       userId,
                       topic.trim(),
+                      userIntent,
                     );
 
                   const stepCount = roadmapResult.steps.length;
