@@ -31,7 +31,7 @@ import { UUID } from 'crypto';
 import { ActivityService } from 'src/activity/activity.service';
 import { WalletService } from 'src/wallet/wallet.service';
 import { RewardsService } from 'src/rewards/rewards.service';
-import { CronTasksService } from 'src/cron-tasks/cron-tasks.service';
+import { CronTasksService } from '../cron-tasks/cron-tasks.service';
 import { ResendService } from 'src/resend/resend.service';
 import { supabaseAdmin } from '../../lib/supabase';
 import { RoadmapService } from 'src/roadmap/roadmap.service';

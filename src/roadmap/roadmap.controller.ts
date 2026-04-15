@@ -43,6 +43,8 @@ export class RoadmapController {
     return await this.roadmapService.getRoadmapsByUserId(userId);
   }
 
+
+
   @Get(':roadmapId')
   async getRoadmapById(@Param('roadmapId') roadmapId: string) {
     const roadmap = await this.roadmapService.getRoadmapById(roadmapId);
@@ -83,6 +85,11 @@ export class RoadmapController {
       userId,
       this.aiService,
     );
+  }
+
+  @Post(':roadmapId/delete')
+  async deleteRoadmap(@Param('roadmapId') roadmapId: string) {
+    return await this.roadmapService.deleteRoadmap(roadmapId);
   }
 
   @Post('step/:stepId/edit')
