@@ -5,7 +5,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { AuthService } from 'src/auth/auth.service';
-import { roadmap, roadMapStep, chat } from 'lib/db/schema';
+import { roadmap, roadMapStep, chat, message } from 'lib/db/schema';
 import db from '../../drizzle';
 import { GoogleGenAI } from '@google/genai';
 import { eq, and, desc, asc } from 'drizzle-orm';
@@ -459,6 +459,18 @@ CRITICAL JSON RULES:
       }),
     );
     return updatedSteps.filter((step) => step !== null && step !== undefined);
+  }
+
+  async deleteRoadmap(roadmapId: string) {
+   const steps = await db.select().from(roadMapStep).where(eq(roadMapStep.roadmapId, roadmapId));
+   if (!steps || steps.length === 0) {
+    throw new NotFoundException('Roadmap steps not found');
+   }
+   for (const step of steps) {
+    await db.delete(roadMapStep).where(eq(roadMapStep.id, step.id));
+   }
+   await db.delete(roadmap).where(eq(roadmap.id, roadmapId));
+   return { message: 'Roadmap deleted successfully' };
   }
 
   private extractAndCleanJSON(response: string): string | null {

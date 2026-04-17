@@ -4,7 +4,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import * as jwt from 'jsonwebtoken';
 import db from '../../../drizzle';
 import { user } from '../../../lib/db/schema';
@@ -17,7 +17,7 @@ export class FlexibleAuthGuard implements CanActivate {
   private readonly CACHE_DURATION = 5 * 60 * 1000;
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<Request>();
+    const request = context.switchToHttp().getRequest<FastifyRequest>();
 
     const marketplaceApiKey = request.headers['x-marketplace-key'] as string;
     if (marketplaceApiKey) {
@@ -39,7 +39,7 @@ export class FlexibleAuthGuard implements CanActivate {
 
   private async validateMarketplaceApiKey(
     apiKey: string,
-    request: Request,
+    request: FastifyRequest,
   ): Promise<boolean> {
     const validKey = process.env.MARKETPLACE_API_KEY;
 
@@ -103,7 +103,7 @@ export class FlexibleAuthGuard implements CanActivate {
     return true;
   }
 
-  private async validateJwtToken(request: Request): Promise<boolean> {
+  private async validateJwtToken(request: FastifyRequest): Promise<boolean> {
     const token = this.extractTokenFromHeader(request);
 
     if (!token) {
@@ -131,7 +131,7 @@ export class FlexibleAuthGuard implements CanActivate {
     }
   }
 
-  private extractTokenFromHeader(request: Request): string | undefined {
+  private extractTokenFromHeader(request: FastifyRequest): string | undefined {
     const [type, token] = request.headers.authorization?.split(' ') ?? [];
     return type === 'Bearer' ? token : undefined;
   }

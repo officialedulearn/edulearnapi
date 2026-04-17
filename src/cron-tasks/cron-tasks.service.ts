@@ -1,6 +1,6 @@
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { AuthService } from 'src/auth/auth.service';
+import type { AuthService } from '../auth/auth.service';
 import { WalletService } from 'src/wallet/wallet.service';
 import { TwitterService } from 'src/twitter/twitter.service';
 import db from '../../drizzle';
@@ -17,7 +17,15 @@ import { MonthlyLeaderboardService } from 'src/monthly-leaderboard/monthly-leade
 export class CronTasksService {
   private readonly logger = new Logger(CronTasksService.name);
   constructor(
-    @Inject(forwardRef(() => AuthService))
+    @Inject(
+      forwardRef(() => {
+        /* eslint-disable @typescript-eslint/no-require-imports -- defer AuthService to break circular import */
+        const mod =
+          require('../auth/auth.service') as typeof import('../auth/auth.service');
+        /* eslint-enable @typescript-eslint/no-require-imports */
+        return mod.AuthService;
+      }),
+    )
     private authService: AuthService,
     private walletService: WalletService,
     private twitterService: TwitterService,
@@ -75,7 +83,7 @@ export class CronTasksService {
     for (const u of topUsers) {
       if (u.expoPushToken) {
         await this.expoPushService.sendPushNotification(
-          u.expoPushToken as string,
+          u.expoPushToken,
           'EduLearn Top Users 🏆',
           "You are in the top 3 users today, let's keep it up!",
           {

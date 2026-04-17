@@ -1,6 +1,6 @@
 import { Controller, Get, Res, Query, Param } from '@nestjs/common';
 import { CardsService } from './cards.service';
-import { Response } from 'express';
+import type { FastifyReply } from 'fastify';
 
 @Controller('cards')
 export class CardsController {
@@ -12,7 +12,7 @@ export class CardsController {
     @Query('subtitle') subtitle: string,
     @Query('mascot') mascot: string,
     @Query('theme') theme: 'light' | 'dark',
-    @Res() res: Response,
+    @Res({ passthrough: false }) res: FastifyReply,
   ) {
     const png = await this.cardsService.generateOg({
       title,
@@ -20,8 +20,8 @@ export class CardsController {
       mascotUrl: mascot,
       theme,
     });
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.header('Content-Type', 'image/png');
+    res.header('Cache-Control', 'public, max-age=3600');
     res.send(png);
   }
 
@@ -29,11 +29,11 @@ export class CardsController {
   async streak(
     @Param('userId') userId: string,
     @Query('theme') theme: 'light' | 'dark',
-    @Res() res: Response,
+    @Res({ passthrough: false }) res: FastifyReply,
   ) {
     const png = await this.cardsService.generateStreakCard({ userId, theme });
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.header('Content-Type', 'image/png');
+    res.header('Cache-Control', 'public, max-age=300');
     res.send(png);
   }
 
@@ -41,11 +41,11 @@ export class CardsController {
   async earnings(
     @Param('userId') userId: string,
     @Query('theme') theme: 'light' | 'dark',
-    @Res() res: Response,
+    @Res({ passthrough: false }) res: FastifyReply,
   ) {
     const png = await this.cardsService.generateEarningsCard({ userId, theme });
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.header('Content-Type', 'image/png');
+    res.header('Cache-Control', 'public, max-age=300');
     res.send(png);
   }
 
@@ -53,11 +53,11 @@ export class CardsController {
   async level(
     @Param('userId') userId: string,
     @Query('theme') theme: 'light' | 'dark',
-    @Res() res: Response,
+    @Res({ passthrough: false }) res: FastifyReply,
   ) {
     const png = await this.cardsService.generateLevelCard({ userId, theme });
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.header('Content-Type', 'image/png');
+    res.header('Cache-Control', 'public, max-age=300');
     res.send(png);
   }
 
@@ -65,14 +65,14 @@ export class CardsController {
   async profileSummary(
     @Param('userId') userId: string,
     @Query('theme') theme: 'light' | 'dark',
-    @Res() res: Response,
+    @Res({ passthrough: false }) res: FastifyReply,
   ) {
     const png = await this.cardsService.generateProfileSummaryCard({
       userId,
       theme,
     });
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.header('Content-Type', 'image/png');
+    res.header('Cache-Control', 'public, max-age=300');
     res.send(png);
   }
 
@@ -82,7 +82,7 @@ export class CardsController {
     @Query('theme') theme: 'light' | 'dark',
     @Query('nftImageUrl') nftImageUrl: string,
     @Query('nftTitle') nftTitle: string,
-    @Res() res: Response,
+    @Res({ passthrough: false }) res: FastifyReply,
   ) {
     const png = await this.cardsService.generateNFTMintCard({
       userId,
@@ -90,8 +90,8 @@ export class CardsController {
       nftImageUrl,
       nftTitle,
     });
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.header('Content-Type', 'image/png');
+    res.header('Cache-Control', 'public, max-age=300');
     res.send(png);
   }
 
@@ -99,14 +99,14 @@ export class CardsController {
   async roadmapProgress(
     @Param('roadmapId') roadmapId: string,
     @Query('theme') theme: 'light' | 'dark',
-    @Res() res: Response,
+    @Res({ passthrough: false }) res: FastifyReply,
   ) {
     const png = await this.cardsService.generateRoadmapProgressCard({
       roadmapId,
       theme,
     });
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.header('Content-Type', 'image/png');
+    res.header('Cache-Control', 'public, max-age=300');
     res.send(png);
   }
 }

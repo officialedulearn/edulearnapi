@@ -432,4 +432,13 @@ export const flashcard = pgTable('flashcard', {
   sortOrder: integer('sortOrder').notNull(),
 });
 
+export const trends = pgTable('trends', {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  tags: text('tags').array().notNull(),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+});
+
+export type Trends = InferSelectModel<typeof trends>;
 export type Flashcard = InferSelectModel<typeof flashcard>;

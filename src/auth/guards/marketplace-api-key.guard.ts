@@ -4,7 +4,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 import db from '../../../drizzle';
 import { user } from '../../../lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -25,10 +25,11 @@ export class MarketplaceApiKeyGuard implements CanActivate {
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<Request>();
+    const request = context.switchToHttp().getRequest<FastifyRequest>();
     // Check both header and query param (query param needed for EventSource which can't send headers)
+    const q = request.query as Record<string, unknown>;
     const apiKey =
-      request.headers['x-marketplace-key'] || request.query['apiKey'];
+      request.headers['x-marketplace-key'] || (q['apiKey'] as string | undefined);
 
     if (!apiKey) {
       throw new UnauthorizedException(
