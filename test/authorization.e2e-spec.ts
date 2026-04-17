@@ -1,6 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
+import {
+  FastifyAdapter,
+  NestFastifyApplication,
+} from '@nestjs/platform-fastify';
+import multipart from '@fastify/multipart';
+import fastifyHelmet from '@fastify/helmet';
+import fastifyCompress from '@fastify/compress';
 import { AppModule } from './../src/app.module';
 
 /**
@@ -10,7 +16,7 @@ import { AppModule } from './../src/app.module';
  * and cannot manipulate other users' data
  */
 describe('Authorization Security (e2e)', () => {
-  let app: INestApplication;
+  let app: NestFastifyApplication;
 
   // Mock JWT tokens for different users
   const user1Token =
@@ -26,7 +32,16 @@ describe('Authorization Security (e2e)', () => {
       imports: [AppModule],
     }).compile();
 
-    app = moduleFixture.createNestApplication();
+    app = moduleFixture.createNestApplication<NestFastifyApplication>(
+      new FastifyAdapter(),
+      { rawBody: true },
+    );
+    const fastifyInstance = app.getHttpAdapter().getInstance();
+    await fastifyInstance.register(multipart as never, {
+      limits: { fileSize: 10 * 1024 * 1024 },
+    });
+    await fastifyInstance.register(fastifyHelmet as never);
+    await fastifyInstance.register(fastifyCompress as never);
     await app.init();
   });
 

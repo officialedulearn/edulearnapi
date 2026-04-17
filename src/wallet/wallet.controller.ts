@@ -1,5 +1,6 @@
 import {
   Body,
+  BadRequestException,
   Controller,
   Get,
   Param,
@@ -8,7 +9,10 @@ import {
   UseGuards,
   Request,
   HttpCode,
+  RawBodyRequest,
+  Req,
 } from '@nestjs/common';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { WalletService } from './wallet.service';
 import { PublicKey } from '@solana/web3.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -27,13 +31,13 @@ export class WalletController {
   @UseGuards(JwtAuthGuard)
   async initiateOnramp(
     @Request() req,
-    @Response() res,
+    @Response({ passthrough: false }) res: FastifyReply,
     @Param('userId') userId: string,
   ) {
     try {
       await verifyUserAuthorization(req.user, userId, 'initiate onramp');
       const result = await this.walletService.initiateOnramp(userId);
-      return res.status(200).json({
+      return res.status(200).send({
         message: 'Onramp initiated successfully',
         result,
       });
@@ -41,13 +45,13 @@ export class WalletController {
       console.error('Error initiating onramp:', error);
       return res
         .status(500)
-        .json({ message: error.message || 'Failed to initiate onramp' });
+        .send({ message: error.message || 'Failed to initiate onramp' });
     }
   }
 
   @Post('onramp/verify')
   async verifyOnramp(
-    @Response() res,
+    @Response({ passthrough: false }) res: FastifyReply,
     @Body() data: { email: string; otp: string; deviceInfo: DeviceInfo },
   ) {
     try {
@@ -56,7 +60,7 @@ export class WalletController {
         data.otp,
         data.deviceInfo,
       );
-      return res.status(200).json({
+      return res.status(200).send({
         message: 'Onramp verified successfully',
         verifiedResponse,
       });
@@ -64,7 +68,7 @@ export class WalletController {
       console.error('Error verifying onramp:', error);
       return res
         .status(500)
-        .json({ message: error.message || 'Failed to verify onramp' });
+        .send({ message: error.message || 'Failed to verify onramp' });
     }
   }
 
@@ -72,7 +76,7 @@ export class WalletController {
   @UseGuards(JwtAuthGuard)
   async onrampFiatToEdln(
     @Request() req,
-    @Response() res,
+    @Response({ passthrough: false }) res: FastifyReply,
     @Param('userId') userId: string,
     @Body() data: { amount: number; verifiedResponse: any },
   ) {
@@ -83,7 +87,7 @@ export class WalletController {
         data.amount,
         data.verifiedResponse,
       );
-      return res.status(200).json({
+      return res.status(200).send({
         message: 'Order created successfully',
         order,
       });
@@ -91,7 +95,7 @@ export class WalletController {
       console.error('Error creating onramp order:', error);
       return res
         .status(500)
-        .json({ message: error.message || 'Failed to create onramp order' });
+        .send({ message: error.message || 'Failed to create onramp order' });
     }
   }
 
@@ -99,7 +103,7 @@ export class WalletController {
   @UseGuards(JwtAuthGuard)
   async onrampFiatToSol(
     @Request() req,
-    @Response() res,
+    @Response({ passthrough: false }) res: FastifyReply,
     @Param('userId') userId: string,
     @Body() data: { amount: number; verifiedResponse: any },
   ) {
@@ -110,7 +114,7 @@ export class WalletController {
         data.amount,
         data.verifiedResponse,
       );
-      return res.status(200).json({
+      return res.status(200).send({
         message: 'Order created successfully',
         order,
       });
@@ -118,15 +122,18 @@ export class WalletController {
       console.error('Error creating onramp order:', error);
       return res
         .status(500)
-        .json({ message: error.message || 'Failed to create onramp order' });
+        .send({ message: error.message || 'Failed to create onramp order' });
     }
   }
 
   @Post('onramp-webhook')
   @HttpCode(200)
-  async onrampWebhook(@Request() req) {
+  async onrampWebhook(@Req() req: RawBodyRequest<FastifyRequest>) {
     try {
       const raw = req.rawBody?.toString();
+      if (raw === undefined || raw === '') {
+        throw new BadRequestException('Empty webhook body');
+      }
 
       console.log('Raw Body:', raw);
 
@@ -150,18 +157,18 @@ export class WalletController {
   @Get('onramp-webhook/pending/:address')
   @UseGuards(JwtAuthGuard)
   async getPendingWebhookEvents(
-    @Response() res,
+    @Response({ passthrough: false }) res: FastifyReply,
     @Param('address') address: string,
   ) {
     try {
       const events = this.walletService.getPendingWebhookEvents(address);
-      return res.status(200).json({
+      return res.status(200).send({
         events,
         hasUpdates: events.length > 0,
       });
     } catch (error) {
       console.error('Error fetching pending webhook events:', error);
-      return res.status(500).json({
+      return res.status(500).send({
         message: error.message || 'Failed to fetch pending events',
       });
     }
@@ -170,19 +177,19 @@ export class WalletController {
   @Post('onramp-webhook/clear/:address')
   @UseGuards(JwtAuthGuard)
   async clearWebhookEvent(
-    @Response() res,
+    @Response({ passthrough: false }) res: FastifyReply,
     @Param('address') address: string,
     @Body() data: { eventId: string },
   ) {
     try {
       this.walletService.clearWebhookEvent(address, data.eventId);
-      return res.status(200).json({
+      return res.status(200).send({
         success: true,
         message: 'Webhook event cleared',
       });
     } catch (error) {
       console.error('Error clearing webhook event:', error);
-      return res.status(500).json({
+      return res.status(500).send({
         success: false,
         message: 'Failed to clear webhook event',
       });
@@ -193,14 +200,14 @@ export class WalletController {
   @UseGuards(JwtAuthGuard)
   async upgradeToPremium(
     @Request() req,
-    @Response() res,
+    @Response({ passthrough: false }) res: FastifyReply,
     @Param('userId') userId: string,
     @Body() data: { amount: number },
   ) {
     try {
       await verifyUserAuthorization(req.user, userId, 'premium upgrade');
       const result = await this.walletService.payPremium(userId, data.amount);
-      return res.status(200).json({
+      return res.status(200).send({
         message: 'Premium upgrade successful',
         result,
         subscriptionType: result.type,
@@ -210,23 +217,23 @@ export class WalletController {
       console.error('Error upgrading to premium:', error);
       return res
         .status(500)
-        .json({ message: error.message || 'Failed to upgrade to premium' });
+        .send({ message: error.message || 'Failed to upgrade to premium' });
     }
   }
 
   @Get('balance/:publicKey')
   @UseGuards(JwtAuthGuard)
-  async getBalance(@Response() res, @Param('publicKey') publicKey: string) {
+  async getBalance(@Response({ passthrough: false }) res: FastifyReply, @Param('publicKey') publicKey: string) {
     try {
       const balance = await this.walletService.getBalance(
         new PublicKey(publicKey),
       );
-      return res.status(200).json({ balance });
+      return res.status(200).send({ balance });
     } catch (error) {
       console.error('Error fetching balance:', error);
       return res
         .status(500)
-        .json({ message: error.message || 'Failed to fetch balance' });
+        .send({ message: error.message || 'Failed to fetch balance' });
     }
   }
 
@@ -234,18 +241,18 @@ export class WalletController {
   @UseGuards(JwtAuthGuard)
   async getUserEarnings(
     @Request() req,
-    @Response() res,
+    @Response({ passthrough: false }) res: FastifyReply,
     @Param('userId') userId: string,
   ) {
     try {
       await verifyUserAuthorization(req.user, userId, 'viewing earnings');
       const earnings = await this.walletService.getUserEarnings(userId);
-      return res.status(200).json({ earnings });
+      return res.status(200).send({ earnings });
     } catch (error) {
       console.error('Error fetching user earnings:', error);
       return res
         .status(500)
-        .json({ message: error.message || 'Failed to fetch user earnings' });
+        .send({ message: error.message || 'Failed to fetch user earnings' });
     }
   }
 
@@ -253,7 +260,7 @@ export class WalletController {
   @UseGuards(JwtAuthGuard)
   async swapSolToEDLN(
     @Request() req,
-    @Response() res,
+    @Response({ passthrough: false }) res: FastifyReply,
     @Body() data: { userId: string; amount: number },
   ) {
     try {
@@ -262,12 +269,12 @@ export class WalletController {
         data.userId,
         data.amount,
       );
-      return res.status(200).json({ response });
+      return res.status(200).send({ response });
     } catch (error) {
       console.error('Error swapping sol to edln', error);
       return res
         .status(500)
-        .json({ message: error.message || 'Failed to swap SOL to EDLN' });
+        .send({ message: error.message || 'Failed to swap SOL to EDLN' });
     }
   }
 
@@ -275,7 +282,7 @@ export class WalletController {
   @UseGuards(JwtAuthGuard)
   async burnEDLN(
     @Request() req,
-    @Response() res,
+    @Response({ passthrough: false }) res: FastifyReply,
     @Body() data: { userId: string; amount: number },
   ) {
     try {
@@ -307,7 +314,7 @@ export class WalletController {
         default:
           break;
       }
-      return res.status(200).json({
+      return res.status(200).send({
         message: 'EDLN tokens burned successfully',
         signature,
         transactionLink: `https://solscan.io/tx/${signature}`,
@@ -316,7 +323,7 @@ export class WalletController {
       console.error('Error burning EDLN tokens', error);
       return res
         .status(500)
-        .json({ message: error.message || 'Failed to burn EDLN tokens' });
+        .send({ message: error.message || 'Failed to burn EDLN tokens' });
     }
   }
 
@@ -324,7 +331,7 @@ export class WalletController {
   @UseGuards(JwtAuthGuard)
   async claimEarnings(
     @Request() req,
-    @Response() res,
+    @Response({ passthrough: false }) res: FastifyReply,
     @Body() data: { userId: string; type: 'sol' | 'edln' | 'all' },
   ) {
     try {
@@ -333,12 +340,12 @@ export class WalletController {
         data.userId,
         data.type,
       );
-      return res.status(200).json(result);
+      return res.status(200).send(result);
     } catch (error) {
       console.error('Error claiming earnings', error);
       return res
         .status(500)
-        .json({ message: error.message || 'Failed to claim earnings' });
+        .send({ message: error.message || 'Failed to claim earnings' });
     }
   }
 
@@ -346,7 +353,7 @@ export class WalletController {
   @UseGuards(JwtAuthGuard)
   async decryptPrivateKey(
     @Request() req,
-    @Response() res,
+    @Response({ passthrough: false }) res: FastifyReply,
     @Body() data: { userId: string },
   ) {
     try {
@@ -356,14 +363,14 @@ export class WalletController {
         'decrypting private key',
       );
       const result = await this.walletService.decryptPrivateKey(data.userId);
-      return res.status(200).json({
+      return res.status(200).send({
         publicKey: result.publicKey.toString(),
         privateKey: result.privateKey,
         success: true,
       });
     } catch (error) {
       console.error('Error decrypting private key', error);
-      return res.status(500).json({
+      return res.status(500).send({
         message: error.message || 'Failed to decrypt private key',
         success: false,
       });

@@ -5,13 +5,12 @@ import {
   Get,
   Delete,
   UseGuards,
-  UseInterceptors,
-  UploadedFile,
   BadRequestException,
   InternalServerErrorException,
   HttpException,
   HttpStatus,
   Request,
+  Req,
   Sse,
   MessageEvent,
   Query,
@@ -22,13 +21,14 @@ import {
   ParseIntPipe,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
-import { FileInterceptor } from '@nestjs/platform-express';
+import type { FastifyRequest } from 'fastify';
+import { mkdirSync, createWriteStream } from 'fs';
+import { pipeline } from 'stream/promises';
+import { randomBytes } from 'crypto';
+import { join, extname } from 'path';
 import { FlexibleAuthGuard } from 'src/auth/guards/flexible-auth.guard';
 import { AiService } from './ai.service';
 import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
-import type { File } from 'multer';
 import {
   GenerateMessagesDto,
   GenerateTitleDto,
@@ -230,59 +230,48 @@ export class AiController {
   }
 
   @Post('transcribe-audio')
-  @UseInterceptors(
-    FileInterceptor('audio', {
-      storage: diskStorage({
-        destination: './uploads/audio',
-        filename: (req, file, cb) => {
-          const randomName = Array(32)
-            .fill(null)
-            .map(() => Math.round(Math.random() * 16).toString(16))
-            .join('');
-          cb(null, `${randomName}${extname(file.originalname)}`);
-        },
-      }),
-      fileFilter: (req, file, cb) => {
-        const allowedMimes = [
-          'audio/mpeg',
-          'audio/mp3',
-          'audio/wav',
-          'audio/wave',
-          'audio/x-wav',
-          'audio/m4a',
-          'audio/mp4',
-          'audio/aac', 
-          'audio/x-m4a',
-          'audio/webm',
-          'audio/ogg',
-          'audio/3gpp',
-          'audio/amr',
-        ];
-
-        if (allowedMimes.includes(file.mimetype)) {
-          cb(null, true);
-        } else {
-          cb(
-            new BadRequestException(
-              `Invalid file type: ${file.mimetype}. Only audio files are allowed.`,
-            ),
-            false,
-          );
-        }
-      },
-      limits: {
-        fileSize: 10 * 1024 * 1024,
-      },
-    }),
-  )
-  async transcribeAudio(@UploadedFile() file: File) {
-    if (!file) {
+  async transcribeAudio(@Req() req: FastifyRequest) {
+    if (!req.isMultipart()) {
+      throw new BadRequestException('Expected multipart/form-data');
+    }
+    const part = await req.file();
+    if (!part || part.fieldname !== 'audio') {
       throw new BadRequestException('No audio file provided');
+    }
+    const allowedMimes = [
+      'audio/mpeg',
+      'audio/mp3',
+      'audio/wav',
+      'audio/wave',
+      'audio/x-wav',
+      'audio/m4a',
+      'audio/mp4',
+      'audio/aac',
+      'audio/x-m4a',
+      'audio/webm',
+      'audio/ogg',
+      'audio/3gpp',
+      'audio/amr',
+    ];
+    if (!allowedMimes.includes(part.mimetype)) {
+      part.file.resume();
+      throw new BadRequestException(
+        `Invalid file type: ${part.mimetype}. Only audio files are allowed.`,
+      );
+    }
+    const destDir = join(process.cwd(), 'uploads', 'audio');
+    mkdirSync(destDir, { recursive: true });
+    const filename =
+      randomBytes(16).toString('hex') + extname(part.filename || 'audio.bin');
+    const filepath = join(destDir, filename);
+    await pipeline(part.file, createWriteStream(filepath));
+    if (part.file.truncated) {
+      throw new BadRequestException('Audio file exceeds maximum size');
     }
 
     try {
       return await this.aiService.transcribeAudioOnly({
-        file,
+        file: { path: filepath },
       });
     } catch (error) {
       if (error instanceof HttpException) {

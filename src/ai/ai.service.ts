@@ -8,7 +8,6 @@ import { generateUUID } from 'lib/utils';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { RewardsService } from 'src/rewards/rewards.service';
 import { RoadmapService } from 'src/roadmap/roadmap.service';
-import type { File } from 'multer';
 import { nftRewards } from './config/nft-rewards';
 import { buildTutorSystemInstruction } from './prompts/tutor-system-prompt';
 import { GEMINI_TUTOR_FUNCTION_DECLARATIONS } from './prompts/gemini-tools';
@@ -1063,7 +1062,7 @@ Return ONLY valid JSON with no additional text.
     return this.speechTranscriptionService.transcribeAudio(file);
   }
 
-  transcribeAudioOnly(params: { file: File }) {
+  transcribeAudioOnly(params: { file: { path: string } }) {
     return this.speechTranscriptionService.transcribeAudioOnly(params);
   }
 

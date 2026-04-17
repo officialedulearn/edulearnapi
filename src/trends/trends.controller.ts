@@ -7,8 +7,8 @@ export class TrendsController {
   constructor(private readonly trendsService: TrendsService) {
   }
 
-  @Get('fetch')
-  async fetchWeeklyTrendsFromPerplexity(): Promise<Trends[]> {
-    return this.trendsService.fetchWeeklyTrendsFromPerplexity();
-  }
+  // @Get('fetch')
+  // async fetchWeeklyTrendsFromPerplexity(): Promise<Trends[]> {
+  //   // return this.trendsService.fetchWeeklyTrendsFromPerplexity();
+  // }
 }

@@ -1,18 +1,32 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
-import { App } from 'supertest/types';
+import {
+  FastifyAdapter,
+  NestFastifyApplication,
+} from '@nestjs/platform-fastify';
+import multipart from '@fastify/multipart';
+import fastifyHelmet from '@fastify/helmet';
+import fastifyCompress from '@fastify/compress';
 import { AppModule } from './../src/app.module';
 
 describe('AppController (e2e)', () => {
-  let app: INestApplication<App>;
+  let app: NestFastifyApplication;
 
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
 
-    app = moduleFixture.createNestApplication();
+    app = moduleFixture.createNestApplication<NestFastifyApplication>(
+      new FastifyAdapter(),
+      { rawBody: true },
+    );
+    const fastifyInstance = app.getHttpAdapter().getInstance();
+    await fastifyInstance.register(multipart as never, {
+      limits: { fileSize: 10 * 1024 * 1024 },
+    });
+    await fastifyInstance.register(fastifyHelmet as never);
+    await fastifyInstance.register(fastifyCompress as never);
     await app.init();
   });
 

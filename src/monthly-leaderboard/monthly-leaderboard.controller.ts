@@ -7,7 +7,7 @@ import {
   Body,
   UseGuards,
 } from '@nestjs/common';
-import { Response } from 'express';
+import type { FastifyReply } from 'fastify';
 import { MonthlyLeaderboardService } from './monthly-leaderboard.service';
 import { AdminApiKeyGuard } from '../auth/guards/admin-api-key.guard';
 
@@ -23,7 +23,7 @@ export class MonthlyLeaderboardController {
     @Query('month') monthStr: string,
     @Query('mock') mockStr: string,
     @Query('theme') theme: 'light' | 'dark',
-    @Res() res: Response,
+    @Res({ passthrough: false }) res: FastifyReply,
   ) {
     const now = new Date();
     const year = yearStr ? parseInt(yearStr, 10) : now.getFullYear();
@@ -36,8 +36,8 @@ export class MonthlyLeaderboardController {
       theme,
       mock,
     });
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'no-store');
+    res.header('Content-Type', 'image/png');
+    res.header('Cache-Control', 'no-store');
     res.send(png);
   }
 

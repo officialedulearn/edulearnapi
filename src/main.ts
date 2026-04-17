@@ -1,22 +1,34 @@
 import { NestFactory } from '@nestjs/core';
+import {
+  FastifyAdapter,
+  NestFastifyApplication,
+} from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import * as compression from 'compression';
-import helmet from 'helmet';
+import multipart from '@fastify/multipart';
+import fastifyHelmet from '@fastify/helmet';
+import fastifyCompress from '@fastify/compress';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    rawBody: true,
+  const app = await NestFactory.create<NestFastifyApplication>(
+    AppModule,
+    new FastifyAdapter(),
+    { rawBody: true },
+  );
+
+  const fastifyInstance = app.getHttpAdapter().getInstance();
+  await fastifyInstance.register(multipart as never, {
+    limits: { fileSize: 10 * 1024 * 1024 },
   });
+  await fastifyInstance.register(fastifyHelmet as never);
+  await fastifyInstance.register(fastifyCompress as never);
+
   app.enableCors({
     origin: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
-
-  app.use(helmet());
-  app.use(compression());
 
   app.useGlobalPipes(
     new ValidationPipe({

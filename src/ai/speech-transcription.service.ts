@@ -2,7 +2,6 @@ import { GoogleGenAI } from '@google/genai';
 import { Injectable } from '@nestjs/common';
 import { SpeechClient } from '@google-cloud/speech';
 import { readFileSync, unlinkSync } from 'fs';
-import type { File } from 'multer';
 import { GeminiClientService } from './gemini-client.service';
 
 @Injectable()
@@ -98,7 +97,7 @@ export class SpeechTranscriptionService {
   async transcribeAudioOnly({
     file,
   }: {
-    file: File;
+    file: { path: string };
   }): Promise<{ transcription: string }> {
     try {
       if (!file || !file.path) {

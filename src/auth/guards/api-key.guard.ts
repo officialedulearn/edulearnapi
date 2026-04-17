@@ -4,7 +4,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Request } from 'express';
+import type { FastifyRequest } from 'fastify';
 
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
@@ -19,7 +19,7 @@ export class ApiKeyGuard implements CanActivate {
   }
 
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest<Request>();
+    const request = context.switchToHttp().getRequest<FastifyRequest>();
     const apiKey = request.headers['x-api-key'];
 
     if (!apiKey) {
