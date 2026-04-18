@@ -133,6 +133,33 @@ export const geminiCreateRoadmapTool = {
   },
 };
 
+export const geminiCreateFlashcardDeckTool = {
+  name: 'createFlashcardDeck',
+  description:
+    "Create a flashcard deck when the user explicitly asks for flashcards, study cards, memorization cards, or spaced-repetition cards for a topic. Use ONLY when they want a deck to review (not a learning roadmap, not a quiz, and not a general explanation). Examples: 'make flashcards on Solana PDAs', 'generate 10 cards about DeFi lending', 'I need study cards for the account model'.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      topic: {
+        type: Type.STRING,
+        description:
+          "The topic or scope for the deck (e.g. 'Solana account rent and rent exemption').",
+      },
+      userIntent: {
+        type: Type.STRING,
+        description:
+          'Brief note on why the user wants flashcards based on their message.',
+      },
+      cardCount: {
+        type: Type.NUMBER,
+        description:
+          'How many cards to generate (5–30). Use 15 when the user does not specify.',
+      },
+    },
+    required: ['topic', 'userIntent'],
+  },
+};
+
 export const geminiEditRoadmapTool = {
   name: 'editLearningRoadmap',
   description:
@@ -193,5 +220,6 @@ export const GEMINI_TUTOR_FUNCTION_DECLARATIONS = [
   geminiScoreUserTool,
   geminiGiveCertificateTool,
   geminiCreateRoadmapTool,
+  geminiCreateFlashcardDeckTool,
   geminiEditRoadmapTool,
 ];

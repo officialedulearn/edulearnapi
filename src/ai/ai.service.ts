@@ -14,6 +14,7 @@ import { GEMINI_TUTOR_FUNCTION_DECLARATIONS } from './prompts/gemini-tools';
 import { GeminiClientService } from './gemini-client.service';
 import { QuizGenerationService } from './quiz-generation.service';
 import { FlashcardService } from './flashcard.service';
+import { FLASHCARD_SYSTEM_INSTRUCTION } from './prompts/flashcard-system-prompt';
 import { SpeechTranscriptionService } from './speech-transcription.service';
 
 @Injectable()
@@ -43,6 +44,132 @@ export class AiService {
       console.error('Failed to check user credits', error);
       throw error;
     }
+  }
+
+  private async generateFlashcardDeckContent(
+    userId: string,
+    topic: string,
+    cardCount: number,
+  ): Promise<{ title: string; cards: { front: string; back: string }[] }> {
+    const topicTrimmed = topic.trim();
+    const u = await this.authService.getUserById(userId);
+    if (!u) {
+      throw new NotFoundException('User not found');
+    }
+
+    const model = u.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+    const userPayload = `Topic / instructions:\n${topicTrimmed}\n\nGenerate exactly ${cardCount} flashcards. Return a deck title and ${cardCount} cards.`;
+
+    let result: { text?: string } | undefined;
+    let attempts = 0;
+    const maxAttempts = 2;
+
+    while (attempts < maxAttempts) {
+      try {
+        result = await Promise.race([
+          this.geminiClient.genAI.models.generateContent({
+            model,
+            contents: userPayload,
+            config: {
+              temperature: 0.2,
+              maxOutputTokens: Math.min(8192, 400 + cardCount * 220),
+              systemInstruction: FLASHCARD_SYSTEM_INSTRUCTION,
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  title: {
+                    type: Type.STRING,
+                    description: 'Short title for this deck',
+                  },
+                  cards: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        front: {
+                          type: Type.STRING,
+                          description: 'Question or term on the front',
+                        },
+                        back: {
+                          type: Type.STRING,
+                          description: 'Answer or explanation on the back',
+                        },
+                      },
+                      required: ['front', 'back'],
+                    },
+                  },
+                },
+                required: ['title', 'cards'],
+              },
+            },
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    'Request timeout - AI service took too long to respond',
+                  ),
+                ),
+              90000,
+            ),
+          ),
+        ]);
+        break;
+      } catch (attemptError) {
+        attempts++;
+        if (attempts >= maxAttempts) {
+          throw new Error(
+            `Failed to generate flashcards after ${maxAttempts} attempts. ${
+              attemptError instanceof Error
+                ? attemptError.message
+                : 'AI service unavailable'
+            }`,
+          );
+        }
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
+
+    const response = result?.text ?? '';
+    if (!response.trim()) {
+      throw new Error('AI returned empty response. Please try again.');
+    }
+
+    let parsed: { title: string; cards: { front: string; back: string }[] };
+    try {
+      parsed = JSON.parse(response) as {
+        title: string;
+        cards: { front: string; back: string }[];
+      };
+    } catch {
+      throw new Error('Failed to parse flashcards from AI response.');
+    }
+
+    if (
+      !parsed.title?.trim() ||
+      !Array.isArray(parsed.cards) ||
+      parsed.cards.length !== cardCount
+    ) {
+      throw new Error(
+        `Expected exactly ${cardCount} cards and a non-empty title. Please try again.`,
+      );
+    }
+
+    for (let i = 0; i < parsed.cards.length; i++) {
+      const c = parsed.cards[i];
+      if (
+        !c.front?.trim() ||
+        !c.back?.trim() ||
+        typeof c.front !== 'string' ||
+        typeof c.back !== 'string'
+      ) {
+        throw new Error(`Card ${i + 1} is invalid. Please try again.`);
+      }
+    }
+
+    return parsed;
   }
 
   async generateTitleFromMessage(message: Message): Promise<string> {
@@ -271,10 +398,15 @@ export class AiService {
         (part: any) => part.functionCall?.name === 'editLearningRoadmap',
       );
 
+      const flashcardPart = parts.find(
+        (part: any) => part.functionCall?.name === 'createFlashcardDeck',
+      );
+
       let scoreAcknowledgement = '';
       let certificateAcknowledgement = '';
       let roadmapAcknowledgement = '';
       let editRoadmapAcknowledgement = '';
+      let flashcardAcknowledgement = '';
 
       if (functionPart) {
         const score = Number(functionPart.functionCall?.args?.score || 0);
@@ -455,8 +587,62 @@ export class AiService {
         }
       }
 
+      if (flashcardPart) {
+        const topic = flashcardPart.functionCall?.args?.topic;
+        const userIntent = flashcardPart.functionCall?.args?.userIntent;
+        const rawCount = flashcardPart.functionCall?.args?.cardCount;
+        console.log(
+          `Flashcard deck requested for topic: ${topic}, intent: ${userIntent}`,
+        );
+
+        let cardCount = 15;
+        if (typeof rawCount === 'number' && !Number.isNaN(rawCount)) {
+          cardCount = Math.min(30, Math.max(5, Math.floor(rawCount)));
+        }
+
+        if (topic && typeof topic === 'string' && topic.trim().length > 0) {
+          try {
+            const parsed = await this.generateFlashcardDeckContent(
+              userId,
+              topic.trim(),
+              cardCount,
+            );
+            const { deck } = await this.flashcardService.saveFlashcardDeck({
+              userId,
+              topic: topic.trim(),
+              title: parsed.title,
+              cards: parsed.cards,
+            });
+
+            const n = parsed.cards.length;
+            flashcardAcknowledgement =
+              `🃏 I've created a flashcard deck for "${topic}"!\n\n` +
+              `📚 **${parsed.title.trim()}**\n` +
+              `✨ ${n} card${n !== 1 ? 's' : ''}\n\n` +
+              `[FLASHCARD_CARD:${deck.id}]\n\n` +
+              `Open your deck in the flashcards section to study!\n\n`;
+
+            console.log(
+              `Created flashcard deck ${deck.id} for user ${userId}, topic: ${topic}`,
+            );
+          } catch (error) {
+            console.error(
+              `Failed to create flashcards for user ${userId}, topic ${topic}:`,
+              error,
+            );
+            if (error instanceof ForbiddenException) {
+              flashcardAcknowledgement = `${error.message}\n\n`;
+            } else {
+              flashcardAcknowledgement = `I tried to create flashcards for "${topic}", but encountered an issue. Please try again or rephrase your request. 🔄\n\n`;
+            }
+          }
+        } else {
+          console.log(`Flashcard creation skipped - invalid topic: ${topic}`);
+        }
+      }
+
       const fullResponse =
-        `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}${responseText}`.trim();
+        `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}${flashcardAcknowledgement}${responseText}`.trim();
       const assistantMessage = {
         id: generateUUID(),
         role: 'assistant' as const,
@@ -712,6 +898,7 @@ export class AiService {
           let certificateAcknowledgement = '';
           let roadmapAcknowledgement = '';
           let editRoadmapAcknowledgement = '';
+          let flashcardAcknowledgement = '';
 
           for (const funcCall of functionCalls) {
             if (funcCall.functionCall?.name === 'scoreUser') {
@@ -902,10 +1089,72 @@ export class AiService {
                 console.log(`Roadmap edit skipped - invalid parameters`);
               }
             }
+
+            if (funcCall.functionCall?.name === 'createFlashcardDeck') {
+              const topic = funcCall.functionCall?.args?.topic;
+              const userIntent = funcCall.functionCall?.args?.userIntent;
+              const rawCount = funcCall.functionCall?.args?.cardCount;
+              console.log(
+                `Flashcard deck requested for topic: ${topic}, intent: ${userIntent}`,
+              );
+
+              let cardCount = 15;
+              if (typeof rawCount === 'number' && !Number.isNaN(rawCount)) {
+                cardCount = Math.min(30, Math.max(5, Math.floor(rawCount)));
+              }
+
+              if (
+                topic &&
+                typeof topic === 'string' &&
+                topic.trim().length > 0
+              ) {
+                try {
+                  const parsed = await this.generateFlashcardDeckContent(
+                    userId,
+                    topic.trim(),
+                    cardCount,
+                  );
+                  const { deck } = await this.flashcardService.saveFlashcardDeck(
+                    {
+                      userId,
+                      topic: topic.trim(),
+                      title: parsed.title,
+                      cards: parsed.cards,
+                    },
+                  );
+
+                  const n = parsed.cards.length;
+                  flashcardAcknowledgement =
+                    `🃏 I've created a flashcard deck for "${topic}"!\n\n` +
+                    `📚 **${parsed.title.trim()}**\n` +
+                    `✨ ${n} card${n !== 1 ? 's' : ''}\n\n` +
+                    `[FLASHCARD_CARD:${deck.id}]\n\n` +
+                    `Open your deck in the flashcards section to study!\n\n`;
+
+                  console.log(
+                    `Created flashcard deck ${deck.id} for user ${userId}, topic: ${topic}`,
+                  );
+                } catch (error) {
+                  console.error(
+                    `Failed to create flashcards for user ${userId}, topic ${topic}:`,
+                    error,
+                  );
+                  if (error instanceof ForbiddenException) {
+                    flashcardAcknowledgement = `${error.message}\n\n`;
+                  } else {
+                    flashcardAcknowledgement = `I tried to create flashcards for "${topic}", but encountered an issue. Please try again or rephrase your request. 🔄\n\n`;
+                  }
+                }
+              } else {
+                console.log(
+                  `Flashcard creation skipped - invalid topic: ${topic}`,
+                );
+              }
+            }
           }
 
           const acknowledgements =
-            `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}`.trim();
+            `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}${flashcardAcknowledgement}`.trim();
           if (acknowledgements) {
             subscriber.next({
               data: {
@@ -1066,12 +1315,23 @@ Return ONLY valid JSON with no additional text.
     return this.speechTranscriptionService.transcribeAudioOnly(params);
   }
 
-  generateFlashcards(dto: {
+  async generateFlashcards(dto: {
     userId: string;
     topic: string;
     cardCount?: number;
   }) {
-    return this.flashcardService.generateFlashcards(dto);
+    const cardCount = dto.cardCount ?? 15;
+    const parsed = await this.generateFlashcardDeckContent(
+      dto.userId,
+      dto.topic,
+      cardCount,
+    );
+    return this.flashcardService.saveFlashcardDeck({
+      userId: dto.userId,
+      topic: dto.topic.trim(),
+      title: parsed.title,
+      cards: parsed.cards,
+    });
   }
 
   listFlashcardDecks(userId: string, limit?: number, offset?: number) {
