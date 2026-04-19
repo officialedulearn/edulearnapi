@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Post,
+  Patch,
   Get,
   Delete,
   UseGuards,
@@ -35,6 +36,7 @@ import {
   GenerateQuizDto,
   GenerateSuggestionsDto,
   GenerateFlashcardsDto,
+  UpdateStudySuggestionFeedbackDto,
 } from './dto/ai.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
@@ -225,6 +227,34 @@ export class AiController {
 
       throw new InternalServerErrorException(
         'An unexpected error occurred while generating suggestions',
+      );
+    }
+  }
+
+  @Patch('suggestions/feedback')
+  async updateStudySuggestionFeedback(
+    @Request() req,
+    @Body() dto: UpdateStudySuggestionFeedbackDto,
+  ) {
+    await verifyUserAuthorization(
+      req.user,
+      dto.userId,
+      'updating study suggestion feedback',
+    );
+
+    try {
+      return await this.aiService.updateStudySuggestionFeedback(dto);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      if (error instanceof Error) {
+        throw new BadRequestException(error.message);
+      }
+
+      throw new InternalServerErrorException(
+        'An unexpected error occurred while updating suggestion feedback',
       );
     }
   }

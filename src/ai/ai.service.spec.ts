@@ -8,6 +8,7 @@ import { ChatService } from 'src/chat/chat.service';
 import { AuthService } from 'src/auth/auth.service';
 import { RewardsService } from 'src/rewards/rewards.service';
 import { RoadmapService } from 'src/roadmap/roadmap.service';
+import { RedisService } from 'src/redis/redis.service';
 
 describe('AiService', () => {
   let service: AiService;
@@ -27,6 +28,14 @@ describe('AiService', () => {
         { provide: AuthService, useValue: {} },
         { provide: RewardsService, useValue: {} },
         { provide: RoadmapService, useValue: {} },
+        {
+          provide: RedisService,
+          useValue: {
+            getStudySuggestionsPayload: jest.fn(),
+            setStudySuggestionsPayload: jest.fn(),
+            getStudySuggestionsTtlSeconds: jest.fn(),
+          },
+        },
       ],
     }).compile();
 

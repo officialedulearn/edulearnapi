@@ -10,6 +10,7 @@ import { NftRewardService } from './nft-reward.service';
 import { QuizGenerationService } from './quiz-generation.service';
 import { FlashcardService } from './flashcard.service';
 import { SpeechTranscriptionService } from './speech-transcription.service';
+import { RedisModule } from 'src/redis/redis.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { SpeechTranscriptionService } from './speech-transcription.service';
     forwardRef(() => AuthModule),
     RewardsModule,
     forwardRef(() => RoadmapModule),
+    RedisModule,
   ],
   controllers: [AiController],
   providers: [

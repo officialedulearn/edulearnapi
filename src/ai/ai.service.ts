@@ -1,11 +1,18 @@
 import { Type } from '@google/genai';
-import { Injectable, Inject, forwardRef } from '@nestjs/common';
+import { createHash } from 'crypto';
+import {
+  Injectable,
+  Inject,
+  forwardRef,
+  BadRequestException,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Message } from 'lib/db/schema';
 import { getMostRecentUserMessage } from 'lib/utils';
 import { AuthService } from 'src/auth/auth.service';
 import { ChatService } from 'src/chat/chat.service';
 import { generateUUID } from 'lib/utils';
-import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { RewardsService } from 'src/rewards/rewards.service';
 import { RoadmapService } from 'src/roadmap/roadmap.service';
 import { nftRewards } from './config/nft-rewards';
@@ -16,6 +23,20 @@ import { QuizGenerationService } from './quiz-generation.service';
 import { FlashcardService } from './flashcard.service';
 import { FLASHCARD_SYSTEM_INSTRUCTION } from './prompts/flashcard-system-prompt';
 import { SpeechTranscriptionService } from './speech-transcription.service';
+import { RedisService } from 'src/redis/redis.service';
+import type {
+  GenerateSuggestionsDto,
+  StudySuggestionsResponse,
+  UpdateStudySuggestionFeedbackDto,
+} from './dto/ai.dto';
+
+const STUDY_SUGGESTIONS_TTL_SEC = 14 * 24 * 60 * 60;
+
+type StudySuggestionsRedisPayload = {
+  suggestions: string[];
+  generatedAt: string;
+  feedback: Partial<Record<'0' | '1' | '2', 'up' | 'down'>>;
+};
 
 @Injectable()
 export class AiService {
@@ -30,6 +51,7 @@ export class AiService {
     private readonly quizGenerationService: QuizGenerationService,
     private readonly flashcardService: FlashcardService,
     private readonly speechTranscriptionService: SpeechTranscriptionService,
+    private readonly redisService: RedisService,
   ) {}
 
   async checkUserCredits(userId: string): Promise<number> {
@@ -44,6 +66,23 @@ export class AiService {
       console.error('Failed to check user credits', error);
       throw error;
     }
+  }
+
+  private normalizeToolCallArgs(raw: unknown): Record<string, unknown> {
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      return raw as Record<string, unknown>;
+    }
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return parsed as Record<string, unknown>;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    return {};
   }
 
   private async generateFlashcardDeckContent(
@@ -69,7 +108,9 @@ export class AiService {
         result = await Promise.race([
           this.geminiClient.genAI.models.generateContent({
             model,
-            contents: userPayload,
+            contents: [
+              { role: 'user', parts: [{ text: userPayload }] },
+            ],
             config: {
               temperature: 0.2,
               maxOutputTokens: Math.min(8192, 400 + cardCount * 220),
@@ -588,16 +629,25 @@ export class AiService {
       }
 
       if (flashcardPart) {
-        const topic = flashcardPart.functionCall?.args?.topic;
-        const userIntent = flashcardPart.functionCall?.args?.userIntent;
-        const rawCount = flashcardPart.functionCall?.args?.cardCount;
+        const fcArgs = this.normalizeToolCallArgs(
+          flashcardPart.functionCall?.args,
+        );
+        const topic = fcArgs.topic;
+        const userIntent = fcArgs.userIntent;
+        const rawCount = fcArgs.cardCount;
         console.log(
           `Flashcard deck requested for topic: ${topic}, intent: ${userIntent}`,
         );
 
         let cardCount = 15;
-        if (typeof rawCount === 'number' && !Number.isNaN(rawCount)) {
-          cardCount = Math.min(30, Math.max(5, Math.floor(rawCount)));
+        const n =
+          typeof rawCount === 'number'
+            ? rawCount
+            : typeof rawCount === 'string'
+              ? Number(rawCount)
+              : NaN;
+        if (!Number.isNaN(n)) {
+          cardCount = Math.min(30, Math.max(5, Math.floor(n)));
         }
 
         if (topic && typeof topic === 'string' && topic.trim().length > 0) {
@@ -862,7 +912,7 @@ export class AiService {
           await this.authService.deductUserCredits(userId);
 
           let fullResponse = '';
-          const functionCalls: any[] = [];
+          const functionCallsByName = new Map<string, any>();
 
           for await (const chunk of stream) {
             const candidate = chunk.candidates?.[0];
@@ -889,9 +939,31 @@ export class AiService {
             }
 
             const functionCall = parts.find((part: any) => part.functionCall);
-            if (functionCall) {
-              functionCalls.push(functionCall);
+            const name = functionCall?.functionCall?.name;
+            if (name) {
+              functionCallsByName.set(name, functionCall);
             }
+          }
+
+          const functionCalls = Array.from(functionCallsByName.values());
+
+          const pendingFlashcards = functionCalls.some(
+            (fc) => fc.functionCall?.name === 'createFlashcardDeck',
+          );
+          const pendingRoadmap = functionCalls.some(
+            (fc) => fc.functionCall?.name === 'createLearningRoadmap',
+          );
+          if (pendingFlashcards || pendingRoadmap) {
+            const status =
+              pendingFlashcards && pendingRoadmap
+                ? 'Creating your roadmap and flashcards…\n\n'
+                : pendingFlashcards
+                  ? 'Creating your flashcard deck…\n\n'
+                  : 'Creating your learning roadmap…\n\n';
+            subscriber.next({
+              data: { token: status, type: 'content' },
+            });
+            fullResponse = status + fullResponse;
           }
 
           let scoreAcknowledgement = '';
@@ -1091,16 +1163,25 @@ export class AiService {
             }
 
             if (funcCall.functionCall?.name === 'createFlashcardDeck') {
-              const topic = funcCall.functionCall?.args?.topic;
-              const userIntent = funcCall.functionCall?.args?.userIntent;
-              const rawCount = funcCall.functionCall?.args?.cardCount;
+              const fcArgs = this.normalizeToolCallArgs(
+                funcCall.functionCall?.args,
+              );
+              const topic = fcArgs.topic;
+              const userIntent = fcArgs.userIntent;
+              const rawCount = fcArgs.cardCount;
               console.log(
                 `Flashcard deck requested for topic: ${topic}, intent: ${userIntent}`,
               );
 
               let cardCount = 15;
-              if (typeof rawCount === 'number' && !Number.isNaN(rawCount)) {
-                cardCount = Math.min(30, Math.max(5, Math.floor(rawCount)));
+              const n =
+                typeof rawCount === 'number'
+                  ? rawCount
+                  : typeof rawCount === 'string'
+                    ? Number(rawCount)
+                    : NaN;
+              if (!Number.isNaN(n)) {
+                cardCount = Math.min(30, Math.max(5, Math.floor(n)));
               }
 
               if (
@@ -1193,24 +1274,97 @@ export class AiService {
     });
   }
 
-  async generateSuggestions({ userId }: { userId: string }) {
+  private getXpTierFromXp(xp: number): string {
+    if (xp < 100) return 'novice';
+    if (xp < 500) return 'beginner';
+    if (xp < 1500) return 'intermediate';
+    if (xp < 3000) return 'advanced';
+    return 'expert';
+  }
+
+  private studySuggestionsFingerprint(
+    learning: string,
+    userLevel: string,
+    xpTier: string,
+  ): string {
+    return createHash('sha256')
+      .update(`${learning}|${userLevel}|${xpTier}`)
+      .digest('hex')
+      .slice(0, 16);
+  }
+
+  private studySuggestionsRedisKey(userId: string, fp: string): string {
+    return `study_suggestions:${userId}:${fp}`;
+  }
+
+  private parseStudySuggestionsCache(
+    raw: string,
+  ): StudySuggestionsRedisPayload | null {
+    try {
+      const data = JSON.parse(raw) as unknown;
+      if (!data || typeof data !== 'object') return null;
+      const o = data as Record<string, unknown>;
+      if (!Array.isArray(o.suggestions) || typeof o.generatedAt !== 'string') {
+        return null;
+      }
+      const strings = o.suggestions.filter((x) => typeof x === 'string');
+      if (strings.length < 3) return null;
+      const feedback: StudySuggestionsRedisPayload['feedback'] = {};
+      const fr = o.feedback;
+      if (fr && typeof fr === 'object') {
+        for (const k of ['0', '1', '2'] as const) {
+          const v = (fr as Record<string, unknown>)[k];
+          if (v === 'up' || v === 'down') feedback[k] = v;
+        }
+      }
+      return {
+        suggestions: strings.slice(0, 3) as string[],
+        generatedAt: o.generatedAt,
+        feedback,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async generateSuggestions(
+    dto: GenerateSuggestionsDto,
+  ): Promise<StudySuggestionsResponse> {
+    const { userId, forceRefresh } = dto;
     const user = await this.authService.getUserById(userId);
 
     if (!user) {
       throw new NotFoundException(`User with id ${userId} not found`);
     }
 
-    const getXpLevel = (xp: number) => {
-      if (xp < 100) return 'novice';
-      if (xp < 500) return 'beginner';
-      if (xp < 1500) return 'intermediate';
-      if (xp < 3000) return 'advanced';
-      return 'expert';
-    };
-
-    const xpLevel = getXpLevel(user.xp);
-    const userLevel = user.level || xpLevel;
+    const xpTier = this.getXpTierFromXp(user.xp);
+    const userLevel = user.level || xpTier;
     const userLearning = user.learning || 'blockchain fundamentals';
+    const fp = this.studySuggestionsFingerprint(
+      userLearning,
+      userLevel,
+      xpTier,
+    );
+    const key = this.studySuggestionsRedisKey(userId, fp);
+
+    if (!forceRefresh) {
+      try {
+        const raw = await this.redisService.getStudySuggestionsPayload(key);
+        if (raw) {
+          const cached = this.parseStudySuggestionsCache(raw);
+          if (cached) {
+            return {
+              suggestions: cached.suggestions,
+              generatedAt: cached.generatedAt,
+              feedback: cached.feedback,
+              fromCache: true,
+            };
+          }
+        }
+      } catch (e) {
+        console.error('Study suggestions cache read failed:', e);
+      }
+    }
 
     const systemInstruction = `
 You are EduLearn AI, a Web3 study assistant. 
@@ -1267,7 +1421,29 @@ Return ONLY valid JSON with no additional text.
         );
       }
 
-      return suggestions.slice(0, 3);
+      const three = suggestions.slice(0, 3) as string[];
+      const generatedAt = new Date().toISOString();
+      const payload: StudySuggestionsRedisPayload = {
+        suggestions: three,
+        generatedAt,
+        feedback: {},
+      };
+      try {
+        await this.redisService.setStudySuggestionsPayload(
+          key,
+          STUDY_SUGGESTIONS_TTL_SEC,
+          JSON.stringify(payload),
+        );
+      } catch (e) {
+        console.error('Study suggestions cache write failed:', e);
+      }
+
+      return {
+        suggestions: three,
+        generatedAt,
+        feedback: {},
+        fromCache: false,
+      };
     } catch (error) {
       console.error('Error generating suggestions:', error);
 
@@ -1299,8 +1475,74 @@ Return ONLY valid JSON with no additional text.
         ],
       };
 
-      return fallbackSuggestions[userLevel] || fallbackSuggestions.novice;
+      const list =
+        fallbackSuggestions[userLevel] || fallbackSuggestions.novice;
+      return {
+        suggestions: list,
+        generatedAt: new Date().toISOString(),
+        feedback: {},
+        fromCache: false,
+      };
     }
+  }
+
+  async updateStudySuggestionFeedback(
+    dto: UpdateStudySuggestionFeedbackDto,
+  ): Promise<StudySuggestionsResponse> {
+    const user = await this.authService.getUserById(dto.userId);
+    if (!user) {
+      throw new NotFoundException(`User with id ${dto.userId} not found`);
+    }
+
+    const xpTier = this.getXpTierFromXp(user.xp);
+    const userLevel = user.level || xpTier;
+    const userLearning = user.learning || 'blockchain fundamentals';
+    const fp = this.studySuggestionsFingerprint(
+      userLearning,
+      userLevel,
+      xpTier,
+    );
+    const key = this.studySuggestionsRedisKey(dto.userId, fp);
+
+    const raw = await this.redisService.getStudySuggestionsPayload(key);
+    if (!raw) {
+      throw new BadRequestException(
+        'No cached study suggestions for this profile. Generate suggestions first.',
+      );
+    }
+
+    const parsed = this.parseStudySuggestionsCache(raw);
+    if (!parsed) {
+      throw new BadRequestException('Cached study suggestions are invalid.');
+    }
+
+    const idx = String(dto.index) as '0' | '1' | '2';
+    const next: StudySuggestionsRedisPayload = {
+      suggestions: parsed.suggestions,
+      generatedAt: parsed.generatedAt,
+      feedback: { ...parsed.feedback },
+    };
+    if (dto.action === 'none') {
+      delete next.feedback[idx];
+    } else {
+      next.feedback[idx] = dto.action;
+    }
+
+    const ttlRaw = await this.redisService.getStudySuggestionsTtlSeconds(key);
+    const ttlSec = ttlRaw > 0 ? ttlRaw : STUDY_SUGGESTIONS_TTL_SEC;
+
+    await this.redisService.setStudySuggestionsPayload(
+      key,
+      ttlSec,
+      JSON.stringify(next),
+    );
+
+    return {
+      suggestions: next.suggestions,
+      generatedAt: next.generatedAt,
+      feedback: next.feedback,
+      fromCache: true,
+    };
   }
 
   generateQuiz(params: { chatId: string; userId: string }) {

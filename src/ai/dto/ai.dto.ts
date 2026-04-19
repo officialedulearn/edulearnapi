@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsString,
   IsArray,
@@ -12,6 +12,8 @@ import {
   Max,
   MaxLength,
   MinLength,
+  IsBoolean,
+  IsIn,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 
@@ -211,6 +213,50 @@ export class GenerateSuggestionsDto {
   @IsUUID()
   @IsNotEmpty()
   userId: string;
+
+  @ApiPropertyOptional({
+    description: 'When true, skip Redis cache and regenerate from Gemini',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  forceRefresh?: boolean;
+}
+
+export type StudySuggestionReaction = 'up' | 'down';
+
+export interface StudySuggestionsResponse {
+  suggestions: string[];
+  generatedAt: string;
+  feedback: Partial<Record<'0' | '1' | '2', StudySuggestionReaction>>;
+  fromCache: boolean;
+}
+
+export class UpdateStudySuggestionFeedbackDto {
+  @ApiProperty({
+    description: 'The ID of the user updating suggestion feedback',
+    example: '987fbc97-4bed-5078-9f07-9141ba07c9f3',
+  })
+  @IsUUID()
+  @IsNotEmpty()
+  userId: string;
+
+  @ApiProperty({
+    description: 'Index of the suggestion (0, 1, or 2)',
+    minimum: 0,
+    maximum: 2,
+  })
+  @IsInt()
+  @Min(0)
+  @Max(2)
+  index: number;
+
+  @ApiProperty({
+    description: 'Reaction for that suggestion; use none to clear',
+    enum: ['up', 'down', 'none'],
+  })
+  @IsIn(['up', 'down', 'none'])
+  action: 'up' | 'down' | 'none';
 }
 
 export class GenerateFlashcardsDto {

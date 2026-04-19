@@ -230,4 +230,22 @@ export class RedisService {
   async ping(): Promise<string> {
     return await this.redis.ping();
   }
+
+  // ==================== STUDY SUGGESTIONS (Gemini cache) ====================
+
+  async getStudySuggestionsPayload(key: string): Promise<string | null> {
+    return this.redis.get(key);
+  }
+
+  async setStudySuggestionsPayload(
+    key: string,
+    ttlSeconds: number,
+    payload: string,
+  ): Promise<void> {
+    await this.redis.setEx(key, ttlSeconds, payload);
+  }
+
+  async getStudySuggestionsTtlSeconds(key: string): Promise<number> {
+    return this.redis.ttl(key);
+  }
 }
