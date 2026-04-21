@@ -369,11 +369,11 @@ export class CronTasksService {
         const randomMessage =
           funMessages[Math.floor(Math.random() * funMessages.length)];
 
-        await this.notificationsService.createNotification({
-          title: 'Hey, you forgot something! 👀',
-          content: randomMessage,
-          userId: userData[0].id,
-        });
+        // await this.notificationsService.createNotification({
+        //   title: 'Hey, you forgot something! 👀',
+        //   content: randomMessage,
+        //   userId: userData[0].id,
+        // });
 
         await this.resendService.sendRoadmapReminderEmail(
           userData[0].email,

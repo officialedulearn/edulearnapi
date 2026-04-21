@@ -162,6 +162,16 @@ export class QuizzesService {
 
   async startParticipation(quizId: string, userId: string) {
     await this.getQuizByIdOrThrow(quizId);
+
+    const existingParticipation = await db
+      .select()
+      .from(publicQuizParticipation)
+      .where(and(eq(publicQuizParticipation.quizId, quizId), eq(publicQuizParticipation.userId, userId)))
+      .limit(1);
+    if (existingParticipation) {
+      throw new BadRequestException('You have already participated in this quiz');
+    }
+
     const [row] = await db
       .insert(publicQuizParticipation)
       .values({ quizId, userId })

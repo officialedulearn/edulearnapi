@@ -1,4 +1,4 @@
-import { Injectable, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Inject, forwardRef, BadRequestException } from '@nestjs/common';
 import { eq, and, desc, sql, ilike, or } from 'drizzle-orm';
 import db from '../../drizzle';
 import {
@@ -211,6 +211,12 @@ export class CommunityService {
     userId: string;
     communityId: string;
   }): Promise<CommunityJoinRequest> {
+
+    const existingRequest = await this.getUserJoinRequest(data.userId, data.communityId);
+    if (existingRequest) {
+      throw new BadRequestException('You have already requested to join this community');
+    }
+
     const [request] = await db
       .insert(community_join_request)
       .values(data)

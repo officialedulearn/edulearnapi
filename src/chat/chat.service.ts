@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { asc, eq, and } from 'drizzle-orm';
+import { asc, desc, eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../../drizzle';
 import {
@@ -135,6 +135,35 @@ export class ChatService {
       .from(message)
       .where(eq(message.chatId, chatId))
       .orderBy(asc(message.createdAt));
+  }
+
+  async getLearningContextSnippetForUser(
+    userId: string,
+    maxChars: number = 4000,
+  ): Promise<string> {
+    const [latest] = await db
+      .select()
+      .from(chat)
+      .where(eq(chat.userId, userId))
+      .orderBy(desc(chat.createdAt))
+      .limit(1);
+    if (!latest) {
+      return '';
+    }
+    const messages = await this.getMessagesInChat(latest.id);
+    const recent = messages.slice(-30);
+    const lines = recent.map((m) => {
+      const text =
+        typeof m.content === 'string'
+          ? m.content
+          : JSON.stringify(m.content);
+      return `${m.role}: ${text}`;
+    });
+    let text = lines.join('\n\n');
+    if (text.length > maxChars) {
+      text = text.slice(text.length - maxChars);
+    }
+    return text;
   }
 
   async deleteMessagesInChat(chatId: string) {

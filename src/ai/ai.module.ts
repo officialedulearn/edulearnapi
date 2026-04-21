@@ -31,6 +31,11 @@ import { QuizzesModule } from 'src/quizzes/quizzes.module';
     SpeechTranscriptionService,
     AiService,
   ],
-  exports: [AiService, NftRewardService, GeminiClientService],
+  exports: [
+    AiService,
+    NftRewardService,
+    GeminiClientService,
+    QuizGenerationService,
+  ],
 })
 export class AiModule {}

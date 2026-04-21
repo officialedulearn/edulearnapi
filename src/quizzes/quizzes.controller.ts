@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Param,
   Query,
@@ -17,10 +18,37 @@ import {
 import { QuizzesService } from './quizzes.service';
 import { PublishQuizDto } from './dto/publish-quiz.dto';
 import { SubmitPublicQuizDto } from './dto/submit-public-quiz.dto';
+import { QuizScheduleService } from './quiz-schedule.service';
+import { UpsertQuizScheduleDto } from './dto/upsert-quiz-schedule.dto';
 
 @Controller('quizzes')
 export class QuizzesController {
-  constructor(private readonly quizzesService: QuizzesService) {}
+  constructor(
+    private readonly quizzesService: QuizzesService,
+    private readonly quizScheduleService: QuizScheduleService,
+  ) {}
+
+  @Post('schedule')
+  @UseGuards(JwtAuthGuard)
+  async upsertSchedule(@Request() req, @Body() dto: UpsertQuizScheduleDto) {
+    const userId = await getDatabaseUserId(req.user);
+    return this.quizScheduleService.upsertForUser(userId, dto);
+  }
+
+  @Get('schedule')
+  @UseGuards(JwtAuthGuard)
+  async getSchedule(@Request() req) {
+    const userId = await getDatabaseUserId(req.user);
+    return this.quizScheduleService.getForUser(userId);
+  }
+
+  @Delete('schedule')
+  @UseGuards(JwtAuthGuard)
+  async deleteSchedule(@Request() req) {
+    const userId = await getDatabaseUserId(req.user);
+    await this.quizScheduleService.deleteForUser(userId);
+    return { ok: true };
+  }
 
   @Post('public')
   @UseGuards(JwtAuthGuard)

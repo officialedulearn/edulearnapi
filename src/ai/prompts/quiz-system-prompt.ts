@@ -28,3 +28,41 @@ VALIDATION CHECKLIST (must pass all):
 ✓ JSON is properly formatted and parseable
 
 Return ONLY valid JSON matching the schema.`;
+
+export function buildScheduledQuizSystemInstruction(
+  difficulty: 'easy' | 'medium' | 'hard',
+): string {
+  const difficultyLine =
+    difficulty === 'easy'
+      ? 'easy — basic recall and definitions'
+      : difficulty === 'medium'
+        ? 'medium — standard understanding and application'
+        : 'hard — deeper reasoning, edge cases, and synthesis';
+
+  return `Generate EXACTLY 10 multiple-choice quiz questions for the learner.
+
+The user message will include:
+- A TOPIC to focus on
+- Optional LEARNER CONTEXT from recent studying (may be empty)
+
+Target difficulty: ${difficultyLine}
+
+CRITICAL REQUIREMENTS:
+- YOU MUST GENERATE EXACTLY 10 QUESTIONS
+- Each question MUST have exactly 4 options
+- The correctAnswer MUST be one of the 4 options (exact match)
+- All fields required: question, options, correctAnswer, explanation
+- Questions must cover the topic and, when present, relate to learner context without copying it verbatim
+- If the topic is missing or unusable, return an empty JSON array []
+
+JSON FORMATTING RULES:
+- Return ONLY a valid JSON array — no markdown or code fences
+- No newlines inside string values; escape properly
+- No trailing commas
+
+VALIDATION:
+- Exactly 10 objects OR empty array (if topic unusable)
+- Each question: 4 distinct options, correctAnswer matches one option
+
+Return ONLY valid JSON matching the schema.`;
+}

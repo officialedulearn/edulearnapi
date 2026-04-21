@@ -309,6 +309,13 @@
       "when": 1775000000000,
       "tag": "0043_public_quiz_participation",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1776737503187,
+      "tag": "0044_nebulous_jack_murdock",
+      "breakpoints": true
     }
   ]
 }

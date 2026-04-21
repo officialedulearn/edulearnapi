@@ -426,6 +426,27 @@ export type PublicQuizParticipation = InferSelectModel<
   typeof publicQuizParticipation
 >;
 
+export const quizGenerationSchedule = pgTable('quiz_generation_schedule', {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  userId: uuid('userId')
+    .notNull()
+    .references(() => user.id)
+    .unique(),
+  topic: text('topic').notNull(),
+  difficulty: varchar('difficulty', {
+    enum: ['easy', 'medium', 'hard'],
+  }).notNull(),
+  cronExpression: text('cronExpression').notNull(),
+  timeZone: text('timeZone').notNull().default('UTC'),
+  enabled: boolean('enabled').notNull().default(true),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+});
+
+export type QuizGenerationSchedule = InferSelectModel<
+  typeof quizGenerationSchedule
+>;
+
 export const flashcardDeck = pgTable(
   'flashcard_deck',
   {
