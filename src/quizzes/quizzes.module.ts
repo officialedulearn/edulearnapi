@@ -7,5 +7,6 @@ import { ActivityModule } from '../activity/activity.module';
   imports: [ActivityModule],
   controllers: [QuizzesController],
   providers: [QuizzesService],
+  exports: [QuizzesService],
 })
 export class QuizzesModule {}

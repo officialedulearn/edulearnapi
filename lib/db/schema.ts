@@ -399,6 +399,33 @@ export const publicQuiz = pgTable('public_quiz', {
 
 export type PublicQuiz = InferSelectModel<typeof publicQuiz>;
 
+export const publicQuizParticipation = pgTable(
+  'public_quiz_participation',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    userId: uuid('userId')
+      .notNull()
+      .references(() => user.id),
+    quizId: uuid('quizId')
+      .notNull()
+      .references(() => publicQuiz.id),
+    joinedAt: timestamp('joinedAt').notNull().defaultNow(),
+    submittedAt: timestamp('submittedAt'),
+    score: integer('score'),
+    totalQuestions: integer('totalQuestions'),
+  },
+  (table) => ({
+    userQuizIdx: index('public_quiz_participation_user_quiz_idx').on(
+      table.userId,
+      table.quizId,
+    ),
+  }),
+);
+
+export type PublicQuizParticipation = InferSelectModel<
+  typeof publicQuizParticipation
+>;
+
 export const flashcardDeck = pgTable(
   'flashcard_deck',
   {

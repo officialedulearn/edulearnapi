@@ -1,4 +1,12 @@
-import { IsString, IsArray, ValidateNested, IsInt, Min } from 'class-validator';
+import {
+  IsString,
+  IsArray,
+  ValidateNested,
+  IsInt,
+  Min,
+  IsOptional,
+  IsUUID,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class PublicQuizAnswerDto {
@@ -13,6 +21,10 @@ export class PublicQuizAnswerDto {
 export class SubmitPublicQuizDto {
   @IsString()
   userId: string;
+
+  @IsOptional()
+  @IsUUID()
+  participationId?: string;
 
   @IsArray()
   @ValidateNested({ each: true })

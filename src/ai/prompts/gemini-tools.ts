@@ -133,6 +133,38 @@ export const geminiCreateRoadmapTool = {
   },
 };
 
+export const geminiCreatePublicQuizTool = {
+  name: 'createPublicQuiz',
+  description:
+    "Create a multiple-choice quiz others can take when the user explicitly asks for a quiz, practice test, or MCQs on a topic (not flashcards, not a roadmap). Saves it as a community quiz. Examples: 'quiz me on Solana rent', 'make a 10-question quiz about PDAs', 'generate a practice test for DeFi lending'.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      topic: {
+        type: Type.STRING,
+        description:
+          'Topic or scope for the quiz (e.g. Solana transaction lifecycle).',
+      },
+      userIntent: {
+        type: Type.STRING,
+        description:
+          'Brief note on why the user wants this quiz based on their message.',
+      },
+      quizTitle: {
+        type: Type.STRING,
+        description:
+          'Short title for the quiz listing. Omit if unsure; a title will be generated.',
+      },
+      questionCount: {
+        type: Type.NUMBER,
+        description:
+          'Number of questions (5–20). Use 10 when the user does not specify.',
+      },
+    },
+    required: ['topic', 'userIntent'],
+  },
+};
+
 export const geminiCreateFlashcardDeckTool = {
   name: 'createFlashcardDeck',
   description:
@@ -220,6 +252,7 @@ export const GEMINI_TUTOR_FUNCTION_DECLARATIONS = [
   geminiScoreUserTool,
   geminiGiveCertificateTool,
   geminiCreateRoadmapTool,
+  geminiCreatePublicQuizTool,
   geminiCreateFlashcardDeckTool,
   geminiEditRoadmapTool,
 ];

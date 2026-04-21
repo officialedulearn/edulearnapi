@@ -29,6 +29,19 @@ export class QuizzesController {
     return this.quizzesService.publish(userId, dto);
   }
 
+  @Get('mine')
+  @UseGuards(JwtAuthGuard)
+  async listMine(
+    @Request() req,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const userId = await getDatabaseUserId(req.user);
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+    const offsetNum = offset ? parseInt(offset, 10) : 0;
+    return this.quizzesService.findMine(userId, limitNum, offsetNum);
+  }
+
   @Get('public')
   async list(
     @Query('limit') limit?: string,
@@ -44,6 +57,13 @@ export class QuizzesController {
   @Get('public/:id')
   async getOne(@Param('id') id: string) {
     return this.quizzesService.findOne(id);
+  }
+
+  @Post('public/:id/participate')
+  @UseGuards(JwtAuthGuard)
+  async startParticipation(@Request() req, @Param('id') id: string) {
+    const userId = await getDatabaseUserId(req.user);
+    return this.quizzesService.startParticipation(id, userId);
   }
 
   @Post('public/:id/attempt')

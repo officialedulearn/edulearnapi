@@ -9,6 +9,7 @@ import { AuthService } from 'src/auth/auth.service';
 import { RewardsService } from 'src/rewards/rewards.service';
 import { RoadmapService } from 'src/roadmap/roadmap.service';
 import { RedisService } from 'src/redis/redis.service';
+import { QuizzesService } from 'src/quizzes/quizzes.service';
 
 describe('AiService', () => {
   let service: AiService;
@@ -23,6 +24,7 @@ describe('AiService', () => {
         },
         { provide: QuizGenerationService, useValue: {} },
         { provide: FlashcardService, useValue: {} },
+        { provide: QuizzesService, useValue: {} },
         { provide: SpeechTranscriptionService, useValue: {} },
         { provide: ChatService, useValue: {} },
         { provide: AuthService, useValue: {} },

@@ -302,6 +302,13 @@
       "when": 1774275917472,
       "tag": "0042_flashcard_decks",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1775000000000,
+      "tag": "0043_public_quiz_participation",
+      "breakpoints": true
     }
   ]
 }

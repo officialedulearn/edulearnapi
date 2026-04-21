@@ -11,6 +11,7 @@ import { QuizGenerationService } from './quiz-generation.service';
 import { FlashcardService } from './flashcard.service';
 import { SpeechTranscriptionService } from './speech-transcription.service';
 import { RedisModule } from 'src/redis/redis.module';
+import { QuizzesModule } from 'src/quizzes/quizzes.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { RedisModule } from 'src/redis/redis.module';
     RewardsModule,
     forwardRef(() => RoadmapModule),
     RedisModule,
+    QuizzesModule,
   ],
   controllers: [AiController],
   providers: [

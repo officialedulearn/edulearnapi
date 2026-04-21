@@ -4,8 +4,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import db from '../../drizzle';
-import { eq, sql, desc } from 'drizzle-orm';
-import { publicQuiz, user } from '../../lib/db/schema';
+import { and, eq, sql, desc } from 'drizzle-orm';
+import {
+  publicQuiz,
+  publicQuizParticipation,
+  user,
+} from '../../lib/db/schema';
 import { PublishQuizDto } from './dto/publish-quiz.dto';
 import { SubmitPublicQuizDto } from './dto/submit-public-quiz.dto';
 import { ActivityService } from '../activity/activity.service';
@@ -22,6 +26,18 @@ interface QuizQuestion {
 @Injectable()
 export class QuizzesService {
   constructor(private readonly activityService: ActivityService) {}
+
+  private async getQuizByIdOrThrow(id: string) {
+    const [quiz] = await db
+      .select()
+      .from(publicQuiz)
+      .where(eq(publicQuiz.id, id))
+      .limit(1);
+    if (!quiz) {
+      throw new NotFoundException(`Quiz ${id} not found`);
+    }
+    return quiz;
+  }
 
   async publish(userId: string, dto: PublishQuizDto) {
     const questions = dto.questions as QuizQuestion[];
@@ -95,15 +111,38 @@ export class QuizzesService {
     }));
   }
 
-  async findOne(id: string) {
-    const [quiz] = await db
-      .select()
+  async findMine(userId: string, limit: number = 20, offset: number = 0) {
+    const rows = await db
+      .select({
+        id: publicQuiz.id,
+        title: publicQuiz.title,
+        description: publicQuiz.description,
+        createdBy: publicQuiz.createdBy,
+        viewCount: publicQuiz.viewCount,
+        attemptCount: publicQuiz.attemptCount,
+        createdAt: publicQuiz.createdAt,
+        creatorUsername: user.username,
+      })
       .from(publicQuiz)
-      .where(eq(publicQuiz.id, id))
-      .limit(1);
-    if (!quiz) {
-      throw new NotFoundException(`Quiz ${id} not found`);
-    }
+      .leftJoin(user, eq(publicQuiz.createdBy, user.id))
+      .where(eq(publicQuiz.createdBy, userId))
+      .orderBy(desc(publicQuiz.createdAt))
+      .limit(limit)
+      .offset(offset);
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      description: r.description,
+      createdBy: r.createdBy,
+      viewCount: r.viewCount,
+      attemptCount: r.attemptCount,
+      createdAt: r.createdAt,
+      creatorUsername: r.creatorUsername ?? null,
+    }));
+  }
+
+  async findOne(id: string) {
+    const quiz = await this.getQuizByIdOrThrow(id);
     await db
       .update(publicQuiz)
       .set({
@@ -116,18 +155,46 @@ export class QuizzesService {
     };
   }
 
+  async startParticipation(quizId: string, userId: string) {
+    await this.getQuizByIdOrThrow(quizId);
+    const [row] = await db
+      .insert(publicQuizParticipation)
+      .values({ quizId, userId })
+      .returning();
+    return {
+      participationId: row.id,
+      quizId: row.quizId,
+      joinedAt: row.joinedAt,
+    };
+  }
+
   async submitAttempt(
     quizId: string,
     userId: string,
     dto: SubmitPublicQuizDto,
   ) {
-    const [quiz] = await db
-      .select()
-      .from(publicQuiz)
-      .where(eq(publicQuiz.id, quizId))
-      .limit(1);
-    if (!quiz) {
-      throw new NotFoundException(`Quiz ${quizId} not found`);
+    const quiz = await this.getQuizByIdOrThrow(quizId);
+
+    if (dto.participationId) {
+      const [participation] = await db
+        .select()
+        .from(publicQuizParticipation)
+        .where(
+          and(
+            eq(publicQuizParticipation.id, dto.participationId),
+            eq(publicQuizParticipation.userId, userId),
+            eq(publicQuizParticipation.quizId, quizId),
+          ),
+        )
+        .limit(1);
+      if (!participation) {
+        throw new BadRequestException(
+          'Invalid participationId for this quiz and user',
+        );
+      }
+      if (participation.submittedAt) {
+        throw new BadRequestException('This attempt was already submitted');
+      }
     }
     const questions = quiz.questions as QuizQuestion[];
     const results: {
@@ -170,6 +237,18 @@ export class QuizzesService {
       })),
     };
     const activityResult = await this.activityService.submitQuiz(submitDto);
+
+    if (dto.participationId) {
+      await db
+        .update(publicQuizParticipation)
+        .set({
+          submittedAt: new Date(),
+          score: correctCount,
+          totalQuestions: questions.length,
+        })
+        .where(eq(publicQuizParticipation.id, dto.participationId));
+    }
+
     return {
       score: correctCount,
       totalQuestions: questions.length,

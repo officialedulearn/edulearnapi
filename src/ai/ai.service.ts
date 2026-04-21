@@ -21,6 +21,7 @@ import { GEMINI_TUTOR_FUNCTION_DECLARATIONS } from './prompts/gemini-tools';
 import { GeminiClientService } from './gemini-client.service';
 import { QuizGenerationService } from './quiz-generation.service';
 import { FlashcardService } from './flashcard.service';
+import { QuizzesService } from 'src/quizzes/quizzes.service';
 import { FLASHCARD_SYSTEM_INSTRUCTION } from './prompts/flashcard-system-prompt';
 import { SpeechTranscriptionService } from './speech-transcription.service';
 import { RedisService } from 'src/redis/redis.service';
@@ -50,6 +51,7 @@ export class AiService {
     private readonly roadmapService: RoadmapService,
     private readonly quizGenerationService: QuizGenerationService,
     private readonly flashcardService: FlashcardService,
+    private readonly quizzesService: QuizzesService,
     private readonly speechTranscriptionService: SpeechTranscriptionService,
     private readonly redisService: RedisService,
   ) {}
@@ -211,6 +213,164 @@ export class AiService {
     }
 
     return parsed;
+  }
+
+  private async generatePublicQuizDeckContent(
+    userId: string,
+    topic: string,
+    questionCount: number,
+  ): Promise<{
+    title: string;
+    description?: string;
+    questions: {
+      question: string;
+      options: string[];
+      correctAnswer: string;
+      explanation: string;
+    }[];
+  }> {
+    const topicTrimmed = topic.trim();
+    const u = await this.authService.getUserById(userId);
+    if (!u) {
+      throw new NotFoundException('User not found');
+    }
+
+    const model = u.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+    const userPayload = `Topic / instructions:\n${topicTrimmed}\n\nGenerate exactly ${questionCount} multiple-choice questions. Each question must have exactly 4 options; correctAnswer must equal one option exactly. Include a short quiz title and optional one-line description.`;
+
+    let result: { text?: string } | undefined;
+    let attempts = 0;
+    const maxAttempts = 2;
+
+    while (attempts < maxAttempts) {
+      try {
+        result = await Promise.race([
+          this.geminiClient.genAI.models.generateContent({
+            model,
+            contents: [
+              { role: 'user', parts: [{ text: userPayload }] },
+            ],
+            config: {
+              temperature: 0.2,
+              maxOutputTokens: Math.min(8192, 400 + questionCount * 280),
+              systemInstruction:
+                'You create accurate educational multiple-choice quizzes for Web3 and technical topics. Output must follow the JSON schema exactly.',
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  title: {
+                    type: Type.STRING,
+                    description: 'Short title for the quiz listing',
+                  },
+                  description: {
+                    type: Type.STRING,
+                    description: 'Optional subtitle or scope (one line)',
+                  },
+                  questions: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        question: { type: Type.STRING },
+                        options: {
+                          type: Type.ARRAY,
+                          items: { type: Type.STRING },
+                        },
+                        correctAnswer: { type: Type.STRING },
+                        explanation: { type: Type.STRING },
+                      },
+                      required: [
+                        'question',
+                        'options',
+                        'correctAnswer',
+                        'explanation',
+                      ],
+                    },
+                  },
+                },
+                required: ['title', 'questions'],
+              },
+            },
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    'Request timeout - AI service took too long to respond',
+                  ),
+                ),
+              90000,
+            ),
+          ),
+        ]);
+        break;
+      } catch (attemptError) {
+        attempts++;
+        if (attempts >= maxAttempts) {
+          throw new Error(
+            `Failed to generate quiz after ${maxAttempts} attempts. ${
+              attemptError instanceof Error
+                ? attemptError.message
+                : 'AI service unavailable'
+            }`,
+          );
+        }
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
+
+    const response = result?.text ?? '';
+    if (!response.trim()) {
+      throw new Error('AI returned empty response. Please try again.');
+    }
+
+    let parsed: {
+      title: string;
+      description?: string;
+      questions: {
+        question: string;
+        options: string[];
+        correctAnswer: string;
+        explanation: string;
+      }[];
+    };
+    try {
+      parsed = JSON.parse(response) as typeof parsed;
+    } catch {
+      throw new Error('Failed to parse quiz from AI response.');
+    }
+
+    if (
+      !parsed.title?.trim() ||
+      !Array.isArray(parsed.questions) ||
+      parsed.questions.length !== questionCount
+    ) {
+      throw new Error(
+        `Expected exactly ${questionCount} questions and a non-empty title. Please try again.`,
+      );
+    }
+
+    for (let i = 0; i < parsed.questions.length; i++) {
+      const q = parsed.questions[i];
+      if (
+        !q.question?.trim() ||
+        !Array.isArray(q.options) ||
+        q.options.length !== 4 ||
+        !q.correctAnswer ||
+        !q.explanation?.trim() ||
+        !q.options.includes(q.correctAnswer)
+      ) {
+        throw new Error(`Question ${i + 1} is invalid. Please try again.`);
+      }
+    }
+
+    return {
+      title: parsed.title.trim(),
+      description: parsed.description?.trim(),
+      questions: parsed.questions,
+    };
   }
 
   async generateTitleFromMessage(message: Message): Promise<string> {
@@ -443,11 +603,16 @@ export class AiService {
         (part: any) => part.functionCall?.name === 'createFlashcardDeck',
       );
 
+      const publicQuizPart = parts.find(
+        (part: any) => part.functionCall?.name === 'createPublicQuiz',
+      );
+
       let scoreAcknowledgement = '';
       let certificateAcknowledgement = '';
       let roadmapAcknowledgement = '';
       let editRoadmapAcknowledgement = '';
       let flashcardAcknowledgement = '';
+      let publicQuizAcknowledgement = '';
 
       if (functionPart) {
         const score = Number(functionPart.functionCall?.args?.score || 0);
@@ -691,8 +856,76 @@ export class AiService {
         }
       }
 
+      if (publicQuizPart) {
+        const pqArgs = this.normalizeToolCallArgs(
+          publicQuizPart.functionCall?.args,
+        );
+        const topic = pqArgs.topic;
+        const userIntent = pqArgs.userIntent;
+        const quizTitleArg = pqArgs.quizTitle;
+        const rawQ = pqArgs.questionCount;
+        console.log(
+          `Public quiz requested for topic: ${topic}, intent: ${userIntent}`,
+        );
+
+        let questionCount = 10;
+        const n =
+          typeof rawQ === 'number'
+            ? rawQ
+            : typeof rawQ === 'string'
+              ? Number(rawQ)
+              : NaN;
+        if (!Number.isNaN(n)) {
+          questionCount = Math.min(20, Math.max(5, Math.floor(n)));
+        }
+
+        if (topic && typeof topic === 'string' && topic.trim().length > 0) {
+          try {
+            const parsed = await this.generatePublicQuizDeckContent(
+              userId,
+              topic.trim(),
+              questionCount,
+            );
+            const title =
+              typeof quizTitleArg === 'string' && quizTitleArg.trim().length > 0
+                ? quizTitleArg.trim()
+                : parsed.title;
+            const saved = await this.quizzesService.publish(userId, {
+              title,
+              description: parsed.description,
+              questions: parsed.questions,
+              sourceChatId: chatId,
+            });
+            const nq = parsed.questions.length;
+            publicQuizAcknowledgement =
+              `📝 I've published a ${nq}-question quiz for "${topic}"!\n\n` +
+              `**${saved.title}**\n\n` +
+              `[PUBLIC_QUIZ_CARD:${saved.id}]\n\n` +
+              `Others can open it from community quizzes and use Participate before submitting answers.\n\n`;
+            console.log(
+              `Published public quiz ${saved.id} for user ${userId}, topic: ${topic}`,
+            );
+          } catch (error) {
+            console.error(
+              `Failed to publish public quiz for user ${userId}, topic ${topic}:`,
+              error,
+            );
+            if (
+              error instanceof BadRequestException ||
+              error instanceof ForbiddenException
+            ) {
+              publicQuizAcknowledgement = `${(error as Error).message}\n\n`;
+            } else {
+              publicQuizAcknowledgement = `I tried to publish a quiz for "${topic}", but encountered an issue. Please try again or rephrase your request. 🔄\n\n`;
+            }
+          }
+        } else {
+          console.log(`Public quiz creation skipped - invalid topic: ${topic}`);
+        }
+      }
+
       const fullResponse =
-        `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}${flashcardAcknowledgement}${responseText}`.trim();
+        `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}${flashcardAcknowledgement}${publicQuizAcknowledgement}${responseText}`.trim();
       const assistantMessage = {
         id: generateUUID(),
         role: 'assistant' as const,
@@ -953,13 +1186,22 @@ export class AiService {
           const pendingRoadmap = functionCalls.some(
             (fc) => fc.functionCall?.name === 'createLearningRoadmap',
           );
-          if (pendingFlashcards || pendingRoadmap) {
+          const pendingPublicQuiz = functionCalls.some(
+            (fc) => fc.functionCall?.name === 'createPublicQuiz',
+          );
+          if (pendingFlashcards || pendingRoadmap || pendingPublicQuiz) {
+            const statusParts: string[] = [];
+            if (pendingRoadmap) statusParts.push('roadmap');
+            if (pendingFlashcards) statusParts.push('flashcard deck');
+            if (pendingPublicQuiz) statusParts.push('quiz');
             const status =
-              pendingFlashcards && pendingRoadmap
-                ? 'Creating your roadmap and flashcards…\n\n'
-                : pendingFlashcards
-                  ? 'Creating your flashcard deck…\n\n'
-                  : 'Creating your learning roadmap…\n\n';
+              statusParts.length > 1
+                ? `Creating your ${statusParts.join(' and ')}…\n\n`
+                : pendingRoadmap
+                  ? 'Creating your learning roadmap…\n\n'
+                  : pendingFlashcards
+                    ? 'Creating your flashcard deck…\n\n'
+                    : 'Publishing your quiz…\n\n';
             subscriber.next({
               data: { token: status, type: 'content' },
             });
@@ -971,6 +1213,7 @@ export class AiService {
           let roadmapAcknowledgement = '';
           let editRoadmapAcknowledgement = '';
           let flashcardAcknowledgement = '';
+          let publicQuizAcknowledgement = '';
 
           for (const funcCall of functionCalls) {
             if (funcCall.functionCall?.name === 'scoreUser') {
@@ -1232,10 +1475,85 @@ export class AiService {
                 );
               }
             }
+
+            if (funcCall.functionCall?.name === 'createPublicQuiz') {
+              const pqArgs = this.normalizeToolCallArgs(
+                funcCall.functionCall?.args,
+              );
+              const topic = pqArgs.topic;
+              const userIntent = pqArgs.userIntent;
+              const quizTitleArg = pqArgs.quizTitle;
+              const rawQ = pqArgs.questionCount;
+              console.log(
+                `Public quiz requested for topic: ${topic}, intent: ${userIntent}`,
+              );
+
+              let questionCount = 10;
+              const n =
+                typeof rawQ === 'number'
+                  ? rawQ
+                  : typeof rawQ === 'string'
+                    ? Number(rawQ)
+                    : NaN;
+              if (!Number.isNaN(n)) {
+                questionCount = Math.min(20, Math.max(5, Math.floor(n)));
+              }
+
+              if (
+                topic &&
+                typeof topic === 'string' &&
+                topic.trim().length > 0
+              ) {
+                try {
+                  const parsed = await this.generatePublicQuizDeckContent(
+                    userId,
+                    topic.trim(),
+                    questionCount,
+                  );
+                  const title =
+                    typeof quizTitleArg === 'string' &&
+                    quizTitleArg.trim().length > 0
+                      ? quizTitleArg.trim()
+                      : parsed.title;
+                  const saved = await this.quizzesService.publish(userId, {
+                    title,
+                    description: parsed.description,
+                    questions: parsed.questions,
+                    sourceChatId: chatId,
+                  });
+                  const nq = parsed.questions.length;
+                  publicQuizAcknowledgement =
+                    `📝 I've published a ${nq}-question quiz for "${topic}"!\n\n` +
+                    `**${saved.title}**\n\n` +
+                    `[PUBLIC_QUIZ_CARD:${saved.id}]\n\n` +
+                    `Others can open it from community quizzes and use Participate before submitting answers.\n\n`;
+                  console.log(
+                    `Published public quiz ${saved.id} for user ${userId}, topic: ${topic}`,
+                  );
+                } catch (error) {
+                  console.error(
+                    `Failed to publish public quiz for user ${userId}, topic ${topic}:`,
+                    error,
+                  );
+                  if (
+                    error instanceof BadRequestException ||
+                    error instanceof ForbiddenException
+                  ) {
+                    publicQuizAcknowledgement = `${(error as Error).message}\n\n`;
+                  } else {
+                    publicQuizAcknowledgement = `I tried to publish a quiz for "${topic}", but encountered an issue. Please try again or rephrase your request. 🔄\n\n`;
+                  }
+                }
+              } else {
+                console.log(
+                  `Public quiz creation skipped - invalid topic: ${topic}`,
+                );
+              }
+            }
           }
 
           const acknowledgements =
-            `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}${flashcardAcknowledgement}`.trim();
+            `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}${flashcardAcknowledgement}${publicQuizAcknowledgement}`.trim();
           if (acknowledgements) {
             subscriber.next({
               data: {
