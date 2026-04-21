@@ -165,6 +165,43 @@ export const geminiCreatePublicQuizTool = {
   },
 };
 
+export const geminiScheduleQuizGenerationTool = {
+  name: 'scheduleQuizGeneration',
+  description:
+    "Schedule automatic quiz generation for the user on a recurring basis. Use when they explicitly ask to schedule, automate, or repeat quiz generation (e.g. 'every day at 9am', 'weekly quiz on Mondays', 'generate a quiz for me each morning'). This saves their preferences and runs AI quiz generation on that schedule (credits apply when each quiz is generated). Do NOT use for a one-off quiz now—use createPublicQuiz instead. Do NOT use for flashcards or roadmaps.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      topic: {
+        type: Type.STRING,
+        description:
+          'Learning topic for generated quizzes (e.g. Solana accounts, DeFi lending).',
+      },
+      difficulty: {
+        type: Type.STRING,
+        description: 'Quiz difficulty for scheduled generation.',
+        enum: ['easy', 'medium', 'hard'],
+      },
+      cronExpression: {
+        type: Type.STRING,
+        description:
+          'Standard 5-field cron (minute hour day-of-month month day-of-week), UTC unless timeZone is set. Examples: daily 9:00 → "0 9 * * *"; Mon/Wed/Fri 8:30 → "30 8 * * 1,3,5"; every Monday 9am → "0 9 * * 1". Convert the user\'s natural language into the correct cron string.',
+      },
+      timeZone: {
+        type: Type.STRING,
+        description:
+          'IANA timezone for the schedule (e.g. America/New_York, Europe/London). Omit or use UTC if the user did not specify a region.',
+      },
+      userIntent: {
+        type: Type.STRING,
+        description:
+          'Brief note on what schedule the user asked for (for logging).',
+      },
+    },
+    required: ['topic', 'difficulty', 'cronExpression', 'userIntent'],
+  },
+};
+
 export const geminiCreateFlashcardDeckTool = {
   name: 'createFlashcardDeck',
   description:
@@ -253,6 +290,7 @@ export const GEMINI_TUTOR_FUNCTION_DECLARATIONS = [
   geminiGiveCertificateTool,
   geminiCreateRoadmapTool,
   geminiCreatePublicQuizTool,
+  geminiScheduleQuizGenerationTool,
   geminiCreateFlashcardDeckTool,
   geminiEditRoadmapTool,
 ];

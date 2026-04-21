@@ -21,6 +21,6 @@ import { QuizScheduleService } from './quiz-schedule.service';
     QuizScheduleService,
     QuizScheduleProcessorService,
   ],
-  exports: [QuizzesService],
+  exports: [QuizzesService, QuizScheduleService],
 })
 export class QuizzesModule {}

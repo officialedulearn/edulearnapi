@@ -22,6 +22,7 @@ import { GeminiClientService } from './gemini-client.service';
 import { QuizGenerationService } from './quiz-generation.service';
 import { FlashcardService } from './flashcard.service';
 import { QuizzesService } from 'src/quizzes/quizzes.service';
+import { QuizScheduleService } from 'src/quizzes/quiz-schedule.service';
 import { FLASHCARD_SYSTEM_INSTRUCTION } from './prompts/flashcard-system-prompt';
 import { SpeechTranscriptionService } from './speech-transcription.service';
 import { RedisService } from 'src/redis/redis.service';
@@ -53,6 +54,8 @@ export class AiService {
     private readonly flashcardService: FlashcardService,
     @Inject(forwardRef(() => QuizzesService))
     private readonly quizzesService: QuizzesService,
+    @Inject(forwardRef(() => QuizScheduleService))
+    private readonly quizScheduleService: QuizScheduleService,
     private readonly speechTranscriptionService: SpeechTranscriptionService,
     private readonly redisService: RedisService,
   ) {}
@@ -86,6 +89,56 @@ export class AiService {
       }
     }
     return {};
+  }
+
+  private async runScheduleQuizGenerationFromTool(
+    userId: string,
+    rawArgs: unknown,
+  ): Promise<string> {
+    const args = this.normalizeToolCallArgs(rawArgs);
+    const topic = args.topic;
+    const cronExpression = args.cronExpression;
+    const rawDiff = args.difficulty;
+    const timeZoneRaw = args.timeZone;
+
+    let difficulty: 'easy' | 'medium' | 'hard' = 'medium';
+    if (rawDiff === 'easy' || rawDiff === 'medium' || rawDiff === 'hard') {
+      difficulty = rawDiff;
+    }
+
+    const cronStr =
+      typeof cronExpression === 'string' ? cronExpression.trim() : '';
+    const cronFields = cronStr.split(/\s+/).filter(Boolean);
+    if (cronFields.length !== 5) {
+      return `I need a valid schedule (day and time). Try again with when you want quizzes—for example every day at 9:00.\n\n`;
+    }
+
+    if (!topic || typeof topic !== 'string' || !topic.trim()) {
+      return `I need a topic for your scheduled quizzes. What should they focus on?\n\n`;
+    }
+
+    const timeZone =
+      typeof timeZoneRaw === 'string' && timeZoneRaw.trim().length > 0
+        ? timeZoneRaw.trim()
+        : undefined;
+
+    try {
+      await this.quizScheduleService.upsertForUser(userId, {
+        topic: topic.trim(),
+        difficulty,
+        cronExpression: cronStr,
+        ...(timeZone ? { timeZone } : {}),
+      });
+      return (
+        `⏰ **Quiz schedule saved**\n\n` +
+        `Topic: **${topic.trim()}** (${difficulty})\n` +
+        `Schedule: \`${cronStr}\`${timeZone ? ` (${timeZone})` : ' (UTC)'}\n\n` +
+        `You'll get a notification when each quiz is generated (0.5 credits per run).\n\n`
+      );
+    } catch (error) {
+      console.error('scheduleQuizGeneration tool failed:', error);
+      return `I couldn't save your quiz schedule. Please try again.\n\n`;
+    }
   }
 
   private async generateFlashcardDeckContent(
@@ -608,12 +661,17 @@ export class AiService {
         (part: any) => part.functionCall?.name === 'createPublicQuiz',
       );
 
+      const scheduleQuizPart = parts.find(
+        (part: any) => part.functionCall?.name === 'scheduleQuizGeneration',
+      );
+
       let scoreAcknowledgement = '';
       let certificateAcknowledgement = '';
       let roadmapAcknowledgement = '';
       let editRoadmapAcknowledgement = '';
       let flashcardAcknowledgement = '';
       let publicQuizAcknowledgement = '';
+      let scheduleQuizAcknowledgement = '';
 
       if (functionPart) {
         const score = Number(functionPart.functionCall?.args?.score || 0);
@@ -925,8 +983,16 @@ export class AiService {
         }
       }
 
+      if (scheduleQuizPart) {
+        scheduleQuizAcknowledgement =
+          await this.runScheduleQuizGenerationFromTool(
+            userId,
+            scheduleQuizPart.functionCall?.args,
+          );
+      }
+
       const fullResponse =
-        `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}${flashcardAcknowledgement}${publicQuizAcknowledgement}${responseText}`.trim();
+        `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}${flashcardAcknowledgement}${publicQuizAcknowledgement}${scheduleQuizAcknowledgement}${responseText}`.trim();
       const assistantMessage = {
         id: generateUUID(),
         role: 'assistant' as const,
@@ -1190,11 +1256,20 @@ export class AiService {
           const pendingPublicQuiz = functionCalls.some(
             (fc) => fc.functionCall?.name === 'createPublicQuiz',
           );
-          if (pendingFlashcards || pendingRoadmap || pendingPublicQuiz) {
+          const pendingScheduleQuiz = functionCalls.some(
+            (fc) => fc.functionCall?.name === 'scheduleQuizGeneration',
+          );
+          if (
+            pendingFlashcards ||
+            pendingRoadmap ||
+            pendingPublicQuiz ||
+            pendingScheduleQuiz
+          ) {
             const statusParts: string[] = [];
             if (pendingRoadmap) statusParts.push('roadmap');
             if (pendingFlashcards) statusParts.push('flashcard deck');
             if (pendingPublicQuiz) statusParts.push('quiz');
+            if (pendingScheduleQuiz) statusParts.push('quiz schedule');
             const status =
               statusParts.length > 1
                 ? `Creating your ${statusParts.join(' and ')}…\n\n`
@@ -1202,7 +1277,9 @@ export class AiService {
                   ? 'Creating your learning roadmap…\n\n'
                   : pendingFlashcards
                     ? 'Creating your flashcard deck…\n\n'
-                    : 'Publishing your quiz…\n\n';
+                    : pendingPublicQuiz
+                      ? 'Publishing your quiz…\n\n'
+                      : 'Saving your quiz schedule…\n\n';
             subscriber.next({
               data: { token: status, type: 'content' },
             });
@@ -1215,6 +1292,7 @@ export class AiService {
           let editRoadmapAcknowledgement = '';
           let flashcardAcknowledgement = '';
           let publicQuizAcknowledgement = '';
+          let scheduleQuizAcknowledgement = '';
 
           for (const funcCall of functionCalls) {
             if (funcCall.functionCall?.name === 'scoreUser') {
@@ -1551,10 +1629,18 @@ export class AiService {
                 );
               }
             }
+
+            if (funcCall.functionCall?.name === 'scheduleQuizGeneration') {
+              scheduleQuizAcknowledgement =
+                await this.runScheduleQuizGenerationFromTool(
+                  userId,
+                  funcCall.functionCall?.args,
+                );
+            }
           }
 
           const acknowledgements =
-            `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}${flashcardAcknowledgement}${publicQuizAcknowledgement}`.trim();
+            `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}${flashcardAcknowledgement}${publicQuizAcknowledgement}${scheduleQuizAcknowledgement}`.trim();
           if (acknowledgements) {
             subscriber.next({
               data: {
