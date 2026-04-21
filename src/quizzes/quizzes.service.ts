@@ -163,13 +163,20 @@ export class QuizzesService {
   async startParticipation(quizId: string, userId: string) {
     await this.getQuizByIdOrThrow(quizId);
 
-    const existingParticipation = await db
-      .select()
+    const [countRow] = await db
+      .select({ count: sql`count(*)` })
       .from(publicQuizParticipation)
-      .where(and(eq(publicQuizParticipation.quizId, quizId), eq(publicQuizParticipation.userId, userId)))
-      .limit(1);
-    if (existingParticipation) {
-      throw new BadRequestException('You have already participated in this quiz');
+      .where(
+        and(
+          eq(publicQuizParticipation.quizId, quizId),
+          eq(publicQuizParticipation.userId, userId),
+        ),
+      );
+    const participationCount = Number(countRow?.count ?? 0);
+    if (participationCount >= 4) {
+      throw new BadRequestException(
+        'You can join this quiz at most 4 times.',
+      );
     }
 
     const [row] = await db
