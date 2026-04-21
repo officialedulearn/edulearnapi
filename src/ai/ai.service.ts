@@ -51,6 +51,7 @@ export class AiService {
     private readonly roadmapService: RoadmapService,
     private readonly quizGenerationService: QuizGenerationService,
     private readonly flashcardService: FlashcardService,
+    @Inject(forwardRef(() => QuizzesService))
     private readonly quizzesService: QuizzesService,
     private readonly speechTranscriptionService: SpeechTranscriptionService,
     private readonly redisService: RedisService,

@@ -1,5 +1,7 @@
 import {
   Injectable,
+  Inject,
+  forwardRef,
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
@@ -25,7 +27,10 @@ interface QuizQuestion {
 
 @Injectable()
 export class QuizzesService {
-  constructor(private readonly activityService: ActivityService) {}
+  constructor(
+    @Inject(forwardRef(() => ActivityService))
+    private readonly activityService: ActivityService,
+  ) {}
 
   private async getQuizByIdOrThrow(id: string) {
     const [quiz] = await db

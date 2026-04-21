@@ -20,7 +20,7 @@ import { QuizzesModule } from 'src/quizzes/quizzes.module';
     RewardsModule,
     forwardRef(() => RoadmapModule),
     RedisModule,
-    QuizzesModule,
+    forwardRef(() => QuizzesModule),
   ],
   controllers: [AiController],
   providers: [
