@@ -12,6 +12,8 @@ import { FlashcardService } from './flashcard.service';
 import { SpeechTranscriptionService } from './speech-transcription.service';
 import { RedisModule } from 'src/redis/redis.module';
 import { QuizzesModule } from 'src/quizzes/quizzes.module';
+import { UserModule } from 'src/user/user.module';
+import { UserService } from 'src/user/user.service';
 
 @Module({
   imports: [
@@ -21,6 +23,7 @@ import { QuizzesModule } from 'src/quizzes/quizzes.module';
     forwardRef(() => RoadmapModule),
     RedisModule,
     forwardRef(() => QuizzesModule),
+    forwardRef(() => UserModule),
   ],
   controllers: [AiController],
   providers: [
@@ -30,6 +33,7 @@ import { QuizzesModule } from 'src/quizzes/quizzes.module';
     FlashcardService,
     SpeechTranscriptionService,
     AiService,
+    UserService,
   ],
   exports: [
     AiService,

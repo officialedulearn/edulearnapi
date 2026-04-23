@@ -47,6 +47,7 @@ export const user = pgTable('user', {
   totalEarnings: numeric('totalEarnings', { precision: 10, scale: 2 }).default(
     '0.00',
   ),
+  memory: varchar('memory', { length: 500 }).default(''),
   expoPushToken: text('expoPushToken'),
   profilePictureURL: text('profilePictureURL'),
   oauthProvider: text('oauth_provider'),
@@ -395,6 +396,7 @@ export const publicQuiz = pgTable('public_quiz', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   viewCount: integer('viewCount').notNull().default(0),
   attemptCount: integer('attemptCount').notNull().default(0),
+  creatorId: uuid('creatorId').references(() => user.id),
 });
 
 export type PublicQuiz = InferSelectModel<typeof publicQuiz>;
@@ -490,3 +492,17 @@ export const trends = pgTable('trends', {
 
 export type Trends = InferSelectModel<typeof trends>;
 export type Flashcard = InferSelectModel<typeof flashcard>;
+
+
+export const agent = pgTable('agent', {
+  id: uuid('id').primaryKey().notNull().defaultRandom(),
+  userId: uuid('userId')
+    .notNull()
+    .references(() => user.id),
+  name: text('name').notNull(),
+  purpose: text('purpose').notNull(),
+  profile_picture_url: text('profile_picture_url'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+});
+
+export type Agent = InferSelectModel<typeof agent>;

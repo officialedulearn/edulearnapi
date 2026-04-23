@@ -8,7 +8,7 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import { Message } from 'lib/db/schema';
+import { message, Message } from 'lib/db/schema';
 import { getMostRecentUserMessage } from 'lib/utils';
 import { AuthService } from 'src/auth/auth.service';
 import { ChatService } from 'src/chat/chat.service';
@@ -31,6 +31,9 @@ import type {
   StudySuggestionsResponse,
   UpdateStudySuggestionFeedbackDto,
 } from './dto/ai.dto';
+import { extractMemoryPrompt } from './prompts/extract-memory.prompt';
+import { UserService } from 'src/user/user.service';
+const MAX_MEMORY_CHARS = 500;
 
 const STUDY_SUGGESTIONS_TTL_SEC = 14 * 24 * 60 * 60;
 
@@ -57,6 +60,8 @@ export class AiService {
     @Inject(forwardRef(() => QuizScheduleService))
     private readonly quizScheduleService: QuizScheduleService,
     private readonly speechTranscriptionService: SpeechTranscriptionService,
+    @Inject(forwardRef(() => UserService))
+    private readonly userService: UserService,
     private readonly redisService: RedisService,
   ) {}
 
@@ -1039,6 +1044,14 @@ export class AiService {
 
     return new Observable((subscriber) => {
       (async () => {
+        if(messages.length >= 10) {
+          const { success, memory } = await this.extractMemoryAndSaveToDb(userId, messages);
+          if(!success) {
+            throw new Error('Failed to extract memory');
+          }
+        }
+      })();
+      (async () => {
         try {
           const recentUserMessage = getMostRecentUserMessage(messages);
           if (!recentUserMessage) {
@@ -1192,17 +1205,23 @@ export class AiService {
               role: msg.role === 'assistant' ? 'model' : 'user',
               parts: [{ text: textContent }],
             };
+
           });
+
+          const hasUrl = formattedMessages.some((m: any) =>
+            JSON.stringify(m).match(/https?:\/\//)
+          );
+          
+          const tools = [
+            ...(hasUrl ? [{ urlContext: {} }] : []),
+            { functionDeclarations: [...GEMINI_TUTOR_FUNCTION_DECLARATIONS] },
+          ];
 
           const stream = await this.geminiClient.genAI.models.generateContentStream({
             model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
             contents: formattedMessages,
             config: {
-              tools: [
-                {
-                  functionDeclarations: [...GEMINI_TUTOR_FUNCTION_DECLARATIONS],
-                },
-              ],
+              tools,
               maxOutputTokens: 5000,
               temperature: 1,
               systemInstruction: systemInstruction,
@@ -1888,6 +1907,43 @@ Return ONLY valid JSON with no additional text.
         feedback: {},
         fromCache: false,
       };
+    }
+  }
+
+  async extractMemoryAndSaveToDb(
+    userId: string,
+    messages: Message[]
+  ): Promise<{ success: boolean; memory: string }> {
+    try {
+      // check existing memory first before making the API call
+      const existingMemory = await this.userService.getUserMemory(userId);
+  
+      if (existingMemory && existingMemory.length >= MAX_MEMORY_CHARS) {
+        return { success: true, memory: existingMemory }; // already at cap, skip Gemini call
+      }
+  
+      const result = await this.geminiClient.genAI.models.generateContent({
+        model: 'gemini-2.5-flash',
+        config: {
+          systemInstruction: extractMemoryPrompt,
+        },
+        contents: messages,
+      });
+  
+      const extracted = result.text?.trim() || '';
+      if (!extracted) return { success: false, memory: '' };
+  
+      const merged = existingMemory
+        ? `${existingMemory}\n${extracted}`
+        : extracted;
+  
+      const capped = merged.slice(0, MAX_MEMORY_CHARS);
+  
+      await this.userService.updateUserMemory(userId, capped);
+      return { success: true, memory: capped };
+    } catch (error) {
+      console.error('Error extracting memory:', error);
+      return { success: false, memory: '' };
     }
   }
 

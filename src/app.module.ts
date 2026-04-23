@@ -27,6 +27,8 @@ import { QuizzesModule } from './quizzes/quizzes.module';
 import { EmailPreviewModule } from './emails/email-preview.module';
 import { MonthlyLeaderboardModule } from './monthly-leaderboard/monthly-leaderboard.module';
 import { TrendsModule } from './trends/trends.module';
+import { AgentModule } from './agent/agent.module';
+import { UserModule } from './user/user.module';
 
 @Module({
   imports: [
@@ -58,6 +60,8 @@ import { TrendsModule } from './trends/trends.module';
     EmailPreviewModule,
     MonthlyLeaderboardModule,
     TrendsModule,
+    AgentModule,
+    UserModule,
   ],
   controllers: [AppController],
   providers: [AppService, RedisService],

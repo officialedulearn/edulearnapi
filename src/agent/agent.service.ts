@@ -1,0 +1,51 @@
+import { Injectable } from '@nestjs/common';
+import { Agent, agent } from 'lib/db/schema';
+import { v4 as uuid } from 'uuid';
+import db from '../../drizzle';
+import { eq } from 'drizzle-orm';
+
+@Injectable()
+export class AgentService {
+  async createAgent({
+    userId,
+    name,
+    purpose,
+    profile_picture_url,
+  }: {
+    userId: string;
+    name: string;
+    purpose: string;
+    profile_picture_url: string;
+  }): Promise<Agent> {
+
+    const userHasAgent = await db.select().from(agent).where(eq(agent.userId, userId));
+    if (userHasAgent.length > 0) {
+      throw new Error('User already has an agent');
+    }
+    const newAgentId = uuid();
+    const [result] = await db
+      .insert(agent)
+      .values({
+        id: newAgentId,
+        userId,
+        name,
+        purpose,
+        profile_picture_url,
+      })
+      .returning();
+    return result;
+  }
+
+  async getAgentById(agentId: string): Promise<Agent> {
+    const [result] = await db.select().from(agent).where(eq(agent.id, agentId));
+    if (!result) {
+      throw new Error('Agent not found');
+    }
+    return result;
+  }
+
+  async getAgentsByUserId(userId: string): Promise<Agent[]> {
+    const result = await db.select().from(agent).where(eq(agent.userId, userId));
+    return result;
+  }
+}

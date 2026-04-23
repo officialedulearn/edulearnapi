@@ -10,8 +10,8 @@ import { QuizGenerationService } from 'src/ai/quiz-generation.service';
 import { NotificationsService } from 'src/common/services/notifications.service';
 import { ChatService } from 'src/chat/chat.service';
 import db from '../../drizzle';
-import { quizGenerationSchedule, user } from '../../lib/db/schema';
-import { and, eq } from 'drizzle-orm';
+import { publicQuiz, quizGenerationSchedule, user } from '../../lib/db/schema';
+import { and, eq, desc } from 'drizzle-orm';
 import { QuizScheduleBullmqService } from './quiz-schedule-bullmq.service';
 import { QUIZ_SCHEDULE_QUEUE_NAME } from './quiz-schedule.constants';
 import type { QuizScheduleJobData } from './quiz-schedule.types';
@@ -111,6 +111,28 @@ export class QuizScheduleProcessorService
       explanation: string;
     }>;
     try {
+      const mostRecentQuiz = await db
+        .select()
+        .from(publicQuiz)
+        .where(eq(publicQuiz.creatorId, userId))
+        .orderBy(desc(publicQuiz.createdAt))
+        .limit(1)
+        .then((r) => r[0]);
+
+        // if the most recent quiz has no attempts, skip the generation
+      if (mostRecentQuiz?.attemptCount && mostRecentQuiz.attemptCount <= 0) {
+        this.logger.log(`Most recent quiz has no attempts, skipping generation for user ${userId}`);
+        await this.notificationsService.createNotification(
+          {
+            userId,
+            title: 'Scheduled quiz skipped',
+            content: 'Your scheduled quiz did not run because the most recent quiz has no attempts.',
+          },
+          true,
+        );
+        return;
+      }
+
       questions = await this.quizGenerationService.generateScheduledQuiz({
         userId,
         topic: schedule.topic,
