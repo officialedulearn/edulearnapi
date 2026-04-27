@@ -2081,13 +2081,32 @@ Return ONLY valid JSON with no additional text.
       if (existingMemory && existingMemory.length >= MAX_MEMORY_CHARS) {
         return { success: true, memory: existingMemory }; // already at cap, skip Gemini call
       }
-  
+
+      const formattedMessages = messages.map((msg: any) => {
+        let textContent = '';
+
+        if (typeof msg.content === 'string') {
+          textContent = msg.content;
+        } else if (msg.content && typeof msg.content.text === 'string') {
+          textContent = msg.content.text;
+        } else if (msg.content && typeof msg.content === 'object') {
+          textContent = JSON.stringify(msg.content);
+        } else {
+          textContent = String(msg.content || '');
+        }
+
+        return {
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: textContent }],
+        };
+      });
+
       const result = await this.geminiClient.genAI.models.generateContent({
         model: 'gemini-2.5-flash',
         config: {
           systemInstruction: extractMemoryPrompt,
         },
-        contents: messages,
+        contents: formattedMessages,
       });
   
       const extracted = result.text?.trim() || '';
