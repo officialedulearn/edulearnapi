@@ -1,13 +1,13 @@
 import {
-  Body,
   Controller,
   Get,
   NotFoundException,
   Param,
-  Patch,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { UserService } from './user.service';
 
+@Throttle({ default: { limit: 40, ttl: 60_000 } })
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}

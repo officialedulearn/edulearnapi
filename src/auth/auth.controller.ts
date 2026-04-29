@@ -15,13 +15,12 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { signUpDetails } from 'types/auth';
-import { ApiKeyGuard } from './guards/api-key.guard';
 import { FlexibleAuthGuard } from './guards/flexible-auth.guard';
 import {
-  getAuthenticatedUserId,
   verifyUserAuthorization,
 } from '../common/helpers/authorization.helper';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { Throttle } from '@nestjs/throttler';
 import { UserResponse } from './auth.service';
 
 @Controller('auth')
@@ -29,6 +28,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @HttpCode(200)
+  @Throttle({ default: { limit: 15, ttl: 60_000 } })
   @Post('check-availability')
   async checkAvailability(@Body() body: { email?: string; username?: string }) {
     const { email, username } = body;
@@ -44,6 +44,7 @@ export class AuthController {
     return result;
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('signup')
   async signUp(@Body() data: signUpDetails) {
     const result = (await this.authService.createUser(
@@ -296,6 +297,7 @@ export class AuthController {
     }
   }
 
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('oauth/callback')
   async handleOAuthCallback(
     @Body()

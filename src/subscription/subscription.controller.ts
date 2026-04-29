@@ -15,6 +15,7 @@ import { SubscriptionService } from './subscription.service';
 import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
+import { Throttle } from '@nestjs/throttler';
 
 interface RevenueCatWebhookEvent {
   api_version: string;
@@ -41,6 +42,7 @@ export class SubscriptionController {
     private readonly configService: ConfigService,
   ) {}
 
+  @Throttle({ default: { limit: 100, ttl: 60_000 } })
   @Post('revenuecat/webhook')
   @HttpCode(200)
   async handleRevenueCatWebhook(

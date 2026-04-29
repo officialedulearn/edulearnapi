@@ -8,6 +8,7 @@ import {
   NotFoundException,
   Request,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { RoadmapService } from './roadmap.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AiService } from 'src/ai/ai.service';
@@ -24,6 +25,7 @@ export class RoadmapController {
     private readonly aiService: AiService,
   ) {}
 
+  @Throttle({ default: { limit: 15, ttl: 60_000 } })
   @Post('generate')
   async generateRoadmap(
     @Request() req,

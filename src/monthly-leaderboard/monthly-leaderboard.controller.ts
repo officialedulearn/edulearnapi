@@ -7,6 +7,7 @@ import {
   Body,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { FastifyReply } from 'fastify';
 import { MonthlyLeaderboardService } from './monthly-leaderboard.service';
 import { AdminApiKeyGuard } from '../auth/guards/admin-api-key.guard';
@@ -17,6 +18,7 @@ export class MonthlyLeaderboardController {
     private readonly monthlyLeaderboardService: MonthlyLeaderboardService,
   ) {}
 
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Get('preview')
   async preview(
     @Query('year') yearStr: string,

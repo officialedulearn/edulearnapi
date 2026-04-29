@@ -10,6 +10,7 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   verifyUserAuthorization,
@@ -70,6 +71,7 @@ export class QuizzesController {
     return this.quizzesService.findMine(userId, limitNum, offsetNum);
   }
 
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @Get('public')
   async list(
     @Query('limit') limit?: string,
@@ -82,6 +84,7 @@ export class QuizzesController {
     return this.quizzesService.findAll(limitNum, offsetNum, sortVal);
   }
 
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @Get('public/:id')
   async getOne(@Param('id') id: string) {
     return this.quizzesService.findOne(id);

@@ -11,10 +11,12 @@ import {
   NotFoundException,
   Put,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AdminService } from './admin.service';
 import { AdminApiKeyGuard } from '../auth/guards/admin-api-key.guard';
 import type { NftListingBroadcastData } from '../emails/nft-listing-announcement.config';
 
+@Throttle({ default: { limit: 80, ttl: 60_000 } })
 @Controller('admin')
 @UseGuards(AdminApiKeyGuard)
 export class AdminController {

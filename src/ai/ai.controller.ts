@@ -21,13 +21,13 @@ import {
   DefaultValuePipe,
   ParseIntPipe,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Observable } from 'rxjs';
 import type { FastifyRequest } from 'fastify';
 import { mkdirSync, createWriteStream } from 'fs';
 import { pipeline } from 'stream/promises';
 import { randomBytes } from 'crypto';
 import { join, extname } from 'path';
-import { FlexibleAuthGuard } from 'src/auth/guards/flexible-auth.guard';
 import { AiService } from './ai.service';
 import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
 import {
@@ -40,6 +40,7 @@ import {
 } from './dto/ai.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
+@Throttle({ default: { limit: 40, ttl: 60_000 } })
 @Controller('ai')
 @UseGuards(JwtAuthGuard)
 export class AiController {

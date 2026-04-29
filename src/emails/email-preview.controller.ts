@@ -1,4 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { render } from '@react-email/render';
 import * as React from 'react';
 import { V25AnnouncementEmail } from './templates/V25AnnouncementEmail';
@@ -10,6 +11,7 @@ import { ReferralSuperstarEmail } from './templates/ReferralSuperstarEmail';
 import { NftListingAnnouncementEmail } from './templates/NftListingAnnouncementEmail';
 import { mergeNftListingBroadcastData } from './nft-listing-announcement.config';
 
+@Throttle({ default: { limit: 35, ttl: 60_000 } })
 @Controller('emails/preview')
 export class EmailPreviewController {
   @Get('v25-announcement')

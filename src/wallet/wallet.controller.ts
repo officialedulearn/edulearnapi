@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
 import { DeviceInfo, OnrampWebhookData } from './wallet.service';
 import { AuthService } from '../auth/auth.service';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('wallet')
 export class WalletController {
@@ -49,6 +50,7 @@ export class WalletController {
     }
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('onramp/verify')
   async verifyOnramp(
     @Response({ passthrough: false }) res: FastifyReply,
@@ -126,6 +128,7 @@ export class WalletController {
     }
   }
 
+  @Throttle({ default: { limit: 40, ttl: 60_000 } })
   @Post('onramp-webhook')
   @HttpCode(200)
   async onrampWebhook(@Req() req: RawBodyRequest<FastifyRequest>) {
@@ -349,6 +352,7 @@ export class WalletController {
     }
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('decrypt-private-key')
   @UseGuards(JwtAuthGuard)
   async decryptPrivateKey(

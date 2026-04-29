@@ -1,7 +1,9 @@
 import { Controller, Get, Res, Query, Param } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { CardsService } from './cards.service';
 import type { FastifyReply } from 'fastify';
 
+@Throttle({ default: { limit: 45, ttl: 60_000 } })
 @Controller('cards')
 export class CardsController {
   constructor(private readonly cardsService: CardsService) {}

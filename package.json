@@ -58,6 +58,7 @@
     "@nestjs/platform-socket.io": "^11.0.1",
     "@nestjs/schedule": "^6.0.0",
     "@nestjs/swagger": "^11.2.1",
+    "@nestjs/throttler": "^6.4.0",
     "@nestjs/websockets": "^11.0.1",
     "@perplexity-ai/perplexity_ai": "^0.26.4",
     "@project-serum/anchor": "^0.26.0",
@@ -135,12 +136,18 @@
     "moduleFileExtensions": [
       "js",
       "json",
-      "ts"
+      "ts",
+      "tsx"
     ],
     "rootDir": "src",
+    "moduleNameMapper": {
+      "^lib/(.*)$": "<rootDir>/../lib/$1",
+      "^types/(.*)$": "<rootDir>/../types/$1",
+      "^src/(.*)$": "<rootDir>/$1"
+    },
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
+      "^.+\\.(t|j)sx?$": "ts-jest"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"

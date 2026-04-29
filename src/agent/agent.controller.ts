@@ -7,8 +7,10 @@ import {
   Param,
   Post,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AgentService } from './agent.service';
 
+@Throttle({ default: { limit: 25, ttl: 60_000 } })
 @Controller('agent')
 export class AgentController {
   constructor(private readonly agentService: AgentService) {}

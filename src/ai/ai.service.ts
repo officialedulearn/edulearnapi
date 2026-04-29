@@ -35,6 +35,57 @@ import { extractMemoryPrompt } from './prompts/extract-memory.prompt';
 import { UserService } from 'src/user/user.service';
 const MAX_MEMORY_CHARS = 500;
 
+function normalizeMemoryFactLine(raw: string): string {
+  return raw
+    .replace(/\*\*/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function mergeMemoryDeduped(
+  existing: string,
+  newFacts: string[],
+  maxChars: number,
+): string {
+  const seen = new Set<string>();
+  const lines: string[] = [];
+
+  const add = (s: string) => {
+    const n = normalizeMemoryFactLine(s);
+    if (n.length < 4) return;
+    const key = n.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    lines.push(n);
+  };
+
+  for (const line of existing.split('\n')) add(line);
+  for (const f of newFacts) add(f);
+
+  while (lines.join('\n').length > maxChars && lines.length > 1) {
+    lines.shift();
+  }
+
+  let out = lines.join('\n');
+  if (out.length > maxChars) {
+    out = out.slice(0, maxChars).trimEnd();
+  }
+  return out;
+}
+
+function formatMessageText(msg: any): string {
+  if (typeof msg.content === 'string') {
+    return msg.content;
+  }
+  if (msg.content && typeof msg.content.text === 'string') {
+    return msg.content.text;
+  }
+  if (msg.content && typeof msg.content === 'object') {
+    return JSON.stringify(msg.content);
+  }
+  return String(msg.content || '');
+}
+
 const TUTOR_URL_PREFETCH_MAX_URLS = 3;
 const TUTOR_URL_FETCH_TIMEOUT_MS = 12_000;
 const TUTOR_URL_MAX_RESPONSE_BYTES = 400_000;
@@ -1158,14 +1209,11 @@ export class AiService {
     const { Observable } = require('rxjs');
 
     return new Observable((subscriber) => {
-      (async () => {
-        if(messages.length >= 10) {
-          const { success, memory } = await this.extractMemoryAndSaveToDb(userId, messages);
-          if(!success) {
-            throw new Error('Failed to extract memory');
-          }
-        }
-      })();
+      if (messages.length >= 10) {
+        void this.extractMemoryAndSaveToDb(userId, messages).catch((err) =>
+          console.error('Memory extraction failed:', err),
+        );
+      }
       (async () => {
         try {
           const recentUserMessage = getMostRecentUserMessage(messages);
@@ -2074,55 +2122,85 @@ Return ONLY valid JSON with no additional text.
     userId: string,
     messages: Message[]
   ): Promise<{ success: boolean; memory: string }> {
+    const existingMemory = await this.userService.getUserMemory(userId);
+
+    if (existingMemory.length >= MAX_MEMORY_CHARS) {
+      return { success: true, memory: existingMemory };
+    }
+
+    const userLines = messages
+      .filter((m) => m.role === 'user')
+      .map((msg) => formatMessageText(msg).trim())
+      .filter(Boolean);
+
+    if (userLines.length === 0) {
+      return { success: true, memory: existingMemory };
+    }
+
+    const transcript = userLines
+      .map((t, i) => `${i + 1}. ${t}`)
+      .join('\n');
+
     try {
-      // check existing memory first before making the API call
-      const existingMemory = await this.userService.getUserMemory(userId);
-  
-      if (existingMemory && existingMemory.length >= MAX_MEMORY_CHARS) {
-        return { success: true, memory: existingMemory }; // already at cap, skip Gemini call
-      }
-
-      const formattedMessages = messages.map((msg: any) => {
-        let textContent = '';
-
-        if (typeof msg.content === 'string') {
-          textContent = msg.content;
-        } else if (msg.content && typeof msg.content.text === 'string') {
-          textContent = msg.content.text;
-        } else if (msg.content && typeof msg.content === 'object') {
-          textContent = JSON.stringify(msg.content);
-        } else {
-          textContent = String(msg.content || '');
-        }
-
-        return {
-          role: msg.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: textContent }],
-        };
-      });
-
       const result = await this.geminiClient.genAI.models.generateContent({
         model: 'gemini-2.5-flash',
         config: {
+          temperature: 0.2,
+          maxOutputTokens: 512,
           systemInstruction: extractMemoryPrompt,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              facts: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.STRING,
+                  description:
+                    'One short third-person fact about the learner; no markdown or filler',
+                },
+              },
+            },
+            required: ['facts'],
+          },
         },
-        contents: formattedMessages,
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: `User messages:\n${transcript}` }],
+          },
+        ],
       });
-  
-      const extracted = result.text?.trim() || '';
-      if (!extracted) return { success: false, memory: '' };
-  
-      const merged = existingMemory
-        ? `${existingMemory}\n${extracted}`
-        : extracted;
-  
-      const capped = merged.slice(0, MAX_MEMORY_CHARS);
-  
-      await this.userService.updateUserMemory(userId, capped);
-      return { success: true, memory: capped };
+
+      const raw = result.text?.trim();
+      if (!raw) {
+        return { success: true, memory: existingMemory };
+      }
+
+      let facts: string[] = [];
+      try {
+        const parsed = JSON.parse(raw) as { facts?: unknown };
+        if (Array.isArray(parsed.facts)) {
+          facts = parsed.facts.filter((x) => typeof x === 'string') as string[];
+        }
+      } catch {
+        return { success: true, memory: existingMemory };
+      }
+
+      if (facts.length === 0) {
+        return { success: true, memory: existingMemory };
+      }
+
+      const merged = mergeMemoryDeduped(existingMemory, facts, MAX_MEMORY_CHARS);
+      if (merged === existingMemory) {
+        return { success: true, memory: existingMemory };
+      }
+
+      await this.userService.updateUserMemory(userId, merged);
+      return { success: true, memory: merged };
     } catch (error) {
       console.error('Error extracting memory:', error);
-      return { success: false, memory: '' };
+      return { success: true, memory: existingMemory };
     }
   }
 
