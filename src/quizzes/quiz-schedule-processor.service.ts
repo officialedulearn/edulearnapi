@@ -119,8 +119,7 @@ export class QuizScheduleProcessorService
         .limit(1)
         .then((r) => r[0]);
 
-        // if the most recent quiz has no attempts, skip the generation
-      if (mostRecentQuiz?.attemptCount && mostRecentQuiz.attemptCount <= 0) {
+      if (mostRecentQuiz != null && mostRecentQuiz.attemptCount < 1) {
         this.logger.log(`Most recent quiz has no attempts, skipping generation for user ${userId}`);
         await this.notificationsService.createNotification(
           {

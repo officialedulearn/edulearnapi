@@ -1,6 +1,8 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
+import { AiStructuredGenerationService } from './ai-structured-generation.service';
+import { AiTutorChatService } from './ai-tutor-chat.service';
 import { ChatModule } from 'src/chat/chat.module';
 import { AuthModule } from 'src/auth/auth.module';
 import { RewardsModule } from 'src/rewards/rewards.module';
@@ -32,6 +34,8 @@ import { UserService } from 'src/user/user.service';
     QuizGenerationService,
     FlashcardService,
     SpeechTranscriptionService,
+    AiStructuredGenerationService,
+    AiTutorChatService,
     AiService,
     UserService,
   ],
