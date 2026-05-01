@@ -48,7 +48,7 @@ export class AgentService {
 
   async getAgentsByUserId(userId: string): Promise<Agent[]> {
     const result = await db.select().from(agent).where(eq(agent.userId, userId));
-    return result;
+    return result[0];
   }
 
   async uploadAgentProfilePicture(
