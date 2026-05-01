@@ -1,11 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Agent, agent } from 'lib/db/schema';
 import { v4 as uuid } from 'uuid';
 import db from '../../drizzle';
 import { eq } from 'drizzle-orm';
+import { CloudinaryService } from 'src/common/cloudinary/cloudinary.service';
 
 @Injectable()
 export class AgentService {
+  constructor(private readonly cloudinaryService: CloudinaryService) {}
   async createAgent({
     userId,
     name,
@@ -47,5 +49,24 @@ export class AgentService {
   async getAgentsByUserId(userId: string): Promise<Agent[]> {
     const result = await db.select().from(agent).where(eq(agent.userId, userId));
     return result;
+  }
+
+  async uploadAgentProfilePicture(
+    agentId: string,
+    buffer: Buffer,
+  ): Promise<{ profile_picture_url: string }> {
+    const url = await this.cloudinaryService.uploadImageBuffer(
+      buffer,
+      'profiles/agents',
+    );
+    const updated = await db
+      .update(agent)
+      .set({ profile_picture_url: url })
+      .where(eq(agent.id, agentId))
+      .returning();
+    if (!updated.length) {
+      throw new NotFoundException('Agent not found');
+    }
+    return { profile_picture_url: url };
   }
 }

@@ -12,16 +12,20 @@ import {
   UseGuards,
   Request,
   HttpCode,
+  Req,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { signUpDetails } from 'types/auth';
 import { FlexibleAuthGuard } from './guards/flexible-auth.guard';
 import {
   verifyUserAuthorization,
+  verifyUserEmail,
 } from '../common/helpers/authorization.helper';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Throttle } from '@nestjs/throttler';
 import { UserResponse } from './auth.service';
+import type { FastifyRequest } from 'fastify';
+import { parseProfileImageMultipart } from '../common/helpers/multipart-image.helper';
 
 @Controller('auth')
 export class AuthController {
@@ -104,6 +108,15 @@ export class AuthController {
     }
 
     return updatedUser;
+  }
+
+  @HttpCode(200)
+  @Post('profile-picture/upload')
+  @UseGuards(FlexibleAuthGuard)
+  async uploadProfilePicture(@Req() req: FastifyRequest) {
+    const email = await verifyUserEmail(req['user']);
+    const { buffer } = await parseProfileImageMultipart(req);
+    return await this.authService.uploadUserProfilePicture(email, buffer);
   }
 
   @Put('address')

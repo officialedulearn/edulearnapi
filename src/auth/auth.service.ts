@@ -1,4 +1,4 @@
-import { Injectable, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Inject, forwardRef, NotFoundException } from '@nestjs/common';
 import { eq, desc, ilike, or, inArray } from 'drizzle-orm';
 import db from '../../drizzle';
 import {
@@ -40,6 +40,7 @@ import { update } from '@metaplex-foundation/mpl-core';
 import { SocialService } from 'src/social/social.service';
 import { LeaderboardService } from 'src/leaderboard/leaderboard.service';
 import resend from 'resend';
+import { CloudinaryService } from 'src/common/cloudinary/cloudinary.service';
 
 export interface UserResponse extends User {
   quizLimit: number;
@@ -60,6 +61,7 @@ export class AuthService {
     @Inject(forwardRef(() => SocialService))
     private socialService: SocialService,
     private leaderboardService: LeaderboardService,
+    private cloudinaryService: CloudinaryService,
   ) {}
   async createUser(data: signUpDetails): Promise<UserResponse | Error> {
     try {
@@ -399,6 +401,25 @@ export class AuthService {
       console.error('Failed to update user profile picture');
       throw error;
     }
+  }
+
+  async uploadUserProfilePicture(
+    email: string,
+    buffer: Buffer,
+  ): Promise<{ profilePictureURL: string }> {
+    const url = await this.cloudinaryService.uploadImageBuffer(
+      buffer,
+      'profiles/users',
+    );
+    const updated = await db
+      .update(user)
+      .set({ profilePictureURL: url })
+      .where(eq(user.email, email))
+      .returning();
+    if (!updated.length) {
+      throw new NotFoundException('User not found');
+    }
+    return { profilePictureURL: url };
   }
 
   async updateUserAddress(email: string, address: string) {

@@ -12,9 +12,11 @@ import { RoadmapModule } from 'src/roadmap/roadmap.module';
 import { CommunityModule } from 'src/community/community.module';
 import { SocialModule } from 'src/social/social.module';
 import { LeaderboardModule } from 'src/leaderboard/leaderboard.module';
+import { CloudinaryModule } from 'src/common/cloudinary/cloudinary.module';
 
 @Module({
   imports: [
+    CloudinaryModule,
     ActivityModule,
     forwardRef(() => WalletModule),
     RewardsModule,
