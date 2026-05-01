@@ -7,5 +7,6 @@ import { CloudinaryModule } from 'src/common/cloudinary/cloudinary.module';
   imports: [CloudinaryModule],
   controllers: [AgentController],
   providers: [AgentService],
+  exports: [AgentService],
 })
 export class AgentModule {}

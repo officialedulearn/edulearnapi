@@ -23,6 +23,7 @@ import { FlashcardService } from './flashcard.service';
 import { AiStructuredGenerationService } from './ai-structured-generation.service';
 import { buildPrefetchedUrlContext, toGeminiMessageParts, MAX_MEMORY_CHARS, mergeMemoryDeduped } from './ai.helpers';
 import { UserService } from 'src/user/user.service';
+import { AgentService } from 'src/agent/agent.service';
 
 @Injectable()
 export class AiTutorChatService {
@@ -41,7 +42,28 @@ export class AiTutorChatService {
     private readonly quizScheduleService: QuizScheduleService,
     private readonly structured: AiStructuredGenerationService,
     private readonly userService: UserService,
+    private readonly agentService: AgentService,
   ) {}
+
+  private async getAgentPromptContext(userId: string): Promise<{
+    name: string;
+    purpose: string;
+  }> {
+    try {
+      const agent = await this.agentService.getAgentsByUserId(userId);
+      return {
+        name: agent?.name?.trim() || 'EduLearn',
+        purpose:
+          agent?.purpose?.trim() ||
+          'Help users build proof of knowledge and proof of work in Web3.',
+      };
+    } catch {
+      return {
+        name: 'EduLearn',
+        purpose: 'Help users build proof of knowledge and proof of work in Web3.',
+      };
+    }
+  }
 
   async checkUserCredits(userId: string): Promise<number> {
     try {
@@ -259,11 +281,15 @@ export class AiTutorChatService {
       }
     }
 
+    const agentContext = await this.getAgentPromptContext(userId);
+
     const systemInstruction = buildTutorSystemInstruction({
       user,
       ownedCertificates,
       availableCertificates,
       memory: userMemory,
+      agentName: agentContext.name,
+      agentPurpose: agentContext.purpose,
     });
 
     await this.chatService.saveMessages({
@@ -837,11 +863,15 @@ export class AiTutorChatService {
             }
           }
 
+          const agentContext = await this.getAgentPromptContext(userId);
+
           const systemInstruction = buildTutorSystemInstruction({
             user,
             ownedCertificates,
             availableCertificates,
             memory: userMemory,
+            agentName: agentContext.name,
+            agentPurpose: agentContext.purpose,
           });
 
           await this.chatService.saveMessages({

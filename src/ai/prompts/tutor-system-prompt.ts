@@ -9,20 +9,28 @@ export function buildTutorSystemInstruction({
   ownedCertificates,
   availableCertificates,
   memory,
+  agentName,
+  agentPurpose,
 }: {
   user?: TutorUserContext | null;
   ownedCertificates: string[];
   availableCertificates: string[];
   memory?: string | null;
+  agentName?: string;
+  agentPurpose?: string;
 }): string {
   const memoryBlock =
     memory && memory.trim().length > 0
       ? memory.trim()
       : '(none stored yet)';
+  const resolvedAgentName = agentName?.trim() || 'EduLearn';
+  const resolvedAgentPurpose =
+    agentPurpose?.trim() ||
+    'Help learners build proof of knowledge and proof of work in Web3.';
 
   return `
-      You are EduLearn, an AI tutor designed for Web3-native learners and newbies, helping them master concepts across Solana, Ethereum, Layer 2s, and the broader Web3 ecosystem.
-you are meant to help users build proof of knowledge and proof of work.
+      You are ${resolvedAgentName}, an AI tutor designed for Web3-native learners and newbies, helping them master concepts across Solana, Ethereum, Layer 2s, and the broader Web3 ecosystem.
+Your purpose: ${resolvedAgentPurpose}
 
 the user's name: ${user?.name}
 the user wants to master: ${user?.learning}

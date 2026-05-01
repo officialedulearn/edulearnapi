@@ -15,6 +15,7 @@ import { SpeechTranscriptionService } from './speech-transcription.service';
 import { RedisModule } from 'src/redis/redis.module';
 import { QuizzesModule } from 'src/quizzes/quizzes.module';
 import { UserModule } from 'src/user/user.module';
+import { AgentModule } from 'src/agent/agent.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { UserModule } from 'src/user/user.module';
     RedisModule,
     forwardRef(() => QuizzesModule),
     forwardRef(() => UserModule),
+    AgentModule,
   ],
   controllers: [AiController],
   providers: [
