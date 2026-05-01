@@ -7,7 +7,7 @@ import { CloudinaryService } from 'src/common/cloudinary/cloudinary.service';
 
 @Injectable()
 export class AgentService {
-  constructor(private readonly cloudinaryService: CloudinaryService) {}
+  constructor(private readonly cloudinaryService: CloudinaryService) { }
   async createAgent({
     userId,
     name,
@@ -46,9 +46,12 @@ export class AgentService {
     return result;
   }
 
-  async getAgentsByUserId(userId: string): Promise<Agent[]> {
-    const result = await db.select().from(agent).where(eq(agent.userId, userId));
-    return result[0];
+  async getAgentsByUserId(userId: string): Promise<Agent> {
+    const [result] = await db.select().from(agent).where(eq(agent.userId, userId));
+    if (!result) {
+      throw new Error('Agent not found');
+    }
+    return result;
   }
 
   async uploadAgentProfilePicture(
