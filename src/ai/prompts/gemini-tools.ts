@@ -229,6 +229,28 @@ export const geminiCreateFlashcardDeckTool = {
   },
 };
 
+export const geminiUpdateUserMemoryTool = {
+  name: 'updateUserMemory',
+  description:
+    'Persist new durable facts about the learner for future sessions. The system message includes LONG-TERM LEARNER MEMORY—only call this when the user shares information that is NOT already covered there (no duplicates or paraphrases of existing lines). Each fact should be a short neutral third-person line (e.g. "Wants to specialize in Solana smart contracts"). Omit pleasantries and meta-talk. If nothing genuinely new, do not call.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      facts: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.STRING,
+          description:
+            'One new fact; must not repeat or overlap existing memory in the profile',
+        },
+        description:
+          'Non-empty only when there is at least one new fact to store',
+      },
+    },
+    required: ['facts'],
+  },
+};
+
 export const geminiEditRoadmapTool = {
   name: 'editLearningRoadmap',
   description:
@@ -293,4 +315,5 @@ export const GEMINI_TUTOR_FUNCTION_DECLARATIONS = [
   geminiScheduleQuizGenerationTool,
   geminiCreateFlashcardDeckTool,
   geminiEditRoadmapTool,
+  geminiUpdateUserMemoryTool,
 ];

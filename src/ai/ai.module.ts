@@ -15,7 +15,6 @@ import { SpeechTranscriptionService } from './speech-transcription.service';
 import { RedisModule } from 'src/redis/redis.module';
 import { QuizzesModule } from 'src/quizzes/quizzes.module';
 import { UserModule } from 'src/user/user.module';
-import { UserService } from 'src/user/user.service';
 
 @Module({
   imports: [
@@ -37,7 +36,6 @@ import { UserService } from 'src/user/user.service';
     AiStructuredGenerationService,
     AiTutorChatService,
     AiService,
-    UserService,
   ],
   exports: [
     AiService,

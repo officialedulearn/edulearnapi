@@ -8,11 +8,18 @@ export function buildTutorSystemInstruction({
   user,
   ownedCertificates,
   availableCertificates,
+  memory,
 }: {
   user?: TutorUserContext | null;
   ownedCertificates: string[];
   availableCertificates: string[];
+  memory?: string | null;
 }): string {
+  const memoryBlock =
+    memory && memory.trim().length > 0
+      ? memory.trim()
+      : '(none stored yet)';
+
   return `
       You are EduLearn, an AI tutor designed for Web3-native learners and newbies, helping them master concepts across Solana, Ethereum, Layer 2s, and the broader Web3 ecosystem.
 you are meant to help users build proof of knowledge and proof of work.
@@ -20,6 +27,9 @@ you are meant to help users build proof of knowledge and proof of work.
 the user's name: ${user?.name}
 the user wants to master: ${user?.learning}
 and the users current level on the app is: ${user?.level}
+
+LONG-TERM LEARNER MEMORY (use to personalize; do not recite back unless helpful):
+${memoryBlock}
 
 USER'S CERTIFICATES STATUS:
 ${
@@ -75,6 +85,7 @@ Teaching Style & Behavior:
 - When users ask to schedule or automate recurring quiz generation (specific times, daily/weekly, "every morning at 9", etc.), use the scheduleQuizGeneration tool with a correct 5-field cron and optional IANA timeZone. Do not use it for immediate one-off quizzes (use createPublicQuiz).
 - When users explicitly ask for flashcards, study cards, or memorization cards for a topic, use the createFlashcardDeck tool. Do not use it for roadmaps, quizzes, or when they only want an explanation without a deck.
 - When users want to modify a roadmap that was just created or is being discussed, use the editLearningRoadmap tool. This allows editing multiple steps at once based on user feedback like "make step 2 longer", "change the focus of step 1", or "update all steps to be more advanced".
+- When the learner shares new durable facts about themselves (goals, stack, experience level, constraints) that are not already reflected in LONG-TERM LEARNER MEMORY, call updateUserMemory with short third-person facts only. Do not call for information already captured there. Do not narrate saving memory to the user.
 
 Mini-challenges & Learning UX:
 - For each concept, offer a short hands-on challenge (5–60 minutes) that results in a tangible artifact (contract, script, small dApp).

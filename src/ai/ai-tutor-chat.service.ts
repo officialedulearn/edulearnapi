@@ -21,8 +21,8 @@ import { GEMINI_TUTOR_FUNCTION_DECLARATIONS } from './prompts/gemini-tools';
 import { GeminiClientService } from './gemini-client.service';
 import { FlashcardService } from './flashcard.service';
 import { AiStructuredGenerationService } from './ai-structured-generation.service';
-import { buildPrefetchedUrlContext, toGeminiMessageParts } from './ai.helpers';
-import { AiService } from './ai.service';
+import { buildPrefetchedUrlContext, toGeminiMessageParts, MAX_MEMORY_CHARS, mergeMemoryDeduped } from './ai.helpers';
+import { UserService } from 'src/user/user.service';
 
 @Injectable()
 export class AiTutorChatService {
@@ -40,8 +40,7 @@ export class AiTutorChatService {
     @Inject(forwardRef(() => QuizScheduleService))
     private readonly quizScheduleService: QuizScheduleService,
     private readonly structured: AiStructuredGenerationService,
-    @Inject(forwardRef(() => AiService))
-    private readonly aiService: AiService,
+    private readonly userService: UserService,
   ) {}
 
   async checkUserCredits(userId: string): Promise<number> {
@@ -73,6 +72,25 @@ export class AiTutorChatService {
       }
     }
     return {};
+  }
+
+  private async applyUpdateUserMemoryFromTool(
+    userId: string,
+    rawArgs: unknown,
+  ): Promise<void> {
+    const args = this.normalizeToolCallArgs(rawArgs);
+    const rawFacts = args.facts;
+    if (!Array.isArray(rawFacts) || rawFacts.length === 0) return;
+    const facts = rawFacts
+      .filter((x): x is string => typeof x === 'string')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (facts.length === 0) return;
+    const existing = await this.userService.getUserMemory(userId);
+    const merged = mergeMemoryDeduped(existing, facts, MAX_MEMORY_CHARS);
+    if (merged !== existing) {
+      await this.userService.updateUserMemory(userId, merged);
+    }
   }
 
   private async runScheduleQuizGenerationFromTool(
@@ -203,6 +221,8 @@ export class AiTutorChatService {
     }
     const user = await this.authService.getUserById(userId);
 
+    const userMemory = await this.userService.getUserMemory(userId);
+
     const userRewards = await this.rewardsService.getUserRewards(userId);
     const userCertificateIds = new Set(userRewards.map((reward) => reward.id));
 
@@ -243,6 +263,7 @@ export class AiTutorChatService {
       user,
       ownedCertificates,
       availableCertificates,
+      memory: userMemory,
     });
 
     await this.chatService.saveMessages({
@@ -673,6 +694,16 @@ export class AiTutorChatService {
           );
       }
 
+      const updateUserMemoryPart = parts.find(
+        (part: any) => part.functionCall?.name === 'updateUserMemory',
+      );
+      if (updateUserMemoryPart) {
+        await this.applyUpdateUserMemoryFromTool(
+          userId,
+          updateUserMemoryPart.functionCall?.args,
+        );
+      }
+
       const fullResponse =
         `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}${flashcardAcknowledgement}${publicQuizAcknowledgement}${scheduleQuizAcknowledgement}${responseText}`.trim();
       const assistantMessage = {
@@ -718,11 +749,6 @@ export class AiTutorChatService {
     userId: string;
   }): any {
     return new Observable((subscriber) => {
-      if (messages.length >= 10) {
-        void this.aiService.extractMemoryAndSaveToDb(userId, messages).catch((err) =>
-          console.error('Memory extraction failed:', err),
-        );
-      }
       (async () => {
         try {
           const recentUserMessage = getMostRecentUserMessage(messages);
@@ -753,6 +779,8 @@ export class AiTutorChatService {
           }
 
           const user = await this.authService.getUserById(userId);
+
+          const userMemory = await this.userService.getUserMemory(userId);
 
           const userRewards = await this.rewardsService.getUserRewards(userId);
           const userCertificateIds = new Set(
@@ -813,6 +841,7 @@ export class AiTutorChatService {
             user,
             ownedCertificates,
             availableCertificates,
+            memory: userMemory,
           });
 
           await this.chatService.saveMessages({
@@ -1320,6 +1349,13 @@ export class AiTutorChatService {
                   userId,
                   funcCall.functionCall?.args,
                 );
+            }
+
+            if (funcCall.functionCall?.name === 'updateUserMemory') {
+              await this.applyUpdateUserMemoryFromTool(
+                userId,
+                funcCall.functionCall?.args,
+              );
             }
           }
 
