@@ -41,7 +41,8 @@ export class ChatService {
       .select()
       .from(chat)
       .where(and(eq(chat.userId, userId), eq(chat.tested, false)))
-      .orderBy(asc(chat.createdAt));
+      .orderBy(asc(chat.createdAt))
+      .limit(10);
   }
 
   async markChatAsTested(chatId: string): Promise<Chat | null> {
