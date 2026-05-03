@@ -39,12 +39,33 @@ import {
   UpdateStudySuggestionFeedbackDto,
 } from './dto/ai.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { AuthService } from 'src/auth/auth.service';
+import { getMostRecentUserMessage } from 'lib/utils';
+import { getAttachmentsFromMessageContent } from './ai.helpers';
 
 @Throttle({ default: { limit: 40, ttl: 60_000 } })
 @Controller('ai')
 @UseGuards(JwtAuthGuard)
 export class AiController {
-  constructor(private readonly aiService: AiService) {}
+  constructor(
+    private readonly aiService: AiService,
+    private readonly authService: AuthService,
+  ) {}
+
+  private async enforceAttachmentLimitForRequest(dto: GenerateMessagesDto) {
+    const user = await this.authService.getUserById(dto.userId);
+    const limit = Number(user?.imageUploadLimit ?? 0);
+    if (!Number.isFinite(limit) || limit <= 0) return;
+
+    const recent = getMostRecentUserMessage(dto.messages as any);
+    if (!recent) return;
+    const attachments = getAttachmentsFromMessageContent((recent as any).content);
+    if (attachments.length > limit) {
+      throw new BadRequestException(
+        `Too many attachments. Your plan allows up to ${limit} attachment${limit === 1 ? '' : 's'} per message.`,
+      );
+    }
+  }
 
   @Post('title')
   async getTitle(@Body() messageDto: GenerateTitleDto) {
@@ -77,6 +98,7 @@ export class AiController {
     );
 
     try {
+      await this.enforceAttachmentLimitForRequest(messageDto);
       return await this.aiService.generateResponse(messageDto as any);
     } catch (error) {
       if (error instanceof HttpException) {
@@ -329,6 +351,8 @@ export class AiController {
       messageDto.userId,
       'streaming AI response',
     );
+
+    await this.enforceAttachmentLimitForRequest(messageDto);
 
     const streamId = `stream-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 

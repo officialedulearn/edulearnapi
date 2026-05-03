@@ -21,7 +21,13 @@ import { GEMINI_TUTOR_FUNCTION_DECLARATIONS } from './prompts/gemini-tools';
 import { GeminiClientService } from './gemini-client.service';
 import { FlashcardService } from './flashcard.service';
 import { AiStructuredGenerationService } from './ai-structured-generation.service';
-import { buildPrefetchedUrlContext, toGeminiMessageParts, MAX_MEMORY_CHARS, mergeMemoryDeduped } from './ai.helpers';
+import {
+  buildPrefetchedUrlContext,
+  toGeminiMessageParts,
+  MAX_MEMORY_CHARS,
+  mergeMemoryDeduped,
+  getAttachmentsFromMessageContent,
+} from './ai.helpers';
 import { UserService } from 'src/user/user.service';
 import { AgentService } from 'src/agent/agent.service';
 import {
@@ -98,6 +104,21 @@ export class AiTutorChatService {
       }
     }
     return {};
+  }
+
+  private enforceUserAttachmentLimit(user: any, recentUserMessage: Message) {
+    const limit = Number(user?.imageUploadLimit ?? 0);
+    if (!Number.isFinite(limit) || limit <= 0) return;
+
+    const attachments = getAttachmentsFromMessageContent(
+      (recentUserMessage as any)?.content,
+    );
+
+    if (attachments.length > limit) {
+      throw new BadRequestException(
+        `Too many attachments. Your plan allows up to ${limit} attachment${limit === 1 ? '' : 's'} per message.`,
+      );
+    }
   }
 
   private async applyUpdateUserMemoryFromTool(
@@ -246,6 +267,7 @@ export class AiTutorChatService {
       );
     }
     const user = await this.authService.getUserById(userId);
+    this.enforceUserAttachmentLimit(user, recentUserMessage);
 
     const userMemory = await this.userService.getUserMemory(userId);
 
@@ -845,6 +867,7 @@ export class AiTutorChatService {
           }
 
           const user = await this.authService.getUserById(userId);
+          this.enforceUserAttachmentLimit(user, recentUserMessage);
 
           const userMemory = await this.userService.getUserMemory(userId);
 
@@ -1013,8 +1036,10 @@ export class AiTutorChatService {
 
           const lastIdx = formattedMessages.length - 1;
           if (lastIdx >= 0 && formattedMessages[lastIdx].role === 'user') {
-            const originalText =
-              formattedMessages[lastIdx].parts[0]?.text ?? '';
+            const firstTextPart = formattedMessages[lastIdx].parts.find(
+              (p: any) => p && typeof p.text === 'string',
+            );
+            const originalText = String(firstTextPart?.text ?? '');
             const urlContext =
               await buildPrefetchedUrlContext(originalText);
             if (urlContext) {

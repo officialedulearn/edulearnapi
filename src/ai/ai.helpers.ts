@@ -46,7 +46,12 @@ export const formatMessageText = (msg: {
 }): string => {
   const c = msg.content;
   if (typeof c === 'string') return c;
-  if (c && typeof c === 'object' && 'text' in c && typeof (c as { text: string }).text === 'string')
+  if (
+    c &&
+    typeof c === 'object' &&
+    'text' in c &&
+    typeof (c as { text?: unknown }).text === 'string'
+  )
     return (c as { text: string }).text;
   if (c && typeof c === 'object') return JSON.stringify(c);
   return String(c ?? '');
@@ -203,5 +208,87 @@ export const parseStudySuggestionsCache = (raw: string): StudySuggestionsRedisPa
 
 export const toGeminiMessageParts = (msg: { role: string; content: unknown }) => ({
   role: msg.role === 'assistant' ? ('model' as const) : ('user' as const),
-  parts: [{ text: formatMessageText(msg as Message) }],
+  parts: toGeminiPartsFromContent(msg.content),
 });
+
+export type ChatAttachmentInput = {
+  data: string;
+  mimeType: string;
+  name?: string;
+  kind?: 'image' | 'document';
+};
+
+export type ChatMessageContentWithAttachments = {
+  text?: string;
+  attachments?: ChatAttachmentInput[];
+};
+
+export const getAttachmentsFromMessageContent = (
+  content: unknown,
+): ChatAttachmentInput[] => {
+  if (!content || typeof content !== 'object') return [];
+  const attachments = (content as ChatMessageContentWithAttachments).attachments;
+  if (!Array.isArray(attachments)) return [];
+  return attachments.filter(
+    (a): a is ChatAttachmentInput =>
+      Boolean(a) &&
+      typeof a === 'object' &&
+      typeof (a as ChatAttachmentInput).data === 'string' &&
+      typeof (a as ChatAttachmentInput).mimeType === 'string' &&
+      (typeof (a as ChatAttachmentInput).name === 'undefined' ||
+        typeof (a as ChatAttachmentInput).name === 'string') &&
+      (typeof (a as ChatAttachmentInput).kind === 'undefined' ||
+        (a as ChatAttachmentInput).kind === 'image' ||
+        (a as ChatAttachmentInput).kind === 'document'),
+  );
+};
+
+export const toGeminiPartsFromContent = (content: unknown) => {
+  // The Gemini SDK expects `parts` to be a list of objects with exactly one field set
+  // (e.g. `text`, `inlineData`, `fileData`, ...). We only emit `text` + `inlineData`.
+  if (typeof content === 'string') return [{ text: content }];
+
+  if (Array.isArray(content)) {
+    // Back-compat: OpenAI-style `{ type: 'text' | 'image_url', ... }` content arrays.
+    const parts: Array<Record<string, unknown>> = [];
+    for (const item of content) {
+      if (!item || typeof item !== 'object') continue;
+      const it = item as Record<string, any>;
+      if (it.type === 'text' && typeof it.text === 'string') {
+        parts.push({ text: it.text });
+        continue;
+      }
+      if (it.type === 'image_url' && it.image_url?.url) {
+        // We don't fetch remote URLs in the server; include a hint as text.
+        parts.push({ text: `Image URL: ${String(it.image_url.url)}` });
+      }
+    }
+    return parts.length > 0 ? parts : [{ text: JSON.stringify(content) }];
+  }
+
+  if (content && typeof content === 'object') {
+    const c = content as ChatMessageContentWithAttachments & Record<string, unknown>;
+    const parts: Array<Record<string, unknown>> = [];
+    if (typeof c.text === 'string' && c.text.trim().length > 0) {
+      parts.push({ text: c.text });
+    } else {
+      const fallback = formatMessageText({ content });
+      if (fallback) parts.push({ text: fallback });
+    }
+
+    const attachments = getAttachmentsFromMessageContent(content);
+    for (const a of attachments) {
+      parts.push({
+        inlineData: {
+          data: a.data,
+          mimeType: a.mimeType,
+          ...(a.name ? { displayName: a.name } : {}),
+        },
+      });
+    }
+
+    return parts.length > 0 ? parts : [{ text: '' }];
+  }
+
+  return [{ text: String(content ?? '') }];
+};
