@@ -120,24 +120,29 @@ export class QuizScheduleProcessorService
         .then((r) => r[0]);
 
       if (mostRecentQuiz != null && mostRecentQuiz.attemptCount < 1) {
-        this.logger.log(`Most recent quiz has no attempts, skipping generation for user ${userId}`);
+        this.logger.log(
+          `Most recent quiz has no attempts, skipping generation for user ${userId}`,
+        );
         await this.notificationsService.createNotification(
           {
             userId,
             title: 'Scheduled quiz skipped',
-            content: 'Your scheduled quiz did not run because the most recent quiz has no attempts.',
+            content:
+              'Your scheduled quiz did not run because the most recent quiz has no attempts.',
           },
           true,
         );
         return;
       }
 
-      questions = await this.quizGenerationService.generateScheduledQuiz({
-        userId,
-        topic: schedule.topic,
-        difficulty: schedule.difficulty as 'easy' | 'medium' | 'hard',
-        memoryContext,
-      });
+      const generatedQuestions: unknown =
+        await this.quizGenerationService.generateScheduledQuiz({
+          userId,
+          topic: schedule.topic,
+          difficulty: schedule.difficulty,
+          memoryContext,
+        });
+      questions = generatedQuestions as typeof questions;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`generateScheduledQuiz failed for ${userId}: ${msg}`);
@@ -158,6 +163,12 @@ export class QuizScheduleProcessorService
         userId,
         title: 'Your quiz is ready',
         content: `A new quiz "${published.title}" was generated from your schedule.`,
+        data: {
+          screen: 'publicQuiz',
+          id: published.id,
+          quizId: published.id,
+          url: `edulearnv2://quizzes/${published.id}`,
+        },
       },
       true,
     );

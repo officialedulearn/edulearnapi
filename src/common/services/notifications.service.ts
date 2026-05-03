@@ -7,13 +7,21 @@ import db from '../../../drizzle';
 import { user, notifications } from '../../../lib/db/schema';
 import { ExpoPushService } from 'src/common/services/expo-push.service';
 import { eq, and, desc, asc } from 'drizzle-orm';
+import type { PushNotificationData } from 'src/common/services/expo-push.service';
+
+type CreateNotificationInput = {
+  title: string;
+  content: string;
+  userId: string;
+  data?: PushNotificationData;
+};
 
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
   constructor(private expoPushService: ExpoPushService) {}
   async createNotification(
-    notification: { title: string; content: string; userId: string },
+    notification: CreateNotificationInput,
     sendPush: boolean = true,
   ) {
     try {
@@ -26,9 +34,14 @@ export class NotificationsService {
           userResponse[0].expoPushToken,
           notification.title,
           notification.content,
+          notification.data,
         );
       }
-      await db.insert(notifications).values(notification);
+      await db.insert(notifications).values({
+        title: notification.title,
+        content: notification.content,
+        userId: notification.userId,
+      });
     } catch (error) {
       this.logger.error(
         'Failed to create notification',

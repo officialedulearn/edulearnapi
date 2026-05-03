@@ -24,7 +24,10 @@ import { AiStructuredGenerationService } from './ai-structured-generation.servic
 import { buildPrefetchedUrlContext, toGeminiMessageParts, MAX_MEMORY_CHARS, mergeMemoryDeduped } from './ai.helpers';
 import { UserService } from 'src/user/user.service';
 import { AgentService } from 'src/agent/agent.service';
-import { aiCostRouteForUserMessage } from './ai-cost-router';
+import {
+  aiCostRouteForUserMessage,
+  deriveConversationContext,
+} from './ai-cost-router';
 
 @Injectable()
 export class AiTutorChatService {
@@ -261,7 +264,7 @@ export class AiTutorChatService {
     }
 
     const existingMessages = await this.chatService.getMessagesInChat(chatId);
-    const isChatFresh = existingMessages.length === 0;
+    const conversationContext = deriveConversationContext(existingMessages);
 
     if (!user?.isPremium) {
       const messageCount = existingMessages.length;
@@ -306,37 +309,38 @@ export class AiTutorChatService {
       ],
     });
 
-    if (isChatFresh) {
-      const routing = aiCostRouteForUserMessage({
-        userText:
-          typeof recentUserMessage.content === 'string'
-            ? recentUserMessage.content
-            : (recentUserMessage.content as any)?.text ?? '',
-      });
+    const routing = aiCostRouteForUserMessage({
+      userText:
+        typeof recentUserMessage.content === 'string'
+          ? recentUserMessage.content
+          : (recentUserMessage.content as any)?.text ?? '',
+      conversationContext,
+    });
 
-      if (routing.route === 'bypass_model') {
-        console.log(
-          JSON.stringify({
-            aiCostRouter: true,
-            route: routing.route,
-            reason: routing.reason,
-            userId,
-            chatId,
-            normalizedLen: routing.normalizedText.length,
-          }),
-        );
-
-        const assistantMessage = {
-          id: generateUUID(),
-          role: 'assistant' as const,
-          content: { text: routing.replyText },
-          createdAt: new Date(),
+    if (routing.route === 'bypass_model') {
+      console.log(
+        JSON.stringify({
+          aiCostRouter: true,
+          route: routing.route,
+          reason: routing.reason,
+          userId,
           chatId,
-        };
+          normalizedLen: routing.normalizedText.length,
+          substantiveContext:
+            conversationContext.hasRecentSubstantiveAssistant,
+        }),
+      );
 
-        await this.chatService.saveMessages({ messages: [assistantMessage] });
-        return assistantMessage;
-      }
+      const assistantMessage = {
+        id: generateUUID(),
+        role: 'assistant' as const,
+        content: { text: routing.replyText },
+        createdAt: new Date(),
+        chatId,
+      };
+
+      await this.chatService.saveMessages({ messages: [assistantMessage] });
+      return assistantMessage;
     }
 
     try {
@@ -862,7 +866,8 @@ export class AiTutorChatService {
 
           const existingMessages =
             await this.chatService.getMessagesInChat(chatId);
-          const isChatFresh = existingMessages.length === 0;
+          const conversationContext =
+            deriveConversationContext(existingMessages);
 
           if (!user?.isPremium) {
             const messageCount = existingMessages.length;
@@ -923,50 +928,51 @@ export class AiTutorChatService {
             ],
           });
 
-          if (isChatFresh) {
-            const routing = aiCostRouteForUserMessage({
-              userText:
-                typeof recentUserMessage.content === 'string'
-                  ? recentUserMessage.content
-                  : (recentUserMessage.content as any)?.text ?? '',
+          const routing = aiCostRouteForUserMessage({
+            userText:
+              typeof recentUserMessage.content === 'string'
+                ? recentUserMessage.content
+                : (recentUserMessage.content as any)?.text ?? '',
+            conversationContext,
+          });
+
+          if (routing.route === 'bypass_model') {
+            console.log(
+              JSON.stringify({
+                aiCostRouter: true,
+                route: routing.route,
+                reason: routing.reason,
+                userId,
+                chatId,
+                normalizedLen: routing.normalizedText.length,
+                substantiveContext:
+                  conversationContext.hasRecentSubstantiveAssistant,
+              }),
+            );
+
+            subscriber.next({
+              data: { token: routing.replyText, type: 'bypass' },
             });
 
-            if (routing.route === 'bypass_model') {
-              console.log(
-                JSON.stringify({
-                  aiCostRouter: true,
-                  route: routing.route,
-                  reason: routing.reason,
-                  userId,
-                  chatId,
-                  normalizedLen: routing.normalizedText.length,
-                }),
-              );
+            const assistantMessage = {
+              id: generateUUID(),
+              role: 'assistant',
+              content: { text: routing.replyText },
+              createdAt: new Date(),
+              chatId,
+            };
 
-              subscriber.next({
-                data: { token: routing.replyText, type: 'bypass' },
-              });
+            await this.chatService.saveMessages({
+              messages: [assistantMessage],
+            });
 
-              const assistantMessage = {
-                id: generateUUID(),
-                role: 'assistant',
-                content: { text: routing.replyText },
-                createdAt: new Date(),
-                chatId,
-              };
+            subscriber.next({
+              event: 'done',
+              data: { id: assistantMessage.id, chatId, complete: true },
+            });
 
-              await this.chatService.saveMessages({
-                messages: [assistantMessage],
-              });
-
-              subscriber.next({
-                event: 'done',
-                data: { id: assistantMessage.id, chatId, complete: true },
-              });
-
-              subscriber.complete();
-              return;
-            }
+            subscriber.complete();
+            return;
           }
 
           const userCredits = await this.checkUserCredits(userId);
