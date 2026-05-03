@@ -70,6 +70,20 @@ export class NotificationsService {
     }
   }
 
+  async deleteAllNotificationsForUser(userId: string) {
+    try {
+      await db.delete(notifications).where(eq(notifications.userId, userId));
+    } catch (error) {
+      this.logger.error(
+        'Failed to delete all notifications',
+        (error as Error)?.stack,
+      );
+      throw new InternalServerErrorException(
+        'Failed to delete all notifications',
+      );
+    }
+  }
+
   async getUserNotificationsByCreatedAt(
     userId: string,
     order: 'asc' | 'desc' = 'desc',

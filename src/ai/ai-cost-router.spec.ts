@@ -51,13 +51,19 @@ describe('ai-cost-router', () => {
   it('bypasses greeting', () => {
     const d = aiCostRouteForUserMessage({ userText: 'hey' });
     expect(d.route).toBe('bypass_model');
-    if (d.route === 'bypass_model') expect(d.reason).toBe('greeting');
+    if (d.route === 'bypass_model') {
+      expect(d.reason).toBe('greeting');
+      expect(d.replyText.toLowerCase()).toContain('hey');
+    }
   });
 
   it('bypasses thanks', () => {
     const d = aiCostRouteForUserMessage({ userText: 'thanks' });
     expect(d.route).toBe('bypass_model');
-    if (d.route === 'bypass_model') expect(d.reason).toBe('thanks');
+    if (d.route === 'bypass_model') {
+      expect(d.reason).toBe('thanks');
+      expect(d.replyText.toLowerCase()).toContain("you're welcome");
+    }
   });
 
   it('bypasses empty', () => {

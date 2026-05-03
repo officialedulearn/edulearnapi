@@ -436,13 +436,23 @@ export function getAiCostRouterCounters() {
 type CannedKey = AiCostRouteReason | 'acknowledgement_followup';
 
 function cannedReply(reason: CannedKey): string {
-  if (reason === 'greeting' || reason === 'thanks') {
+  if (reason === 'greeting') {
     return (
       'Hey! What are you studying right now?\n\n' +
       'Try one of these:\n' +
       "1) Explain Solana PDAs like I'm new to Anchor.\n" +
       '2) Quiz me on SPL tokens (10 questions, medium).\n' +
       '3) Build me a 7-day roadmap for DeFi basics with daily tasks.'
+    );
+  }
+
+  if (reason === 'thanks') {
+    return (
+      "You're welcome. Want to keep going?\n\n" +
+      'Pick a format:\n' +
+      '- Explain: "Explain <topic> at <level>."\n' +
+      '- Quiz: "Quiz me on <topic> (N questions, difficulty)."\n' +
+      '- Roadmap: "Make a <days>-day plan for <topic>."'
     );
   }
 
@@ -483,18 +493,34 @@ function cannedReply(reason: CannedKey): string {
     );
   }
 
-  if (reason === 'empty' || reason === 'too_short' || reason === 'too_vague') {
+  if (reason === 'empty') {
     return (
-      "Tell me what you want to learn, and I'll tailor it.\n\n" +
-      'Reply with:\n' +
+      "I didn't catch any text there.\n\n" +
+      'Send a topic + what you want:\n' +
+      '- Explain / Quiz / Roadmap\n\n' +
+      'Example: "Quiz me on SPL tokens (10 questions, medium)."'
+    );
+  }
+
+  if (reason === 'too_short') {
+    return (
+      "That message is a bit short for me to route well.\n\n" +
+      'Add one detail:\n' +
       '- Topic (what)\n' +
       '- Goal (why)\n' +
-      '- Your level (new/beginner/intermediate)\n' +
-      '- Format (explain/quiz/roadmap)\n\n' +
-      'Examples:\n' +
-      "1) Explain Solana PDAs like I'm new to Anchor.\n" +
-      '2) Quiz me on SPL tokens (10 questions, medium).\n' +
-      '3) Build me a 7-day roadmap for DeFi basics with daily tasks.'
+      '- Level (beginner/intermediate)\n\n' +
+      'Example: "Explain PDAs in Solana for a beginner using an analogy."'
+    );
+  }
+
+  if (reason === 'too_vague') {
+    return (
+      'Help with what, specifically?\n\n' +
+      'Reply with:\n' +
+      '- Topic (e.g., "Solana PDAs")\n' +
+      '- What you want (explain / quiz / roadmap)\n' +
+      '- Your level\n\n' +
+      'Example: "Explain Solana PDAs at a beginner level, step-by-step."'
     );
   }
 

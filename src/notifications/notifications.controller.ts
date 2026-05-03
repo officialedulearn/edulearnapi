@@ -42,4 +42,12 @@ export class NotificationsController {
     await this.notificationsService.deleteNotification(notificationId, userId);
     return { message: 'Notification deleted successfully' };
   }
+
+  @Delete()
+  @HttpCode(HttpStatus.OK)
+  async clearAllNotifications(@Request() req) {
+    const userId = await getDatabaseUserId(req.user);
+    await this.notificationsService.deleteAllNotificationsForUser(userId);
+    return { message: 'All notifications cleared successfully' };
+  }
 }
