@@ -282,7 +282,6 @@ export const toGeminiPartsFromContent = (content: unknown) => {
         inlineData: {
           data: a.data,
           mimeType: a.mimeType,
-          ...(a.name ? { displayName: a.name } : {}),
         },
       });
     }
