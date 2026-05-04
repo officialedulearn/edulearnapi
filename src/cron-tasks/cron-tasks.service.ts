@@ -320,7 +320,8 @@ export class CronTasksService {
     }
   }
 
-  @Cron(CronExpression.EVERY_WEEKEND)
+  // Legacy broadcast-ish reminder loop. Replaced by per-user autonomous reminders (BullMQ).
+  // Intentionally NOT scheduled.
   async remindUsersAboutRoadmaps() {
     const incompleteSteps = await db
       .select()

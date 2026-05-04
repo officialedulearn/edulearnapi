@@ -316,6 +316,13 @@
       "when": 1776737503187,
       "tag": "0044_nebulous_jack_murdock",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1777920000000,
+      "tag": "0045_autonomous_reminder_emails",
+      "breakpoints": true
     }
   ]
 }

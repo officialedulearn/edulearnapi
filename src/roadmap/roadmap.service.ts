@@ -14,6 +14,7 @@ import { generateUUID } from 'lib/utils';
 import { AiService } from 'src/ai/ai.service';
 import { NftRewardService } from 'src/ai/nft-reward.service';
 import { RewardsService } from 'src/rewards/rewards.service';
+import { RemindersService } from 'src/reminders/reminders.service';
 
 @Injectable()
 export class RoadmapService {
@@ -26,6 +27,7 @@ export class RoadmapService {
     private readonly aiService: AiService,
     private readonly nftRewardService: NftRewardService,
     private readonly rewardsService: RewardsService,
+    private readonly remindersService: RemindersService,
   ) {
     this.genAI = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY,
@@ -47,6 +49,9 @@ export class RoadmapService {
     }
 
     const newRoadmap = await db.insert(roadmap).values(roadmapData).returning();
+    this.remindersService
+      .enqueueEvaluation(userId, 'roadmap_updated')
+      .catch(() => undefined);
     return newRoadmap[0];
   }
 
@@ -402,6 +407,10 @@ CRITICAL JSON RULES:
     console.log(
       `✅ Marked step ${stepId} (${step.title}) as done for user ${userId}`,
     );
+
+    this.remindersService
+      .enqueueEvaluation(userId, 'roadmap_updated')
+      .catch(() => undefined);
 
     return {
       step,

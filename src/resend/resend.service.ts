@@ -11,6 +11,7 @@ import { ReferFriendsEmail } from '../emails/templates/ReferFriendsEmail';
 import { StreakReminderEmail } from '../emails/templates/StreakReminderEmail';
 import { EddyWeeklyTipEmail } from '../emails/templates/EddyWeeklyTipEmail';
 import { ReferralSuperstarEmail } from '../emails/templates/ReferralSuperstarEmail';
+import { AgentReminderEmail } from '../emails/templates/AgentReminderEmail';
 import {
   type EngagementTemplateId,
   ENGAGEMENT_SUBJECTS,
@@ -137,9 +138,10 @@ export class ResendService {
     };
   }
 
-  async sendEmail(to: string, subject: string, html: string) {
+  async sendEmail(to: string, subject: string, html: string, fromName?: string) {
+    const safeFromName = (fromName || 'Eddy 💚').trim() || 'Eddy 💚';
     const { data, error } = await this.resend.emails.send({
-      from: 'Eddy 💚 <eddy@edulearn.fun>',
+      from: `${safeFromName} <eddy@edulearn.fun>`,
       to: to,
       subject: subject,
       html: html,
@@ -205,6 +207,32 @@ export class ResendService {
       roadmapStepTime,
     );
     return this.sendEmail(to, 'Roadmap Reminder 🔔', html);
+  }
+
+  async sendAgentReminderEmail(params: {
+    to: string;
+    name: string;
+    subject: string;
+    personalizedRecap: string;
+    tip: string;
+    goalText?: string;
+    agentName?: string;
+    agentProfilePictureUrl?: string;
+  }) {
+    const html = await render(
+      React.createElement(AgentReminderEmail, {
+        name: params.name,
+        agentName: params.agentName,
+        agentProfilePictureUrl: params.agentProfilePictureUrl,
+        goalText: params.goalText,
+        personalizedRecap: params.personalizedRecap,
+        tip: params.tip,
+      }),
+    );
+    const fromName = params.agentName
+      ? `${params.agentName} from EduLearn`
+      : 'Eddy 💚';
+    return this.sendEmail(params.to, params.subject, html, fromName);
   }
   async sendLevelUpEmail(
     to: string,

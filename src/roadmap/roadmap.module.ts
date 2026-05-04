@@ -5,6 +5,7 @@ import { AuthModule } from 'src/auth/auth.module';
 import { ChatModule } from 'src/chat/chat.module';
 import { AiModule } from 'src/ai/ai.module';
 import { RewardsModule } from 'src/rewards/rewards.module';
+import { RemindersModule } from 'src/reminders/reminders.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { RewardsModule } from 'src/rewards/rewards.module';
     ChatModule,
     forwardRef(() => AiModule),
     RewardsModule,
+    RemindersModule,
   ],
   controllers: [RoadmapController],
   providers: [RoadmapService],

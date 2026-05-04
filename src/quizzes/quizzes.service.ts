@@ -15,6 +15,7 @@ import {
 import { PublishQuizDto } from './dto/publish-quiz.dto';
 import { SubmitPublicQuizDto } from './dto/submit-public-quiz.dto';
 import { ActivityService } from '../activity/activity.service';
+import { RemindersService } from 'src/reminders/reminders.service';
 
 type SortOption = 'recent' | 'popular';
 
@@ -30,6 +31,7 @@ export class QuizzesService {
   constructor(
     @Inject(forwardRef(() => ActivityService))
     private readonly activityService: ActivityService,
+    private readonly remindersService: RemindersService,
   ) {}
 
   private async getQuizByIdOrThrow(id: string) {
@@ -271,12 +273,18 @@ export class QuizzesService {
         .where(eq(publicQuizParticipation.id, dto.participationId));
     }
 
-    return {
+    const payload = {
       score: correctCount,
       totalQuestions: questions.length,
       results,
       xpEarned: activityResult.xpEarned,
       activity: activityResult.activity,
     };
+
+    this.remindersService
+      .enqueueEvaluation(userId, 'quiz_submitted')
+      .catch(() => undefined);
+
+    return payload;
   }
 }

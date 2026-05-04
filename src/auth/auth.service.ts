@@ -41,6 +41,7 @@ import { SocialService } from 'src/social/social.service';
 import { LeaderboardService } from 'src/leaderboard/leaderboard.service';
 import resend from 'resend';
 import { CloudinaryService } from 'src/common/cloudinary/cloudinary.service';
+import { RemindersService } from 'src/reminders/reminders.service';
 
 export interface UserResponse extends User {
   quizLimit: number;
@@ -62,6 +63,7 @@ export class AuthService {
     private socialService: SocialService,
     private leaderboardService: LeaderboardService,
     private cloudinaryService: CloudinaryService,
+    private readonly remindersService: RemindersService,
   ) {}
   async createUser(data: signUpDetails): Promise<UserResponse | Error> {
     try {
@@ -362,6 +364,10 @@ export class AuthService {
       const updatedUser = result[0] ?? null;
 
       if (updatedUser && learning && learning.trim() !== '') {
+        this.remindersService
+          .enqueueEvaluation(updatedUser.id, 'roadmap_updated')
+          .catch(() => undefined);
+
         this.roadmapService
           .generateRoadmap(updatedUser.id, learning.trim())
           .catch((error) => {
@@ -679,6 +685,10 @@ export class AuthService {
         .update(user)
         .set({ streak: newStreak, lastLoggedIn: now })
         .where(eq(user.id, userId));
+
+      this.remindersService
+        .enqueueEvaluation(userId, 'login')
+        .catch(() => undefined);
 
       return newStreak;
     } catch (error) {
@@ -1138,6 +1148,9 @@ export class AuthService {
           .where(eq(user.id, existingUser.id));
 
         const updatedUser = await this.getUserById(existingUser.id);
+        this.remindersService
+          .enqueueEvaluation(existingUser.id, 'login')
+          .catch(() => undefined);
         return {
           user: updatedUser,
           isNewUser: false,
@@ -1149,6 +1162,10 @@ export class AuthService {
         .update(user)
         .set({ lastLoggedIn: new Date() })
         .where(eq(user.id, existingUser.id));
+
+      this.remindersService
+        .enqueueEvaluation(existingUser.id, 'login')
+        .catch(() => undefined);
 
       return {
         user: existingUser,

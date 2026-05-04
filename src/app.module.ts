@@ -31,6 +31,7 @@ import { MonthlyLeaderboardModule } from './monthly-leaderboard/monthly-leaderbo
 import { TrendsModule } from './trends/trends.module';
 import { AgentModule } from './agent/agent.module';
 import { UserModule } from './user/user.module';
+import { RemindersModule } from './reminders/reminders.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { UserModule } from './user/user.module';
     TrendsModule,
     AgentModule,
     UserModule,
+    RemindersModule,
   ],
   controllers: [AppController],
   providers: [

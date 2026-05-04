@@ -4,10 +4,14 @@ import { v4 as uuid } from 'uuid';
 import db from '../../drizzle';
 import { eq } from 'drizzle-orm';
 import { CloudinaryService } from 'src/common/cloudinary/cloudinary.service';
+import { RemindersService } from 'src/reminders/reminders.service';
 
 @Injectable()
 export class AgentService {
-  constructor(private readonly cloudinaryService: CloudinaryService) { }
+  constructor(
+    private readonly cloudinaryService: CloudinaryService,
+    private readonly remindersService: RemindersService,
+  ) {}
   async createAgent({
     userId,
     name,
@@ -35,6 +39,10 @@ export class AgentService {
         profile_picture_url,
       })
       .returning();
+
+    this.remindersService
+      .enqueueEvaluation(userId, 'roadmap_updated')
+      .catch(() => undefined);
     return result;
   }
 

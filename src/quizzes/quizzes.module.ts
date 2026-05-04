@@ -7,12 +7,14 @@ import { ChatModule } from '../chat/chat.module';
 import { QuizScheduleBullmqService } from './quiz-schedule-bullmq.service';
 import { QuizScheduleProcessorService } from './quiz-schedule-processor.service';
 import { QuizScheduleService } from './quiz-schedule.service';
+import { RemindersModule } from 'src/reminders/reminders.module';
 
 @Module({
   imports: [
     forwardRef(() => ActivityModule),
     forwardRef(() => AiModule),
     ChatModule,
+    RemindersModule,
   ],
   controllers: [QuizzesController],
   providers: [

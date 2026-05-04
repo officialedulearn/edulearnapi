@@ -13,6 +13,7 @@ import { CommunityModule } from 'src/community/community.module';
 import { SocialModule } from 'src/social/social.module';
 import { LeaderboardModule } from 'src/leaderboard/leaderboard.module';
 import { CloudinaryModule } from 'src/common/cloudinary/cloudinary.module';
+import { RemindersModule } from 'src/reminders/reminders.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { CloudinaryModule } from 'src/common/cloudinary/cloudinary.module';
     forwardRef(() => CommunityModule),
     forwardRef(() => SocialModule),
     LeaderboardModule,
+    RemindersModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtAuthGuard, ApiKeyGuard],

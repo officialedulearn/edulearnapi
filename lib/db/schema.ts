@@ -506,3 +506,67 @@ export const agent = pgTable('agent', {
 });
 
 export type Agent = InferSelectModel<typeof agent>;
+
+export const userReminderState = pgTable(
+  'user_reminder_state',
+  {
+    userId: uuid('userId')
+      .notNull()
+      .references(() => user.id)
+      .unique(),
+    nextCheckAt: timestamp('nextCheckAt'),
+    lastSentAt: timestamp('lastSentAt'),
+    lastEvaluationAt: timestamp('lastEvaluationAt'),
+    lastEmailId: text('lastEmailId'),
+    lastEmailSubject: text('lastEmailSubject'),
+    cooldownUntil: timestamp('cooldownUntil'),
+    disabled: boolean('disabled').notNull().default(false),
+    disabledReason: text('disabledReason'),
+    agentMemory: varchar('agentMemory', { length: 500 }),
+    updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index('user_reminder_state_user_id_idx').on(table.userId),
+    nextCheckAtIdx: index('user_reminder_state_next_check_at_idx').on(
+      table.nextCheckAt,
+    ),
+    lastSentAtIdx: index('user_reminder_state_last_sent_at_idx').on(
+      table.lastSentAt,
+    ),
+  }),
+);
+
+export type UserReminderState = InferSelectModel<typeof userReminderState>;
+
+export const reminderEmailLog = pgTable(
+  'reminder_email_log',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    userId: uuid('userId')
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+    decision: varchar('decision', { enum: ['sent', 'skipped'] }).notNull(),
+    reason: varchar('reason', {
+      enum: ['quiz_submitted', 'login', 'roadmap_updated', 'manual', 'scheduled'],
+    }).notNull(),
+    subject: text('subject'),
+    tip: text('tip'),
+    personalizedRecap: text('personalizedRecap'),
+    nextCheckAt: timestamp('nextCheckAt'),
+    modelMeta: json('modelMeta'),
+    featuresUsed: json('featuresUsed'),
+    why: text('why'),
+  },
+  (table) => ({
+    userIdIdx: index('reminder_email_log_user_id_idx').on(table.userId),
+    createdAtIdx: index('reminder_email_log_created_at_idx').on(table.createdAt),
+    userCreatedAtIdx: index('reminder_email_log_user_created_at_idx').on(
+      table.userId,
+      table.createdAt,
+    ),
+  }),
+);
+
+export type ReminderEmailLog = InferSelectModel<typeof reminderEmailLog>;

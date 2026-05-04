@@ -15,6 +15,7 @@ import {
 } from '../../lib/db/schema';
 import { NotificationsService } from '../common/services/notifications.service';
 import { ResendService } from '../resend/resend.service';
+import { RemindersService } from '../reminders/reminders.service';
 import {
   NFT_LISTING_BROADCAST_DATA,
   type NftListingBroadcastData,
@@ -59,6 +60,7 @@ export class AdminService {
     private readonly notificationsService: NotificationsService,
     private readonly resendService: ResendService,
     private readonly expoPushService: ExpoPushService,
+    private readonly remindersService: RemindersService,
   ) {}
 
   private async retryQuery<T>(
@@ -315,6 +317,28 @@ export class AdminService {
     }
 
     return { sent, failed };
+  }
+
+  async evaluateReminderNow(userId: string) {
+    const result = await this.remindersService.enqueueEvaluation(userId, 'manual');
+    return { ok: true, ...result };
+  }
+
+  async previewReminder(userId: string) {
+    return await this.remindersService.evaluateUser({
+      userId,
+      reason: 'manual',
+      dryRun: true,
+    });
+  }
+
+  async setReminderDisabled(userId: string, disabled: boolean, reason?: string) {
+    const state = await this.remindersService.setReminderDisabled(
+      userId,
+      disabled,
+      reason,
+    );
+    return { ok: true, state };
   }
 
   async broadcastV25Announcement(): Promise<{

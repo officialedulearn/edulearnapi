@@ -150,6 +150,44 @@ export class AdminController {
     );
   }
 
+  @Post('reminders/evaluate')
+  async evaluateReminder(@Body() body: { userId: string }) {
+    if (!body.userId?.trim()) {
+      throw new BadRequestException('userId is required');
+    }
+    return await this.adminService.evaluateReminderNow(body.userId.trim());
+  }
+
+  @Post('reminders/preview')
+  async previewReminder(@Body() body: { userId: string }) {
+    if (!body.userId?.trim()) {
+      throw new BadRequestException('userId is required');
+    }
+    return await this.adminService.previewReminder(body.userId.trim());
+  }
+
+  @Put('reminders/disable')
+  async disableReminders(
+    @Body() body: { userId: string; reason?: string },
+  ) {
+    if (!body.userId?.trim()) {
+      throw new BadRequestException('userId is required');
+    }
+    return await this.adminService.setReminderDisabled(
+      body.userId.trim(),
+      true,
+      body.reason,
+    );
+  }
+
+  @Put('reminders/enable')
+  async enableReminders(@Body() body: { userId: string }) {
+    if (!body.userId?.trim()) {
+      throw new BadRequestException('userId is required');
+    }
+    return await this.adminService.setReminderDisabled(body.userId.trim(), false);
+  }
+
   @Post('emails/v25-announcement')
   async sendV25Announcement() {
     return await this.adminService.broadcastV25Announcement();
