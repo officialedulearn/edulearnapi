@@ -10,6 +10,7 @@ import {
   type Chat,
   type Message,
 } from '../../lib/db/schema';
+import { sanitizeAssistantMessageContent } from 'src/ai/ai.helpers';
 
 @Injectable()
 export class ChatService {
@@ -127,7 +128,15 @@ export class ChatService {
     if (!messages || !messages.length) {
       throw new Error('No messages to save');
     }
-    return await db.insert(message).values(messages);
+    const sanitizedMessages = messages.map((msg) =>
+      msg.role === 'assistant'
+        ? {
+            ...msg,
+            content: sanitizeAssistantMessageContent(msg.content),
+          }
+        : msg,
+    );
+    return await db.insert(message).values(sanitizedMessages);
   }
 
   async getMessagesInChat(chatId: string) {

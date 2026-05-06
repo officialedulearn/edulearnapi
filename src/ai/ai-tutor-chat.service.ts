@@ -27,6 +27,7 @@ import {
   MAX_MEMORY_CHARS,
   mergeMemoryDeduped,
   getAttachmentsFromMessageContent,
+  sanitizeLeakedAssistantToolTranscript,
 } from './ai.helpers';
 import { UserService } from 'src/user/user.service';
 import { AgentService } from 'src/agent/agent.service';
@@ -427,6 +428,13 @@ export class AiTutorChatService {
         .map((part: any) => part.text)
         .join('')
         .trim();
+      const sanitizedResponse =
+        sanitizeLeakedAssistantToolTranscript(responseText);
+      if (sanitizedResponse.leakedMemoryFacts.length > 0) {
+        await this.applyUpdateUserMemoryFromTool(userId, {
+          facts: sanitizedResponse.leakedMemoryFacts,
+        });
+      }
 
       const functionPart = parts.find(
         (part: any) => part.functionCall?.name === 'scoreUser',
@@ -793,7 +801,7 @@ export class AiTutorChatService {
       }
 
       const fullResponse =
-        `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}${flashcardAcknowledgement}${publicQuizAcknowledgement}${scheduleQuizAcknowledgement}${responseText}`.trim();
+        `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}${flashcardAcknowledgement}${publicQuizAcknowledgement}${scheduleQuizAcknowledgement}${sanitizedResponse.text}`.trim();
       const assistantMessage = {
         id: generateUUID(),
         role: 'assistant' as const,
@@ -1503,6 +1511,15 @@ export class AiTutorChatService {
               );
             }
           }
+
+          const sanitizedResponse =
+            sanitizeLeakedAssistantToolTranscript(fullResponse);
+          if (sanitizedResponse.leakedMemoryFacts.length > 0) {
+            await this.applyUpdateUserMemoryFromTool(userId, {
+              facts: sanitizedResponse.leakedMemoryFacts,
+            });
+          }
+          fullResponse = sanitizedResponse.text;
 
           const acknowledgements =
             `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}${flashcardAcknowledgement}${publicQuizAcknowledgement}${scheduleQuizAcknowledgement}`.trim();

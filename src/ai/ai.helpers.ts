@@ -57,6 +57,124 @@ export const formatMessageText = (msg: {
   return String(c ?? '');
 };
 
+export type SanitizedAssistantText = {
+  text: string;
+  leakedMemoryFacts: string[];
+};
+
+const unwrapJsonTextPayload = (raw: string): string => {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith('{')) return raw;
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      typeof (parsed as { text?: unknown }).text === 'string'
+    ) {
+      return (parsed as { text: string }).text;
+    }
+  } catch {
+    /* not a JSON text wrapper */
+  }
+
+  return raw;
+};
+
+const unescapeQuotedToolString = (raw: string) =>
+  raw
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\r')
+    .replace(/\\t/g, '\t')
+    .replace(/\\'/g, "'")
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\');
+
+export const extractLeakedUpdateUserMemoryFacts = (raw: string): string[] => {
+  const facts: string[] = [];
+  const calls =
+    raw.matchAll(
+      /default_api\.updateUserMemory\s*\(\s*facts\s*=\s*\[([\s\S]*?)\]\s*\)/g,
+    );
+
+  for (const call of calls) {
+    const list = call[1] ?? '';
+    const quotedFacts = list.matchAll(/(['"])((?:\\.|(?!\1)[\s\S])*)\1/g);
+    for (const fact of quotedFacts) {
+      const normalized = normalizeMemoryFactLine(
+        unescapeQuotedToolString(fact[2] ?? ''),
+      );
+      if (normalized) facts.push(normalized);
+    }
+  }
+
+  return facts;
+};
+
+const extractUserFacingTextAfterThought = (raw: string): string => {
+  const thoughtMatch = /(?:^|\n)\s*thought\s*\n/i.exec(raw);
+  if (!thoughtMatch) return raw;
+
+  const afterThought = raw
+    .slice(thoughtMatch.index + thoughtMatch[0].length)
+    .trim();
+  if (!afterThought) return '';
+
+  const responseCue =
+    /(?:^|[.!?]\s+)(That's|That is|Awesome|Great|Nice|Absolutely|Sure|Got it|Yes|No|Thanks|You're|You are|As a|Let's|We can|Here(?:'s| is)|To help|For\b|In\b)\b/i;
+  const cue = responseCue.exec(afterThought);
+  if (cue?.index !== undefined) {
+    return afterThought.slice(cue.index).replace(/^[.!?]\s*/, '').trim();
+  }
+
+  return afterThought;
+};
+
+export const sanitizeLeakedAssistantToolTranscript = (
+  raw: string,
+): SanitizedAssistantText => {
+  const unwrapped = unwrapJsonTextPayload(raw);
+  const leakedMemoryFacts = extractLeakedUpdateUserMemoryFacts(unwrapped);
+
+  if (!/\btool_code\b/i.test(unwrapped) && !/\bthought\b/i.test(unwrapped)) {
+    return { text: unwrapped.trim(), leakedMemoryFacts };
+  }
+
+  let text = unwrapped.replace(
+    /(?:^|\n)\s*tool_code\s*\n[\s\S]*?(?=(?:^|\n)\s*thought\s*\n|$)/i,
+    '\n',
+  );
+  text = extractUserFacingTextAfterThought(text);
+
+  return {
+    text: text.trim(),
+    leakedMemoryFacts,
+  };
+};
+
+export const sanitizeAssistantMessageContent = (content: unknown): unknown => {
+  if (typeof content === 'string') {
+    return sanitizeLeakedAssistantToolTranscript(content).text;
+  }
+
+  if (
+    content &&
+    typeof content === 'object' &&
+    !Array.isArray(content) &&
+    typeof (content as { text?: unknown }).text === 'string'
+  ) {
+    return {
+      ...(content as Record<string, unknown>),
+      text: sanitizeLeakedAssistantToolTranscript(
+        (content as { text: string }).text,
+      ).text,
+    };
+  }
+
+  return content;
+};
+
 const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
 export const isForbiddenUrlTarget = (url: URL) => {
