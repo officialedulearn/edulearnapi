@@ -5,7 +5,11 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   NotFoundException,
+  BadRequestException,
+  DefaultValuePipe,
+  ParseIntPipe,
   UseGuards,
   Request,
 } from '@nestjs/common';
@@ -15,6 +19,7 @@ import {
   ApiSecurity,
   ApiResponse,
   ApiBody,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { ChatService } from './chat.service';
 import { Message } from '../../lib/db/schema';
@@ -53,6 +58,12 @@ export class ChatController {
   async getAllChatsForUser(@Request() req, @Param('userId') userId: string) {
     await verifyUserAuthorization(req.user, userId, 'viewing chats');
     return await this.chatService.getAllChatsForUser(userId);
+  }
+
+  @Get('user/history/:userId')
+  async getAllChatHistory(@Request() req, @Param('userId') userId: string) {
+    await verifyUserAuthorization(req.user, userId, 'viewing chat history');
+    return await this.chatService.getChatHistory(userId);
   }
 
   @Get(':chatId')
@@ -113,19 +124,61 @@ export class ChatController {
 
   @Get(':chatId/messages')
   @ApiOperation({ summary: 'Get all messages in a chat' })
+  @ApiQuery({
+    name: 'offset',
+    required: false,
+    type: Number,
+    description: 'Pagination offset from the latest message (default: 0)',
+    example: 0,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Number of messages to return (default: 5)',
+    example: 5,
+  })
+  @ApiQuery({
+    name: 'before_message_id',
+    required: false,
+    type: String,
+    description:
+      'Cursor message id. Returns messages older than this message id.',
+    example: 'a6f60ac8-ecef-45d6-8c50-49a33f5e1c9c',
+  })
   @ApiResponse({ status: 200, description: 'Returns all messages in the chat' })
   @ApiResponse({ status: 403, description: 'Forbidden - private chat' })
   @ApiResponse({ status: 404, description: 'Chat not found' })
-  async getMessagesInChat(@Request() req, @Param('chatId') chatId: string) {
+  async getMessagesInChat(
+    @Request() req,
+    @Param('chatId') chatId: string,
+    @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+    @Query('limit', new DefaultValuePipe(5), ParseIntPipe) limit: number,
+    @Query('before_message_id') beforeMessageId?: string,
+  ) {
     const chat = await this.chatService.getChatById(chatId);
 
     if (!chat) {
       throw new NotFoundException(`Chat with id ${chatId} not found`);
     }
 
+    if (offset < 0) {
+      throw new BadRequestException(
+        'offset must be greater than or equal to 0',
+      );
+    }
+
+    if (limit < 1) {
+      throw new BadRequestException('limit must be at least 1');
+    }
+
     await verifyChatAccess(req.user, chat, 'view messages in this chat');
 
-    return await this.chatService.getMessagesInChat(chatId);
+    return await this.chatService.getMessagesInChat(chatId, {
+      offset,
+      limit,
+      beforeMessageId,
+    });
   }
 
   @Delete(':chatId/messages')

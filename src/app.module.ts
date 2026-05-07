@@ -32,6 +32,8 @@ import { TrendsModule } from './trends/trends.module';
 import { AgentModule } from './agent/agent.module';
 import { UserModule } from './user/user.module';
 import { RemindersModule } from './reminders/reminders.module';
+import { ReferralModule } from './referral/referral.module';
+import { DeepLinksModule } from './deep-links/deep-links.module';
 
 @Module({
   imports: [
@@ -72,6 +74,8 @@ import { RemindersModule } from './reminders/reminders.module';
     AgentModule,
     UserModule,
     RemindersModule,
+    ReferralModule,
+    DeepLinksModule,
   ],
   controllers: [AppController],
   providers: [

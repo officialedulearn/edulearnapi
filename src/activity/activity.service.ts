@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import db from '../../drizzle';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, desc } from 'drizzle-orm';
 import {
   xpActivity,
   user,
@@ -18,6 +18,22 @@ export class ActivityService {
     private rewardService: RewardsService,
     private roadmapService: RoadmapService,
   ) {}
+
+  private buildActivityPaginationMeta(
+    total: number,
+    limit: number,
+    page: number,
+  ) {
+    const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+    return {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1,
+    };
+  }
 
   async createActivity(data: {
     userId: string;
@@ -195,13 +211,41 @@ export class ActivityService {
     }
   }
 
-  async getActivitiesByUser(userId: string) {
+  async getActivitiesByUser(
+    userId: string,
+    pagination?: { limit: number; page: number },
+  ) {
     try {
-      return await db
+      if (!pagination) {
+        return await db
+          .select()
+          .from(xpActivity)
+          .where(eq(xpActivity.userId, userId))
+          .orderBy(xpActivity.createdAt);
+      }
+
+      const safeLimit = Math.max(1, Math.min(100, pagination.limit));
+      const safePage = Math.max(1, pagination.page);
+      const offset = (safePage - 1) * safeLimit;
+
+      const [countResult] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(xpActivity)
+        .where(eq(xpActivity.userId, userId));
+
+      const total = Number(countResult?.count ?? 0);
+      const activities = await db
         .select()
         .from(xpActivity)
         .where(eq(xpActivity.userId, userId))
-        .orderBy(xpActivity.createdAt);
+        .orderBy(desc(xpActivity.createdAt))
+        .limit(safeLimit)
+        .offset(offset);
+
+      return {
+        data: activities,
+        pagination: this.buildActivityPaginationMeta(total, safeLimit, safePage),
+      };
     } catch (error) {
       console.error(
         `Failed to get activities for user with id ${userId}`,
@@ -265,7 +309,7 @@ export class ActivityService {
         throw new Error(`User with id ${userId} not found`);
       }
 
-      const activities = await this.getActivitiesByUser(userId);
+      const activities = (await this.getActivitiesByUser(userId)) as any[];
 
       return {
         user: userData[0],

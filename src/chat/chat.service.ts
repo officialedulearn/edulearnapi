@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { asc, desc, eq, and } from 'drizzle-orm';
+import { asc, desc, eq, and, lt } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../../drizzle';
 import {
@@ -35,6 +35,21 @@ export class ChatService {
       .returning();
 
     return result[0];
+  }
+
+  async getChatHistory(userId: string) {
+    return await db
+      .select({
+        id: chat.id,
+        title: chat.title,
+        createdAt: chat.createdAt,
+        tested: chat.tested,
+        testLimit: chat.testLimit,
+      })
+      .from(chat)
+      .where(eq(chat.userId, userId))
+      .orderBy(desc(chat.createdAt))
+      .limit(10);
   }
 
   async getAllChatsForUser(userId: string) {
@@ -139,7 +154,60 @@ export class ChatService {
     return await db.insert(message).values(sanitizedMessages);
   }
 
-  async getMessagesInChat(chatId: string) {
+  async getMessagesInChat(
+    chatId: string,
+    options?: { offset?: number; limit?: number; beforeMessageId?: string },
+  ) {
+    const hasPagination =
+      typeof options?.offset === 'number' ||
+      typeof options?.limit === 'number' ||
+      typeof options?.beforeMessageId === 'string';
+
+    if (hasPagination) {
+      const offset = Math.max(0, options?.offset ?? 0);
+      const limit = Math.max(1, options?.limit ?? 5);
+      const beforeMessageId = options?.beforeMessageId?.trim();
+
+      if (beforeMessageId) {
+        const [cursorMessage] = await db
+          .select({ createdAt: message.createdAt })
+          .from(message)
+          .where(
+            and(eq(message.id, beforeMessageId), eq(message.chatId, chatId)),
+          )
+          .limit(1);
+
+        if (!cursorMessage) {
+          return [];
+        }
+
+        const paginatedMessages = await db
+          .select()
+          .from(message)
+          .where(
+            and(
+              eq(message.chatId, chatId),
+              lt(message.createdAt, cursorMessage.createdAt),
+            ),
+          )
+          .orderBy(desc(message.createdAt))
+          .offset(offset)
+          .limit(limit);
+
+        return paginatedMessages.reverse();
+      }
+
+      const paginatedMessages = await db
+        .select()
+        .from(message)
+        .where(eq(message.chatId, chatId))
+        .orderBy(desc(message.createdAt))
+        .offset(offset)
+        .limit(limit);
+
+      return paginatedMessages.reverse();
+    }
+
     return await db
       .select()
       .from(message)

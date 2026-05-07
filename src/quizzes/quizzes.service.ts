@@ -6,9 +6,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import db from '../../drizzle';
-import { and, eq, sql, desc } from 'drizzle-orm';
+import { and, eq, sql, desc, asc, max, min } from 'drizzle-orm';
 import {
   publicQuiz,
+  PublicQuizParticipation,
   publicQuizParticipation,
   user,
 } from '../../lib/db/schema';
@@ -190,6 +191,46 @@ export class QuizzesService {
       quizId: row.quizId,
       joinedAt: row.joinedAt,
     };
+  }
+
+  async getQuizLeaderboard(quizId: string) {
+    // Subquery: best score per user for this quiz
+    const bestScores = db
+      .select({
+        userId: publicQuizParticipation.userId,
+        maxScore: max(publicQuizParticipation.score).as("maxScore"),
+        firstJoined: min(publicQuizParticipation.joinedAt).as("firstJoined"),
+      })
+      .from(publicQuizParticipation)
+      .where(eq(publicQuizParticipation.quizId, quizId))
+      .groupBy(publicQuizParticipation.userId)
+      .as("bestScores");
+  
+    const leaderboard = await db
+      .select({
+        userId: bestScores.userId,
+        score: bestScores.maxScore,
+        joinedAt: bestScores.firstJoined,
+        userId_: user.id,
+        profilePictureURL: user.profilePictureURL,
+        username: user.username,
+        name: user.name,
+      })
+      .from(bestScores)
+      .innerJoin(user, eq(user.id, bestScores.userId))
+      .orderBy(desc(bestScores.maxScore), asc(bestScores.firstJoined))
+      .limit(10);
+  
+    return leaderboard.map(({ ...row }) => ({
+      userId: row.userId,
+      score: row.score,
+      joinedAt: row.joinedAt,
+      user: {
+        profilePictureURL: row.profilePictureURL,
+        username: row.username,
+        name: row.name,
+      },
+    }));
   }
 
   async submitAttempt(

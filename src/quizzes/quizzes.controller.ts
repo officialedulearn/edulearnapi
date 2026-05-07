@@ -58,6 +58,11 @@ export class QuizzesController {
     return this.quizzesService.publish(userId, dto);
   }
 
+  @Get('public/:id/leaderboard')
+  async getLeaderboard(@Param('id') id: string) {
+    return this.quizzesService.getQuizLeaderboard(id);
+  }
+
   @Get('mine')
   @UseGuards(JwtAuthGuard)
   async listMine(
