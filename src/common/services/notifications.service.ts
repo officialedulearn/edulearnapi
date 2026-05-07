@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -8,12 +9,64 @@ import { user, notifications } from '../../../lib/db/schema';
 import { ExpoPushService } from 'src/common/services/expo-push.service';
 import { eq, and, desc, asc } from 'drizzle-orm';
 import type { PushNotificationData } from 'src/common/services/expo-push.service';
+import {
+  type NotificationMetadataMap,
+  type NotificationType,
+} from 'src/common/notifications/notification-types';
 
 type CreateNotificationInput = {
   title: string;
   content: string;
   userId: string;
+  type: NotificationType;
+  metadata?: NotificationMetadataMap[NotificationType];
   data?: PushNotificationData;
+};
+
+const hasString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
+export const validateNotificationMetadata = (
+  type: NotificationType,
+  metadata: unknown,
+) => {
+  const meta = (metadata ?? {}) as Record<string, unknown>;
+  switch (type) {
+    case 'quiz_ready':
+      if (!hasString(meta.quizId)) {
+        throw new BadRequestException(
+          'quiz_ready notification metadata requires quizId',
+        );
+      }
+      break;
+    case 'roadmap_ready':
+      if (!hasString(meta.roadmapId)) {
+        throw new BadRequestException(
+          'roadmap_ready notification metadata requires roadmapId',
+        );
+      }
+      break;
+    case 'mention':
+      if (!hasString(meta.communityId)) {
+        throw new BadRequestException(
+          'mention notification metadata requires communityId',
+        );
+      }
+      break;
+    case 'nft_claimed':
+      if (!hasString(meta.nftId)) {
+        throw new BadRequestException(
+          'nft_claimed notification metadata requires nftId',
+        );
+      }
+      break;
+    case 'leaderboard_update':
+    case 'streak_warning':
+    case 'system_announcement':
+      break;
+    default:
+      throw new BadRequestException('Unsupported notification type');
+  }
 };
 
 @Injectable()
@@ -25,6 +78,7 @@ export class NotificationsService {
     sendPush: boolean = true,
   ) {
     try {
+      validateNotificationMetadata(notification.type, notification.metadata);
       const userResponse = await db
         .select()
         .from(user)
@@ -40,6 +94,8 @@ export class NotificationsService {
       await db.insert(notifications).values({
         title: notification.title,
         content: notification.content,
+        type: notification.type,
+        metadata: notification.metadata ?? {},
         userId: notification.userId,
       });
     } catch (error) {

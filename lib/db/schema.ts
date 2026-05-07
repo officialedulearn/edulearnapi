@@ -292,6 +292,18 @@ export const notifications = pgTable('notifications', {
   id: uuid('id').notNull().primaryKey().defaultRandom(),
   content: text('content').notNull(),
   title: text('title').notNull(),
+  type: varchar('type', {
+    enum: [
+      'quiz_ready',
+      'roadmap_ready',
+      'mention',
+      'leaderboard_update',
+      'streak_warning',
+      'nft_claimed',
+      'system_announcement',
+    ],
+  }).notNull().default('system_announcement'),
+  metadata: json('metadata'),
   userId: uuid('userId')
     .notNull()
     .references(() => user.id),
@@ -432,8 +444,8 @@ export const quizGenerationSchedule = pgTable('quiz_generation_schedule', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
   userId: uuid('userId')
     .notNull()
-    .references(() => user.id)
-    .unique(),
+    .references(() => user.id),
+
   topic: text('topic').notNull(),
   difficulty: varchar('difficulty', {
     enum: ['easy', 'medium', 'hard'],

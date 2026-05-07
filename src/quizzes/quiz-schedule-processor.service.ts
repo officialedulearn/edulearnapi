@@ -97,6 +97,7 @@ export class QuizScheduleProcessorService
           title: 'Scheduled quiz skipped',
           content:
             'Your scheduled quiz did not run because you need at least 0.5 credits.',
+          type: 'system_announcement',
         },
         true,
       );
@@ -129,6 +130,7 @@ export class QuizScheduleProcessorService
             title: 'Scheduled quiz skipped',
             content:
               'Your scheduled quiz did not run because the most recent quiz has no attempts.',
+            type: 'system_announcement',
           },
           true,
         );
@@ -163,6 +165,8 @@ export class QuizScheduleProcessorService
         userId,
         title: 'Your quiz is ready',
         content: `A new quiz "${published.title}" was generated from your schedule.`,
+        type: 'quiz_ready',
+        metadata: { quizId: published.id },
         data: {
           screen: 'publicQuiz',
           id: published.id,

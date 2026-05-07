@@ -241,6 +241,7 @@ export class AdminService {
           title,
           content,
           userId: u.id,
+          type: 'system_announcement',
         });
         sent++;
       } catch (error) {
@@ -266,6 +267,7 @@ export class AdminService {
           title,
           content,
           userId,
+          type: 'system_announcement',
         });
         sent++;
       } catch (error) {

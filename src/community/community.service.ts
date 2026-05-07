@@ -244,6 +244,8 @@ export class CommunityService {
             title: `New join request for ${communityTitle}`,
             content: `${requester.name || requester.username} wants to join ${communityTitle}`,
             userId: mod.userId,
+            type: 'mention',
+            metadata: { communityId: data.communityId },
           });
         }
       }
@@ -624,6 +626,12 @@ export class CommunityService {
         title: `${mentionedByName} mentioned you`,
         content: `You were mentioned in ${communityTitle}: ${message.content.substring(0, 100)}${message.content.length > 100 ? '...' : ''}`,
         userId: data.mentionedUserId,
+        type: 'mention',
+        metadata: {
+          communityId: data.communityId ?? message.roomId,
+          messageId: data.messageId,
+          mentionedByUserId: data.mentionedByUserId,
+        },
       });
     } catch (error) {
       console.error('Failed to create mention notification:', error);

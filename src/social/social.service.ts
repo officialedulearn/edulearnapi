@@ -76,6 +76,7 @@ export class SocialService {
       title: '👥 New Follower!',
       content: `${followerExists[0].username} started following you!`,
       userId: followingId,
+      type: 'system_announcement',
     });
   }
 
@@ -334,6 +335,14 @@ export class SocialService {
             title,
             content,
             userId: follower.id as string,
+            type:
+              event.type === 'nft_earned' && event.data?.nftId
+                ? 'nft_claimed'
+                : 'system_announcement',
+            metadata:
+              event.type === 'nft_earned' && event.data?.nftId
+                ? { nftId: event.data.nftId as string }
+                : {},
           },
           follower.pushNotifications ?? true,
         );

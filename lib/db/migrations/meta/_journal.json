@@ -323,6 +323,20 @@
       "when": 1777920000000,
       "tag": "0045_autonomous_reminder_emails",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1777996800000,
+      "tag": "0046_notification_type_metadata",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1778112442988,
+      "tag": "0047_purple_vanisher",
+      "breakpoints": true
     }
   ]
 }
