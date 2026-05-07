@@ -100,6 +100,51 @@ export class DeepLinksService {
     });
   }
 
+  buildNotFoundPage() {
+    return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Link not found</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #0b1020;
+        color: #f8fafc;
+        display: grid;
+        place-items: center;
+      }
+      main {
+        width: min(90vw, 420px);
+        background: rgba(12, 15, 24, 0.92);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 24px;
+        text-align: center;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 24px;
+      }
+      p {
+        margin: 0;
+        color: #cbd5e1;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Link not found</h1>
+      <p>This link is invalid or has expired.</p>
+    </main>
+  </body>
+</html>`;
+  }
+
   logHit(request: FastifyRequest, linkType: LinkType, value: string) {
     const payload = {
       type: linkType,

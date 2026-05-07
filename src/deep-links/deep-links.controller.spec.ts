@@ -8,6 +8,7 @@ import { DeepLinksModule } from './deep-links.module';
 
 describe('DeepLinksController', () => {
   let app: NestFastifyApplication;
+  const hostHeader = { Host: 'mobile.edulearn.fun' };
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -28,6 +29,7 @@ describe('DeepLinksController', () => {
   it('serves apple app site association json', async () => {
     const res = await request(app.getHttpServer())
       .get('/.well-known/apple-app-site-association')
+      .set(hostHeader)
       .expect(200);
 
     expect(res.headers['content-type']).toContain('application/json');
@@ -44,6 +46,7 @@ describe('DeepLinksController', () => {
   it('serves android asset links json', async () => {
     const res = await request(app.getHttpServer())
       .get('/.well-known/assetlinks.json')
+      .set(hostHeader)
       .expect(200);
 
     expect(res.headers['content-type']).toContain('application/json');
@@ -57,7 +60,10 @@ describe('DeepLinksController', () => {
   });
 
   it('serves referral landing html with deep-link and install fallback', async () => {
-    const res = await request(app.getHttpServer()).get('/ref/abc123').expect(200);
+    const res = await request(app.getHttpServer())
+      .get('/ref/abc123')
+      .set(hostHeader)
+      .expect(200);
 
     expect(res.headers['content-type']).toContain('text/html');
     expect(res.text).toContain('Join EduLearn with a referral');
@@ -69,18 +75,26 @@ describe('DeepLinksController', () => {
   it('serves quiz and community landing pages', async () => {
     const quiz = await request(app.getHttpServer())
       .get('/quizzes/quizref1234')
+      .set(hostHeader)
       .expect(200);
     expect(quiz.text).toContain('edulearnv2://quizzes/quizref1234');
 
     const community = await request(app.getHttpServer())
       .get('/community/Invite77')
+      .set(hostHeader)
       .expect(200);
     expect(community.text).toContain('edulearnv2://community/INVITE77');
   });
 
   it('returns 404 for invalid deep-link params without app-open script', async () => {
-    const res = await request(app.getHttpServer()).get('/community/abc-123');
+    const res = await request(app.getHttpServer())
+      .get('/community/abc-123')
+      .set(hostHeader);
     expect(res.status).toBe(404);
     expect(res.text).not.toContain('window.location.href = deepLinkUrl');
+  });
+
+  it('does not serve deep-link routes on non-mobile host', async () => {
+    await request(app.getHttpServer()).get('/ref/abc123').expect(404);
   });
 });
