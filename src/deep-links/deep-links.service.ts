@@ -29,6 +29,26 @@ export class DeepLinksService {
   private readonly desktopFallbackUrl =
     process.env.DEEP_LINK_DESKTOP_FALLBACK_URL || 'https://edulearn.fun';
 
+  private readonly brandName = process.env.DEEP_LINK_BRAND_NAME || 'EduLearn';
+  private readonly brandSiteUrl = this.normalizeUrl(
+    process.env.DEEP_LINK_BRAND_SITE_URL || 'https://edulearn.fun',
+  );
+  private readonly brandSupportUrl = this.normalizeUrl(
+    process.env.DEEP_LINK_BRAND_SUPPORT_URL || 'https://support.edulearn.fun',
+  );
+  private readonly brandLogoUrl =
+    process.env.DEEP_LINK_BRAND_LOGO_URL ||
+    `${this.brandSiteUrl}/assets/images/logo.png`;
+  private readonly brandMarkUrl =
+    process.env.DEEP_LINK_BRAND_MARK_URL ||
+    `${this.brandSiteUrl}/assets/images/edulearn.png`;
+  private readonly brandFontUrl =
+    process.env.DEEP_LINK_BRAND_FONT_URL ||
+    `${this.brandSiteUrl}/assets/fonts/Satoshi-Regular.otf`;
+  private readonly brandPreviewImageUrl =
+    process.env.DEEP_LINK_BRAND_PREVIEW_IMAGE_URL ||
+    'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/edulearn-preview.png';
+
   private readonly iosAppId =
     process.env.DEEP_LINK_IOS_APP_ID || 'TEAMID.com.edulearnv2.app';
   private readonly androidPackageName =
@@ -101,45 +121,123 @@ export class DeepLinksService {
   }
 
   buildNotFoundPage() {
+    const escapedBrandName = this.escapeHtml(this.brandName);
+    const escapedBrandSiteUrl = this.escapeHtml(this.brandSiteUrl);
+    const escapedBrandSupportUrl = this.escapeHtml(this.brandSupportUrl);
+    const escapedBrandLogoUrl = this.escapeHtml(this.brandLogoUrl);
+    const escapedBrandMarkUrl = this.escapeHtml(this.brandMarkUrl);
+    const escapedBrandFontUrl = this.escapeHtml(this.brandFontUrl);
+    const escapedPreviewImageUrl = this.escapeHtml(this.brandPreviewImageUrl);
+
     return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Link not found</title>
+    <title>${escapedBrandName} | Link not found</title>
+    <meta name="description" content="This ${escapedBrandName} link is invalid or has expired." />
+    <meta name="theme-color" content="#00FF80" />
+    <meta property="og:title" content="${escapedBrandName} | Link not found" />
+    <meta property="og:description" content="This ${escapedBrandName} link is invalid or has expired." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${escapedBrandSiteUrl}" />
+    <meta property="og:image" content="${escapedPreviewImageUrl}" />
+    <meta property="og:site_name" content="${escapedBrandName}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapedBrandName} | Link not found" />
+    <meta name="twitter:description" content="This ${escapedBrandName} link is invalid or has expired." />
+    <meta name="twitter:image" content="${escapedPreviewImageUrl}" />
     <style>
+      @font-face {
+        font-family: "Satoshi";
+        src: url("${escapedBrandFontUrl}") format("opentype");
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+      }
       body {
         margin: 0;
         min-height: 100vh;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        background: #0b1020;
-        color: #f8fafc;
+        font-family: "Satoshi", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: radial-gradient(circle at 12% 15%, rgba(0, 255, 128, 0.22) 0%, rgba(0, 255, 128, 0) 40%), #0a0a0a;
+        color: #e0e0e0;
         display: grid;
         place-items: center;
       }
       main {
-        width: min(90vw, 420px);
-        background: rgba(12, 15, 24, 0.92);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 16px;
-        padding: 24px;
+        width: min(92vw, 460px);
+        background: rgba(19, 19, 19, 0.95);
+        border: 1px solid #2e3033;
+        border-radius: 20px;
+        padding: 28px 24px;
         text-align: center;
+        box-shadow: 0 24px 50px rgba(0, 0, 0, 0.45);
+      }
+      .brand-logo {
+        width: min(200px, 70%);
+        height: auto;
+        margin: 0 auto 20px;
+        display: block;
+      }
+      .brand-mark {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 14px;
+        opacity: 0.9;
       }
       h1 {
-        margin: 0 0 8px;
+        margin: 0 0 10px;
         font-size: 24px;
+        line-height: 1.2;
       }
       p {
-        margin: 0;
-        color: #cbd5e1;
+        margin: 0 0 18px;
+        color: #b3b3b3;
         line-height: 1.5;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      a.button {
+        display: inline-block;
+        padding: 12px 16px;
+        border-radius: 12px;
+        text-decoration: none;
+        font-weight: 700;
+      }
+      a.primary {
+        background: #00ff80;
+        color: #000000;
+      }
+      a.primary:hover {
+        background: #00e070;
+      }
+      a.secondary {
+        border: 1px solid #2e3033;
+        color: #00ff80;
+        background: rgba(0, 255, 128, 0.06);
+      }
+      small {
+        display: block;
+        margin-top: 12px;
+        color: #8a8a8a;
       }
     </style>
   </head>
   <body>
     <main>
+      <img class="brand-logo" src="${escapedBrandLogoUrl}" alt="${escapedBrandName} logo" loading="eager" />
+      <img class="brand-mark" src="${escapedBrandMarkUrl}" alt="" aria-hidden="true" />
       <h1>Link not found</h1>
       <p>This link is invalid or has expired.</p>
+      <div class="actions">
+        <a class="button primary" href="${escapedBrandSiteUrl}">Go to ${escapedBrandName}</a>
+        <a class="button secondary" href="${escapedBrandSupportUrl}">Get support</a>
+      </div>
+      <small>Check the link and try again.</small>
     </main>
   </body>
 </html>`;
@@ -172,6 +270,12 @@ export class DeepLinksService {
     const escapedCanonical = this.escapeHtml(
       `https://${this.deepLinkHost}${canonicalPath}`,
     );
+    const escapedBrandName = this.escapeHtml(this.brandName);
+    const escapedBrandLogoUrl = this.escapeHtml(this.brandLogoUrl);
+    const escapedBrandMarkUrl = this.escapeHtml(this.brandMarkUrl);
+    const escapedBrandFontUrl = this.escapeHtml(this.brandFontUrl);
+    const escapedPreviewImageUrl = this.escapeHtml(this.brandPreviewImageUrl);
+    const escapedBrandSiteUrl = this.escapeHtml(this.brandSiteUrl);
 
     return `<!doctype html>
 <html lang="en">
@@ -180,78 +284,129 @@ export class DeepLinksService {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapedTitle}</title>
     <meta name="description" content="${escapedDescription}" />
+    <meta name="theme-color" content="#00FF80" />
     <meta property="og:title" content="${escapedTitle}" />
     <meta property="og:description" content="${escapedDescription}" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="${escapedCanonical}" />
+    <meta property="og:image" content="${escapedPreviewImageUrl}" />
+    <meta property="og:site_name" content="${escapedBrandName}" />
+    <meta property="og:image:alt" content="${escapedBrandName} preview" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapedTitle}" />
     <meta name="twitter:description" content="${escapedDescription}" />
+    <meta name="twitter:image" content="${escapedPreviewImageUrl}" />
+    <link rel="canonical" href="${escapedCanonical}" />
     <style>
-      :root {
-        color-scheme: dark;
+      @font-face {
+        font-family: "Satoshi";
+        src: url("${escapedBrandFontUrl}") format("opentype");
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
       }
+
       body {
         margin: 0;
         min-height: 100vh;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        background: radial-gradient(circle at top, #171923 0%, #090b10 60%, #05060a 100%);
-        color: #f8fafc;
+        font-family: "Satoshi", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: radial-gradient(circle at 10% 10%, rgba(0, 255, 128, 0.24) 0%, rgba(0, 255, 128, 0) 35%), #0a0a0a;
+        color: #e0e0e0;
         display: grid;
         place-items: center;
       }
       main {
-        width: min(90vw, 420px);
-        background: rgba(12, 15, 24, 0.9);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 18px;
-        padding: 24px;
+        width: min(92vw, 460px);
+        background: rgba(19, 19, 19, 0.95);
+        border: 1px solid #2e3033;
+        border-radius: 20px;
+        padding: 28px 24px;
         text-align: center;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+        box-shadow: 0 24px 50px rgba(0, 0, 0, 0.45);
+      }
+      .brand-logo {
+        width: min(200px, 70%);
+        height: auto;
+        margin: 0 auto 16px;
+        display: block;
+      }
+      .brand-mark {
+        width: 36px;
+        height: 36px;
+        margin: 0 auto 14px;
+        opacity: 0.95;
       }
       h1 {
-        margin: 0 0 8px;
-        font-size: 24px;
+        margin: 0 0 10px;
+        font-size: 26px;
         line-height: 1.2;
       }
       p {
         margin: 0 0 18px;
-        color: #cbd5e1;
+        color: #b3b3b3;
         line-height: 1.5;
       }
+      .actions {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
       a.button {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: min(100%, 300px);
         padding: 12px 16px;
-        border-radius: 10px;
+        border-radius: 12px;
         text-decoration: none;
-        font-weight: 600;
+        font-weight: 700;
       }
       a.primary {
         background: #00ff80;
-        color: #00150b;
+        color: #000000;
+      }
+      a.primary:hover {
+        background: #00e070;
       }
       a.secondary {
-        background: rgba(255, 255, 255, 0.08);
-        color: #f8fafc;
-        border: 1px solid rgba(255, 255, 255, 0.16);
-        margin-top: 10px;
+        background: rgba(0, 255, 128, 0.06);
+        color: #00ff80;
+        border: 1px solid #2e3033;
       }
       small {
         display: block;
         margin-top: 14px;
-        color: #94a3b8;
+        color: #8a8a8a;
+      }
+      .footer-link {
+        margin-top: 12px;
+        color: #8a8a8a;
+        font-size: 13px;
+      }
+      .footer-link a {
+        color: #00ff80;
+        text-decoration: none;
+      }
+      .footer-link a:hover {
+        text-decoration: underline;
       }
     </style>
   </head>
   <body>
     <main>
+      <img class="brand-logo" src="${escapedBrandLogoUrl}" alt="${escapedBrandName} logo" loading="eager" />
+      <img class="brand-mark" src="${escapedBrandMarkUrl}" alt="" aria-hidden="true" />
       <h1>${escapedTitle}</h1>
       <p>${escapedDescription}</p>
-      <a id="open-app" class="button primary" href="${this.escapeHtml(
-        deepLinkUrl,
-      )}">Open App</a>
-      <a id="install-app" class="button secondary" href="#">Install App</a>
+      <div class="actions">
+        <a id="open-app" class="button primary" href="${this.escapeHtml(
+          deepLinkUrl,
+        )}">Open ${escapedBrandName}</a>
+        <a id="install-app" class="button secondary" href="#">Install ${escapedBrandName}</a>
+      </div>
       <small>If the app does not open automatically, use the buttons above.</small>
+      <div class="footer-link">Need help? <a href="${escapedBrandSiteUrl}">Visit ${escapedBrandName}</a></div>
     </main>
     <script>
       (function () {
@@ -302,6 +457,10 @@ export class DeepLinksService {
       .split(',')
       .map((item) => item.trim())
       .filter(Boolean);
+  }
+
+  private normalizeUrl(value: string) {
+    return value.trim().replace(/\/+$/, '');
   }
 
   private escapeHtml(input: string) {
