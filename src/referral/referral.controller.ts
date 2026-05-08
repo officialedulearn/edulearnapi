@@ -21,9 +21,29 @@ export class ReferralController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async getMyReferralOverview(
-    @Request() req,
+    @Request() req: { user?: unknown },
   ): Promise<ReferralOverviewResponse> {
     const userId = await getDatabaseUserId(req.user);
-    return this.referralService.getReferralOverview(userId);
+
+    try {
+      return this.referralService.getReferralOverview(userId);
+    } catch (error) {
+      const referralError = error as
+        | {
+            message?: string;
+            code?: string;
+            stack?: string;
+            cause?: { code?: string; message?: string };
+          }
+        | undefined;
+      console.error('Referral /me failed', {
+        message: referralError?.message,
+        code: referralError?.code,
+        causeCode: referralError?.cause?.code,
+        causeMessage: referralError?.cause?.message,
+        stack: referralError?.stack,
+      });
+      return this.referralService.getReferralOverviewFallback(userId);
+    }
   }
 }

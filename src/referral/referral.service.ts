@@ -67,25 +67,43 @@ export class ReferralService {
   async getReferralLeaderboard(
     currentUserId?: string,
   ): Promise<ReferralLeaderboardResponse> {
-    const rankedUsers = this.getRankedUsersSubquery();
-    const rows = await db
-      .select({
-        userId: rankedUsers.userId,
-        displayName: rankedUsers.displayName,
-        username: rankedUsers.username,
-        profilePictureUrl: rankedUsers.profilePictureUrl,
-        referralCode: rankedUsers.referralCode,
-        totalReferrals: rankedUsers.totalReferrals,
-        totalEarnings: rankedUsers.totalEarnings,
-        level: rankedUsers.level,
-        streak: rankedUsers.streak,
-        xp: rankedUsers.xp,
-        quizCompleted: rankedUsers.quizCompleted,
-        rank: rankedUsers.rank,
-      })
-      .from(rankedUsers)
-      .orderBy(asc(rankedUsers.rank))
-      .limit(this.leaderboardLimit);
+    const runQuery = (
+      includeTotalEarningsColumn: boolean,
+    ): Promise<ReferralLeaderboardRankedRow[]> => {
+      const rankedUsers = this.getRankedUsersSubquery(
+        includeTotalEarningsColumn,
+        includeTotalEarningsColumn,
+        includeTotalEarningsColumn,
+      );
+      return db
+        .select({
+          userId: rankedUsers.userId,
+          displayName: rankedUsers.displayName,
+          username: rankedUsers.username,
+          profilePictureUrl: rankedUsers.profilePictureUrl,
+          referralCode: rankedUsers.referralCode,
+          totalReferrals: rankedUsers.totalReferrals,
+          totalEarnings: rankedUsers.totalEarnings,
+          level: rankedUsers.level,
+          streak: rankedUsers.streak,
+          xp: rankedUsers.xp,
+          quizCompleted: rankedUsers.quizCompleted,
+          rank: rankedUsers.rank,
+        })
+        .from(rankedUsers)
+        .orderBy(asc(rankedUsers.rank))
+        .limit(this.leaderboardLimit);
+    };
+
+    let rows: ReferralLeaderboardRankedRow[];
+    try {
+      rows = await runQuery(true);
+    } catch (error) {
+      if (!this.shouldUseLegacyReferralQueryFallback(error)) {
+        throw error;
+      }
+      rows = await runQuery(false);
+    }
 
     const leaderboard = rows.map((row) =>
       this.toLeaderboardEntry(row, currentUserId),
@@ -142,27 +160,85 @@ export class ReferralService {
     };
   }
 
-  private getRankedUsersSubquery() {
+  async getReferralOverviewFallback(
+    userId: string,
+  ): Promise<ReferralOverviewResponse> {
+    const fallbackUserRows = await db
+      .select({
+        userId: user.id,
+        displayName: user.name,
+        username: user.username,
+      })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+
+    const fallbackUser = fallbackUserRows[0];
+    if (!fallbackUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    const fallbackRankedRow: ReferralLeaderboardRankedRow = {
+      userId: fallbackUser.userId,
+      displayName: fallbackUser.displayName,
+      username: fallbackUser.username,
+      profilePictureUrl: null,
+      referralCode: null,
+      totalReferrals: 0,
+      totalEarnings: 0,
+      level: 'novice',
+      streak: 0,
+      xp: 0,
+      quizCompleted: 0,
+      rank: 1,
+    };
+
+    const leaderboard = [this.toLeaderboardEntry(fallbackRankedRow, userId)];
+    const me = this.toReferralMe(fallbackRankedRow, null, leaderboard);
+
+    return {
+      leaderboard,
+      summary: {
+        spots: this.leaderboardLimit,
+        total_referrals: fallbackRankedRow.totalReferrals,
+        average_referrals: fallbackRankedRow.totalReferrals,
+        cutoff_referrals: fallbackRankedRow.totalReferrals,
+        top_referrer_name: fallbackRankedRow.displayName,
+      },
+      updated_at: new Date().toISOString(),
+      me,
+      cta: this.buildCallToAction(me, leaderboard),
+    };
+  }
+
+  private getRankedUsersSubquery(
+    includeTotalEarningsColumn = true,
+    includeProfilePictureColumn = true,
+    includeQuizCompletedColumn = true,
+  ) {
     return db
       .select({
         userId: user.id,
         displayName: user.name,
         username: user.username,
-        profilePictureUrl: user.profilePictureURL,
+        profilePictureUrl: includeProfilePictureColumn
+          ? user.profilePictureURL
+          : sql<string | null>`null`,
         referralCode: user.referralCode,
         totalReferrals: sql<number>`coalesce(${user.referralCount}, 0)`.mapWith(
           Number,
         ),
-        totalEarnings:
-          sql<number>`coalesce(${user.totalEarnings}, 0)::float8`.mapWith(
-            Number,
-          ),
+        totalEarnings: includeTotalEarningsColumn
+          ? sql<number>`coalesce(${user.totalEarnings}, 0)::float8`.mapWith(
+              Number,
+            )
+          : sql<number>`0`.mapWith(Number),
         level: user.level,
         streak: sql<number>`coalesce(${user.streak}, 0)`.mapWith(Number),
         xp: sql<number>`coalesce(${user.xp}, 0)`.mapWith(Number),
-        quizCompleted: sql<number>`coalesce(${user.quizCompleted}, 0)`.mapWith(
-          Number,
-        ),
+        quizCompleted: includeQuizCompletedColumn
+          ? sql<number>`coalesce(${user.quizCompleted}, 0)`.mapWith(Number)
+          : sql<number>`0`.mapWith(Number),
         rank: sql<number>`row_number() over (
           order by
             coalesce(${user.referralCount}, 0) desc,
@@ -175,28 +251,67 @@ export class ReferralService {
       .as('ranked_referral_users');
   }
 
+  private shouldUseLegacyReferralQueryFallback(error: unknown): boolean {
+    const dbError = error as
+      | { message?: string; code?: string; cause?: { code?: string } }
+      | undefined;
+    const message = `${dbError?.message ?? ''}`.toLowerCase();
+    const code = `${dbError?.code ?? dbError?.cause?.code ?? ''}`;
+    const isMissingColumn =
+      code === '42703' || message.includes('does not exist');
+
+    if (!isMissingColumn) {
+      return false;
+    }
+
+    return (
+      message.includes('totalearnings') ||
+      message.includes('profilepictureurl') ||
+      message.includes('quizcompleted')
+    );
+  }
+
   private async getRankedUserById(
     userId: string,
   ): Promise<ReferralLeaderboardRankedRow | null> {
-    const rankedUsers = this.getRankedUsersSubquery();
-    const [row] = await db
-      .select({
-        userId: rankedUsers.userId,
-        displayName: rankedUsers.displayName,
-        username: rankedUsers.username,
-        profilePictureUrl: rankedUsers.profilePictureUrl,
-        referralCode: rankedUsers.referralCode,
-        totalReferrals: rankedUsers.totalReferrals,
-        totalEarnings: rankedUsers.totalEarnings,
-        level: rankedUsers.level,
-        streak: rankedUsers.streak,
-        xp: rankedUsers.xp,
-        quizCompleted: rankedUsers.quizCompleted,
-        rank: rankedUsers.rank,
-      })
-      .from(rankedUsers)
-      .where(eq(rankedUsers.userId, userId))
-      .limit(1);
+    const runQuery = (
+      includeTotalEarningsColumn: boolean,
+    ): Promise<ReferralLeaderboardRankedRow[]> => {
+      const rankedUsers = this.getRankedUsersSubquery(
+        includeTotalEarningsColumn,
+        includeTotalEarningsColumn,
+        includeTotalEarningsColumn,
+      );
+      return db
+        .select({
+          userId: rankedUsers.userId,
+          displayName: rankedUsers.displayName,
+          username: rankedUsers.username,
+          profilePictureUrl: rankedUsers.profilePictureUrl,
+          referralCode: rankedUsers.referralCode,
+          totalReferrals: rankedUsers.totalReferrals,
+          totalEarnings: rankedUsers.totalEarnings,
+          level: rankedUsers.level,
+          streak: rankedUsers.streak,
+          xp: rankedUsers.xp,
+          quizCompleted: rankedUsers.quizCompleted,
+          rank: rankedUsers.rank,
+        })
+        .from(rankedUsers)
+        .where(eq(rankedUsers.userId, userId))
+        .limit(1);
+    };
+
+    let rowResult: ReferralLeaderboardRankedRow[];
+    try {
+      rowResult = await runQuery(true);
+    } catch (error) {
+      if (!this.shouldUseLegacyReferralQueryFallback(error)) {
+        throw error;
+      }
+      rowResult = await runQuery(false);
+    }
+    const [row] = rowResult;
 
     return row ?? null;
   }
@@ -208,27 +323,46 @@ export class ReferralService {
       return null;
     }
 
-    const rankedUsers = this.getRankedUsersSubquery();
     const offset = rank - 1;
-    const [row] = await db
-      .select({
-        userId: rankedUsers.userId,
-        displayName: rankedUsers.displayName,
-        username: rankedUsers.username,
-        profilePictureUrl: rankedUsers.profilePictureUrl,
-        referralCode: rankedUsers.referralCode,
-        totalReferrals: rankedUsers.totalReferrals,
-        totalEarnings: rankedUsers.totalEarnings,
-        level: rankedUsers.level,
-        streak: rankedUsers.streak,
-        xp: rankedUsers.xp,
-        quizCompleted: rankedUsers.quizCompleted,
-        rank: rankedUsers.rank,
-      })
-      .from(rankedUsers)
-      .orderBy(asc(rankedUsers.rank))
-      .offset(offset)
-      .limit(1);
+    const runQuery = (
+      includeTotalEarningsColumn: boolean,
+    ): Promise<ReferralLeaderboardRankedRow[]> => {
+      const rankedUsers = this.getRankedUsersSubquery(
+        includeTotalEarningsColumn,
+        includeTotalEarningsColumn,
+        includeTotalEarningsColumn,
+      );
+      return db
+        .select({
+          userId: rankedUsers.userId,
+          displayName: rankedUsers.displayName,
+          username: rankedUsers.username,
+          profilePictureUrl: rankedUsers.profilePictureUrl,
+          referralCode: rankedUsers.referralCode,
+          totalReferrals: rankedUsers.totalReferrals,
+          totalEarnings: rankedUsers.totalEarnings,
+          level: rankedUsers.level,
+          streak: rankedUsers.streak,
+          xp: rankedUsers.xp,
+          quizCompleted: rankedUsers.quizCompleted,
+          rank: rankedUsers.rank,
+        })
+        .from(rankedUsers)
+        .orderBy(asc(rankedUsers.rank))
+        .offset(offset)
+        .limit(1);
+    };
+
+    let rowResult: ReferralLeaderboardRankedRow[];
+    try {
+      rowResult = await runQuery(true);
+    } catch (error) {
+      if (!this.shouldUseLegacyReferralQueryFallback(error)) {
+        throw error;
+      }
+      rowResult = await runQuery(false);
+    }
+    const [row] = rowResult;
 
     return row ?? null;
   }
