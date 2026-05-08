@@ -222,30 +222,38 @@ export class ReferralService {
         displayName: user.name,
         username: user.username,
         profilePictureUrl: includeProfilePictureColumn
-          ? user.profilePictureURL
-          : sql<string | null>`null`,
-        referralCode: user.referralCode,
-        totalReferrals: sql<number>`coalesce(${user.referralCount}, 0)`.mapWith(
-          Number,
-        ),
-        totalEarnings: includeTotalEarningsColumn
-          ? sql<number>`coalesce(${user.totalEarnings}, 0)::float8`.mapWith(
-              Number,
+          ? sql<string | null>`${user.profilePictureURL}`.as(
+              'profilePictureUrl',
             )
-          : sql<number>`0`.mapWith(Number),
+          : sql<string | null>`null`.as('profilePictureUrl'),
+        referralCode: user.referralCode,
+        totalReferrals: sql<number>`coalesce(${user.referralCount}, 0)`
+          .mapWith(Number)
+          .as('totalReferrals'),
+        totalEarnings: includeTotalEarningsColumn
+          ? sql<number>`coalesce(${user.totalEarnings}, 0)::float8`
+              .mapWith(Number)
+              .as('totalEarnings')
+          : sql<number>`0`.mapWith(Number).as('totalEarnings'),
         level: user.level,
-        streak: sql<number>`coalesce(${user.streak}, 0)`.mapWith(Number),
-        xp: sql<number>`coalesce(${user.xp}, 0)`.mapWith(Number),
+        streak: sql<number>`coalesce(${user.streak}, 0)`
+          .mapWith(Number)
+          .as('streak'),
+        xp: sql<number>`coalesce(${user.xp}, 0)`.mapWith(Number).as('xp'),
         quizCompleted: includeQuizCompletedColumn
-          ? sql<number>`coalesce(${user.quizCompleted}, 0)`.mapWith(Number)
-          : sql<number>`0`.mapWith(Number),
+          ? sql<number>`coalesce(${user.quizCompleted}, 0)`
+              .mapWith(Number)
+              .as('quizCompleted')
+          : sql<number>`0`.mapWith(Number).as('quizCompleted'),
         rank: sql<number>`row_number() over (
           order by
             coalesce(${user.referralCount}, 0) desc,
             coalesce(${user.xp}, 0) desc,
             coalesce(${user.streak}, 0) desc,
             ${user.name} asc
-        )`.mapWith(Number),
+        )`
+          .mapWith(Number)
+          .as('rank'),
       })
       .from(user)
       .as('ranked_referral_users');
