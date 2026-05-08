@@ -209,6 +209,7 @@ export class ReferralService {
     }
 
     const rankedUsers = this.getRankedUsersSubquery();
+    const offset = rank - 1;
     const [row] = await db
       .select({
         userId: rankedUsers.userId,
@@ -225,7 +226,8 @@ export class ReferralService {
         rank: rankedUsers.rank,
       })
       .from(rankedUsers)
-      .where(eq(rankedUsers.rank, rank))
+      .orderBy(asc(rankedUsers.rank))
+      .offset(offset)
       .limit(1);
 
     return row ?? null;
