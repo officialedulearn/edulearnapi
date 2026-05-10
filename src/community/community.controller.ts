@@ -13,7 +13,8 @@ import {
   Request,
 } from '@nestjs/common';
 import { CommunityService } from './community.service';
-import { CommunityGateway } from './community.gateway';
+import { RedisService } from '../redis/redis.service';
+import { RealtimePublisherService } from '../realtime/realtime.publisher';
 import { FlexibleAuthGuard } from '../auth/guards/flexible-auth.guard';
 import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
 
@@ -22,7 +23,8 @@ import { verifyUserAuthorization } from '../common/helpers/authorization.helper'
 export class CommunityController {
   constructor(
     private readonly communityService: CommunityService,
-    private readonly communityGateway: CommunityGateway,
+    private readonly redisService: RedisService,
+    private readonly realtimePublisher: RealtimePublisherService,
   ) {}
 
   @Post()
@@ -339,7 +341,63 @@ export class CommunityController {
       }
     }
 
-    return message;
+    await this.redisService.clearTyping(communityId, dbUserId);
+
+    const fullMessage = await this.communityService.getMessageById(message.id);
+    const messagePayload = {
+      ...fullMessage,
+      roomId: communityId,
+      mentionedUserIds: body.mentionedUserIds,
+    };
+
+    this.realtimePublisher.publishToCommunityRoom(
+      communityId,
+      'community.message.created',
+      messagePayload,
+    );
+
+    return messagePayload;
+  }
+
+  @Post(':communityId/typing')
+  async sendTyping(
+    @Request() req,
+    @Param('communityId') communityId: string,
+    @Body() body: { isTyping: boolean; userId?: string },
+  ) {
+    const dbUserId = body.userId || req.user.sub;
+    if (!dbUserId) {
+      throw new ForbiddenException('User ID is required');
+    }
+
+    const isMember = await this.communityService.isUserMember(
+      dbUserId,
+      communityId,
+    );
+    if (!isMember) {
+      throw new ForbiddenException('You must be a member to send typing state');
+    }
+
+    if (body.isTyping) {
+      await this.redisService.setTyping(communityId, dbUserId, 3);
+    } else {
+      await this.redisService.clearTyping(communityId, dbUserId);
+    }
+
+    this.realtimePublisher.publishToCommunityRoom(
+      communityId,
+      body.isTyping ? 'community.typing.started' : 'community.typing.stopped',
+      {
+        userId: dbUserId,
+        username:
+          (await this.communityService.getDisplayNameForSocket(dbUserId)) ??
+          undefined,
+        communityId,
+        timestamp: new Date().toISOString(),
+      },
+    );
+
+    return { success: true };
   }
 
   @Get(':communityId/messages')
@@ -428,6 +486,16 @@ export class CommunityController {
     }
 
     await this.communityService.deleteMessage(messageId);
+    this.realtimePublisher.publishToCommunityRoom(
+      message.roomId,
+      'community.message.deleted',
+      {
+        messageId,
+        communityId: message.roomId,
+        deletedBy: dbUserId,
+        timestamp: new Date().toISOString(),
+      },
+    );
     return { message: 'Message deleted successfully' };
   }
 
@@ -449,27 +517,26 @@ export class CommunityController {
     });
 
     const message = await this.communityService.getMessageById(messageId);
-    if (message && body.communityId) {
+    if (message) {
+      const communityId = body.communityId ?? message.roomId;
       const reactionCounts =
         await this.communityService.getReactionCountByType(messageId);
 
-      this.communityGateway.server.to(body.communityId).emit('reaction_added', {
-        messageId,
-        reaction: body.reaction,
-        userId: dbUserId,
-        reactionCounts,
-        timestamp: new Date().toISOString(),
-      });
-    } else if (message) {
-      const reactionCounts =
-        await this.communityService.getReactionCountByType(messageId);
-      this.communityGateway.server.to(message.roomId).emit('reaction_added', {
-        messageId,
-        reaction: body.reaction,
-        userId: dbUserId,
-        reactionCounts,
-        timestamp: new Date().toISOString(),
-      });
+      this.realtimePublisher.publishToCommunityRoom(
+        communityId,
+        'community.reaction.updated',
+        {
+          messageId,
+          communityId,
+          reaction: body.reaction,
+          userId: dbUserId,
+          username:
+            (await this.communityService.getDisplayNameForSocket(dbUserId)) ??
+            undefined,
+          reactionCounts,
+          timestamp: new Date().toISOString(),
+        },
+      );
     }
 
     return reaction;
@@ -487,7 +554,30 @@ export class CommunityController {
 
   @Delete('messages/:messageId/reactions')
   async removeReaction(@Request() req, @Param('messageId') messageId: string) {
+    const message = await this.communityService.getMessageById(messageId);
+    if (!message) {
+      throw new NotFoundException('Message not found');
+    }
+
     await this.communityService.removeReaction(messageId, req.user.sub);
+    const reactionCounts =
+      await this.communityService.getReactionCountByType(messageId);
+
+    this.realtimePublisher.publishToCommunityRoom(
+      message.roomId,
+      'community.reaction.updated',
+      {
+        messageId,
+        communityId: message.roomId,
+        userId: req.user.sub,
+        username:
+          (await this.communityService.getDisplayNameForSocket(req.user.sub)) ??
+          undefined,
+        reactionCounts,
+        timestamp: new Date().toISOString(),
+      },
+    );
+
     return { message: 'Reaction removed successfully' };
   }
 
