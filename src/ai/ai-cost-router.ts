@@ -504,12 +504,7 @@ function cannedReply(reason: CannedKey): string {
 
   if (reason === 'too_short') {
     return (
-      "That message is a bit short for me to route well.\n\n" +
-      'Add one detail:\n' +
-      '- Topic (what)\n' +
-      '- Goal (why)\n' +
-      '- Level (beginner/intermediate)\n\n' +
-      'Example: "Explain PDAs in Solana for a beginner using an analogy."'
+      "Hi! What are you learning today?"
     );
   }
 
