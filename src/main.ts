@@ -9,6 +9,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import multipart from '@fastify/multipart';
 import fastifyHelmet from '@fastify/helmet';
 import fastifyCompress from '@fastify/compress';
+import { LoggingInterceptor } from 'interceptors/logger.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -39,6 +40,10 @@ async function bootstrap() {
         enableImplicitConversion: true,
       },
     }),
+  );
+
+  app.useGlobalInterceptors(
+    new LoggingInterceptor(),
   );
 
   const internalConfig = new DocumentBuilder()

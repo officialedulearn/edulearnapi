@@ -1,5 +1,5 @@
 import { Type } from '@google/genai';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { GeminiClientService } from 'src/ai/gemini-client.service';
 import {
   REMINDER_MAX_NEXT_CHECK_DAYS,
@@ -9,6 +9,7 @@ import type { ReminderAiDecision } from './reminders.types';
 
 @Injectable()
 export class ReminderDecisionService {
+  private readonly logger = new Logger(ReminderDecisionService.name);
   constructor(private readonly geminiClient: GeminiClientService) {}
 
   async decide(params: {
@@ -76,6 +77,7 @@ Return ONLY valid JSON (no markdown).
 
     const raw = result.text?.trim();
     if (!raw) throw new Error('ReminderDecisionService: empty AI response');
+    this.logger.log(`ReminderDecisionService: raw=${raw}`);
     const parsed = JSON.parse(raw) as ReminderAiDecision;
     const next = Number(parsed.nextCheckInDays);
     parsed.nextCheckInDays = Number.isFinite(next)
@@ -95,6 +97,7 @@ Return ONLY valid JSON (no markdown).
       model: 'gemini-2.5-flash',
       usage: (result as any).usageMetadata ?? undefined,
     };
+    this.logger.log(`ReminderDecisionService: ${JSON.stringify(parsed)}`);
 
     return { decision: parsed, modelMeta };
   }
