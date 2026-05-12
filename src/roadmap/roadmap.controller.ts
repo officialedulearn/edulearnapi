@@ -49,21 +49,11 @@ export class RoadmapController {
 
   @Get(':roadmapId')
   async getRoadmapById(@Param('roadmapId') roadmapId: string) {
-    const roadmap = await this.roadmapService.getRoadmapById(roadmapId);
-    if (!roadmap) {
+    const response = await this.roadmapService.getRoadmapWithSteps(roadmapId);
+    if (!response) {
       throw new NotFoundException('Roadmap not found');
     }
-    const steps = await this.roadmapService.getRoadmapSteps(roadmapId);
-    console.log(
-      'Steps from DB:',
-      steps.map((s) => ({
-        id: s.id,
-        title: s.title,
-        done: s.done,
-        doneType: typeof s.done,
-      })),
-    );
-    return { roadmap, steps };
+    return response;
   }
 
   @Get(':roadmapId/steps')

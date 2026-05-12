@@ -231,6 +231,27 @@ export class RedisService {
     return await this.redis.ping();
   }
 
+  // ==================== ROADMAP CACHE ====================
+
+  async getRoadmapPayload(key: string): Promise<string | null> {
+    return this.redis.get(key);
+  }
+
+  async setRoadmapPayload(
+    key: string,
+    ttlSeconds: number,
+    payload: string,
+  ): Promise<void> {
+    await this.redis.setEx(key, ttlSeconds, payload);
+  }
+
+  async deleteRoadmapPayload(keys: string[]): Promise<void> {
+    if (!keys.length) {
+      return;
+    }
+    await this.redis.del(keys);
+  }
+
   // ==================== STUDY SUGGESTIONS (Gemini cache) ====================
 
   async getStudySuggestionsPayload(key: string): Promise<string | null> {

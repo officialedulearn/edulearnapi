@@ -1,5 +1,5 @@
 import { Injectable, Inject, forwardRef, NotFoundException } from '@nestjs/common';
-import { eq, desc, ilike, or, inArray } from 'drizzle-orm';
+import { eq, desc, ilike, or, inArray, count } from 'drizzle-orm';
 import db from '../../drizzle';
 import {
   user,
@@ -36,10 +36,8 @@ import { ResendService } from 'src/resend/resend.service';
 import { supabaseAdmin } from '../../lib/supabase';
 import { RoadmapService } from 'src/roadmap/roadmap.service';
 import { CommunityService } from 'src/community/community.service';
-import { update } from '@metaplex-foundation/mpl-core';
 import { SocialService } from 'src/social/social.service';
 import { LeaderboardService } from 'src/leaderboard/leaderboard.service';
-import resend from 'resend';
 import { CloudinaryService } from 'src/common/cloudinary/cloudinary.service';
 import { RemindersService } from 'src/reminders/reminders.service';
 
@@ -64,7 +62,7 @@ export class AuthService {
     private leaderboardService: LeaderboardService,
     private cloudinaryService: CloudinaryService,
     private readonly remindersService: RemindersService,
-  ) {}
+  ) { }
 
   private toUserResponse(dbUser: User): UserResponse {
     return {
@@ -383,8 +381,15 @@ export class AuthService {
       const result = await db.select().from(user).where(eq(user.id, id));
       if (!result[0]) return null;
 
+      const [{ count: nftCount }] = await db
+        .select({
+          count: count(),
+        })
+        .from(userReward)
+        .where(eq(userReward.userId, id));
       return {
         ...result[0],
+        nfts: nftCount,
         quizLimit: result[0].quizLimits,
       } as any;
     } catch (error) {

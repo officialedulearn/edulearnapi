@@ -5,16 +5,24 @@ import { eq } from 'drizzle-orm';
 
 @Injectable()
 export class UserService {
-  async getUserById(userId: string): Promise<User> {
-    const [result] = await db.select().from(user).where(eq(user.id, userId));
-    if (!result) {
-      throw new Error('User not found');
+  async getUserById(id: string): Promise<User | null> {
+    try {
+      const result = await db.select().from(user).where(eq(user.id, id));
+      if (!result[0]) return null;
+
+      return {
+        ...result[0],
+        quizLimit: result[0].quizLimits,
+      } as any;
+    } catch (error) {
+      console.error('Failed to get user by ID');
+      throw error;
     }
-    return result;
   }
 
+
   async getUserMemory(userId: string): Promise<string> {
-    const [result] = await db.select({memory: user.memory}).from(user).where(eq(user.id, userId));
+    const [result] = await db.select({ memory: user.memory }).from(user).where(eq(user.id, userId));
     return result?.memory ?? '';
   }
 
@@ -22,4 +30,6 @@ export class UserService {
     await db.update(user).set({ memory: memory }).where(eq(user.id, userId));
     return memory;
   }
+
+
 }

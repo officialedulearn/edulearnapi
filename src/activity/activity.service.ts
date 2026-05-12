@@ -216,21 +216,9 @@ export class ActivityService {
     pagination?: { limit: number; page: number },
   ) {
     try {
-      if (!pagination) {
-        return await db
-          .select({
-            id: xpActivity.id,
-            title: xpActivity.title,
-            xpEarned: xpActivity.xpEarned,
-            createdAt: xpActivity.createdAt,
-          })
-          .from(xpActivity)
-          .where(eq(xpActivity.userId, userId))
-          .orderBy(xpActivity.createdAt);
-      }
 
-      const safeLimit = Math.max(1, Math.min(100, pagination.limit));
-      const safePage = Math.max(1, pagination.page);
+      const safeLimit = Math.max(1, Math.min(100, pagination?.limit ?? 10));
+      const safePage = Math.max(1, pagination?.page ?? 1);
       const offset = (safePage - 1) * safeLimit;
 
       const [countResult] = await db
@@ -319,7 +307,7 @@ export class ActivityService {
         throw new Error(`User with id ${userId} not found`);
       }
 
-      const activities = (await this.getActivitiesByUser(userId)) as any[];
+      const { data: activities } = await this.getActivitiesByUser(userId);
 
       return {
         user: userData[0],

@@ -6,6 +6,7 @@ import { ChatModule } from 'src/chat/chat.module';
 import { AiModule } from 'src/ai/ai.module';
 import { RewardsModule } from 'src/rewards/rewards.module';
 import { RemindersModule } from 'src/reminders/reminders.module';
+import { RedisModule } from 'src/redis/redis.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { RemindersModule } from 'src/reminders/reminders.module';
     forwardRef(() => AiModule),
     RewardsModule,
     RemindersModule,
+    RedisModule,
   ],
   controllers: [RoadmapController],
   providers: [RoadmapService],

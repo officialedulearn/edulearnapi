@@ -15,6 +15,9 @@ import { AiService } from 'src/ai/ai.service';
 import { NftRewardService } from 'src/ai/nft-reward.service';
 import { RewardsService } from 'src/rewards/rewards.service';
 import { RemindersService } from 'src/reminders/reminders.service';
+import { RedisService } from 'src/redis/redis.service';
+
+const ROADMAP_CACHE_TTL_SECONDS = 300;
 
 @Injectable()
 export class RoadmapService {
@@ -28,10 +31,79 @@ export class RoadmapService {
     private readonly nftRewardService: NftRewardService,
     private readonly rewardsService: RewardsService,
     private readonly remindersService: RemindersService,
+    private readonly redisService: RedisService,
   ) {
     this.genAI = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY,
     });
+  }
+
+  private roadmapByIdCacheKey(roadmapId: string): string {
+    return `roadmap:by-id:${roadmapId}`;
+  }
+
+  private roadmapStepsCacheKey(roadmapId: string): string {
+    return `roadmap:steps:${roadmapId}`;
+  }
+
+  private roadmapResponseCacheKey(roadmapId: string): string {
+    return `roadmap:response:${roadmapId}`;
+  }
+
+  private roadmapsByUserCacheKey(userId: string): string {
+    return `roadmap:user:${userId}`;
+  }
+
+  private async readRoadmapCache<T>(key: string): Promise<T | null> {
+    try {
+      const payload = await this.redisService.getRoadmapPayload(key);
+      if (!payload) {
+        return null;
+      }
+      return JSON.parse(payload) as T;
+    } catch (error) {
+      console.error(`Roadmap cache read failed for key ${key}:`, error);
+      return null;
+    }
+  }
+
+  private async setRoadmapCache(key: string, payload: unknown): Promise<void> {
+    try {
+      await this.redisService.setRoadmapPayload(
+        key,
+        ROADMAP_CACHE_TTL_SECONDS,
+        JSON.stringify(payload),
+      );
+    } catch (error) {
+      console.error(`Roadmap cache write failed for key ${key}:`, error);
+    }
+  }
+
+  private async invalidateRoadmapCache(params: {
+    roadmapId?: string;
+    userId?: string;
+  }): Promise<void> {
+    const keys = new Set<string>();
+
+    if (params.roadmapId) {
+      keys.add(this.roadmapByIdCacheKey(params.roadmapId));
+      keys.add(this.roadmapStepsCacheKey(params.roadmapId));
+      keys.add(this.roadmapResponseCacheKey(params.roadmapId));
+    }
+
+    if (params.userId) {
+      keys.add(this.roadmapsByUserCacheKey(params.userId));
+    }
+
+    if (!keys.size) {
+      return;
+    }
+
+    try {
+      await this.redisService.deleteRoadmapPayload([...keys]);
+    } catch (error) {
+      console.error('Roadmap cache invalidation failed:', error);
+    }
   }
 
   async createRoadmap(
@@ -49,6 +121,7 @@ export class RoadmapService {
     }
 
     const newRoadmap = await db.insert(roadmap).values(roadmapData).returning();
+    await this.invalidateRoadmapCache({ userId });
     this.remindersService
       .enqueueEvaluation(userId, 'roadmap_updated')
       .catch(() => undefined);
@@ -66,6 +139,7 @@ export class RoadmapService {
       .insert(roadMapStep)
       .values({ roadmapId, prompt, title, description, time })
       .returning();
+    await this.invalidateRoadmapCache({ roadmapId });
     return newRoadmapStep[0];
   }
 
@@ -256,31 +330,89 @@ CRITICAL JSON RULES:
   }
 
   async getRoadmapById(roadmapId: string) {
+    const cacheKey = this.roadmapByIdCacheKey(roadmapId);
+    const cached = await this.readRoadmapCache<typeof roadmap.$inferSelect>(
+      cacheKey,
+    );
+    if (cached) {
+      return cached;
+    }
+
     const result = await db
       .select()
       .from(roadmap)
       .where(eq(roadmap.id, roadmapId));
-    return result.length ? result[0] : null;
+    const roadmapData = result.length ? result[0] : null;
+
+    if (roadmapData) {
+      await this.setRoadmapCache(cacheKey, roadmapData);
+    }
+
+    return roadmapData;
   }
 
   async getRoadmapsByUserId(userId: string) {
-    return await db
+    const cacheKey = this.roadmapsByUserCacheKey(userId);
+    const cached = await this.readRoadmapCache<
+      Array<typeof roadmap.$inferSelect>
+    >(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const roadmaps = await db
       .select()
       .from(roadmap)
       .where(eq(roadmap.userId, userId))
       .orderBy(desc(roadmap.createdAt));
+
+    await this.setRoadmapCache(cacheKey, roadmaps);
+    return roadmaps;
   }
 
   async getRoadmapSteps(roadmapId: string) {
+    const cacheKey = this.roadmapStepsCacheKey(roadmapId);
+    const cached = await this.readRoadmapCache<
+      Array<(typeof roadMapStep.$inferSelect) & { done: boolean }>
+    >(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const steps = await db
       .select()
       .from(roadMapStep)
       .where(eq(roadMapStep.roadmapId, roadmapId))
       .orderBy(asc(roadMapStep.createdAt));
-    return steps.map((step) => ({
+    const normalizedSteps = steps.map((step) => ({
       ...step,
       done: Boolean(step.done),
     }));
+
+    await this.setRoadmapCache(cacheKey, normalizedSteps);
+    return normalizedSteps;
+  }
+
+  async getRoadmapWithSteps(roadmapId: string) {
+    const cacheKey = this.roadmapResponseCacheKey(roadmapId);
+    const cached = await this.readRoadmapCache<{
+      roadmap: typeof roadmap.$inferSelect;
+      steps: Array<(typeof roadMapStep.$inferSelect) & { done: boolean }>;
+    }>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const roadmapData = await this.getRoadmapById(roadmapId);
+    if (!roadmapData) {
+      return null;
+    }
+
+    const steps = await this.getRoadmapSteps(roadmapId);
+    const response = { roadmap: roadmapData, steps };
+
+    await this.setRoadmapCache(cacheKey, response);
+    return response;
   }
 
   async checkAndAwardRoadmapNFT(
@@ -417,6 +549,8 @@ CRITICAL JSON RULES:
       `✅ Marked step ${stepId} (${step.title}) as done for user ${userId}`,
     );
 
+    await this.invalidateRoadmapCache({ roadmapId: step.roadmapId, userId });
+
     this.remindersService
       .enqueueEvaluation(userId, 'roadmap_updated')
       .catch(() => undefined);
@@ -443,7 +577,13 @@ CRITICAL JSON RULES:
     if (!step || step.length === 0) {
       throw new NotFoundException('Roadmap step not found');
     }
-    return step[0];
+    const updatedStep = step[0];
+    const roadmapData = await this.getRoadmapById(updatedStep.roadmapId);
+    await this.invalidateRoadmapCache({
+      roadmapId: updatedStep.roadmapId,
+      userId: roadmapData?.userId,
+    });
+    return updatedStep;
   }
 
   async editMultipleRoadmapSteps(
@@ -476,19 +616,33 @@ CRITICAL JSON RULES:
         return step[0];
       }),
     );
+    const roadmapData = await this.getRoadmapById(roadmapId);
+    await this.invalidateRoadmapCache({
+      roadmapId,
+      userId: roadmapData?.userId,
+    });
     return updatedSteps.filter((step) => step !== null && step !== undefined);
   }
 
   async deleteRoadmap(roadmapId: string) {
-   const steps = await db.select().from(roadMapStep).where(eq(roadMapStep.roadmapId, roadmapId));
-   if (!steps || steps.length === 0) {
-    throw new NotFoundException('Roadmap steps not found');
-   }
-   for (const step of steps) {
-    await db.delete(roadMapStep).where(eq(roadMapStep.id, step.id));
-   }
-   await db.delete(roadmap).where(eq(roadmap.id, roadmapId));
-   return { message: 'Roadmap deleted successfully' };
+    const roadmapData = await this.getRoadmapById(roadmapId);
+    if (!roadmapData) {
+      throw new NotFoundException('Roadmap not found');
+    }
+
+    const steps = await db
+      .select()
+      .from(roadMapStep)
+      .where(eq(roadMapStep.roadmapId, roadmapId));
+    if (!steps || steps.length === 0) {
+      throw new NotFoundException('Roadmap steps not found');
+    }
+    for (const step of steps) {
+      await db.delete(roadMapStep).where(eq(roadMapStep.id, step.id));
+    }
+    await db.delete(roadmap).where(eq(roadmap.id, roadmapId));
+    await this.invalidateRoadmapCache({ roadmapId, userId: roadmapData.userId });
+    return { message: 'Roadmap deleted successfully' };
   }
 
   private extractAndCleanJSON(response: string): string | null {
