@@ -379,9 +379,13 @@ CRITICAL JSON RULES:
       );
     }
 
-    const currentMessages = await this.chatService.getMessagesInChat(
-      roadmapData.chatId,
-    );
+    const [persistedMessageCount, recentMessages] = await Promise.all([
+      this.chatService.countMessagesInChat(roadmapData.chatId),
+      this.chatService.getMessagesInChat(roadmapData.chatId, {
+        offset: 0,
+        limit: 2,
+      }),
+    ]);
 
     const userMessage = {
       id: generateUUID(),
@@ -391,12 +395,17 @@ CRITICAL JSON RULES:
       chatId: roadmapData.chatId,
     };
 
-    const messagesWithNewPrompt = [...currentMessages, userMessage];
+    const messagesWithNewPrompt = [...recentMessages, userMessage];
 
     const aiResponse = await aiService.generateResponse({
       messages: messagesWithNewPrompt,
       chatId: roadmapData.chatId,
       userId,
+      preloadedChatState: {
+        persistedMessages: recentMessages,
+        persistedMessageCount,
+      },
+      roadmapStepStart: true,
     });
 
     await db

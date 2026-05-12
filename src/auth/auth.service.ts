@@ -65,6 +65,159 @@ export class AuthService {
     private cloudinaryService: CloudinaryService,
     private readonly remindersService: RemindersService,
   ) {}
+
+  private toUserResponse(dbUser: User): UserResponse {
+    return {
+      id: dbUser.id,
+      name: dbUser.name,
+      email: dbUser.email,
+      username: dbUser.username,
+      learning: dbUser.learning,
+      verified: dbUser.verified,
+      level: dbUser.level,
+      xp: dbUser.xp,
+      address: dbUser.address,
+      credits: dbUser.credits,
+      isPremium: dbUser.isPremium,
+      premiumUntil: dbUser.premiumUntil,
+      streak: dbUser.streak,
+      referralCode: dbUser.referralCode,
+      lastLoggedIn: dbUser.lastLoggedIn,
+      profilePictureURL: dbUser.profilePictureURL,
+      quizLimit: dbUser.quizLimits,
+    } as UserResponse;
+  }
+
+  private resolveTimeZone(timeZoneHeader?: string | string[]): string {
+    const fallbackTimeZone = 'UTC';
+    const candidate = Array.isArray(timeZoneHeader)
+      ? timeZoneHeader[0]
+      : timeZoneHeader;
+    const normalized = candidate?.trim();
+
+    if (!normalized) {
+      return fallbackTimeZone;
+    }
+
+    try {
+      Intl.DateTimeFormat('en-US', { timeZone: normalized }).format(new Date());
+      return normalized;
+    } catch {
+      return fallbackTimeZone;
+    }
+  }
+
+  private getDayIndexForTimeZone(date: Date, timeZone: string): number {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+
+    const year = Number(parts.find((part) => part.type === 'year')?.value || 0);
+    const month = Number(
+      parts.find((part) => part.type === 'month')?.value || 1,
+    );
+    const day = Number(parts.find((part) => part.type === 'day')?.value || 1);
+
+    return Math.floor(Date.UTC(year, month - 1, day) / (1000 * 60 * 60 * 24));
+  }
+
+  private async applyLoginStreakUpdate(
+    currentUser: User,
+    timeZoneHeader?: string | string[],
+  ): Promise<number> {
+    const now = new Date();
+    const timeZone = this.resolveTimeZone(timeZoneHeader);
+    const previousStreak = currentUser.streak || 1;
+
+    const lastLogin = currentUser.lastLoggedIn
+      ? new Date(currentUser.lastLoggedIn)
+      : now;
+    const todayDayIndex = this.getDayIndexForTimeZone(now, timeZone);
+    const lastLoginDayIndex = this.getDayIndexForTimeZone(lastLogin, timeZone);
+    const daysSinceLogin = Math.max(0, todayDayIndex - lastLoginDayIndex);
+
+    let newStreak = previousStreak;
+    let shouldConsumeShield = false;
+
+    if (daysSinceLogin === 0) {
+      newStreak = previousStreak;
+    } else if (daysSinceLogin === 1) {
+      newStreak = previousStreak + 1;
+    } else {
+      const shieldActive =
+        currentUser.streakShieldActive &&
+        currentUser.streakShieldExpiry &&
+        new Date(currentUser.streakShieldExpiry) > now;
+
+      if (shieldActive) {
+        newStreak = previousStreak;
+        shouldConsumeShield = true;
+      } else {
+        newStreak = 1;
+      }
+    }
+
+    if (shouldConsumeShield) {
+      await db
+        .update(user)
+        .set({ streakShieldActive: false, streakShieldExpiry: null })
+        .where(eq(user.id, currentUser.id));
+    }
+
+    await db
+      .update(user)
+      .set({ streak: newStreak, lastLoggedIn: now })
+      .where(eq(user.id, currentUser.id));
+
+    if (newStreak > previousStreak && newStreak >= 3) {
+      await this.activityService.createActivity({
+        userId: currentUser.id,
+        type: 'streak',
+        title: `${newStreak}-day XP Streak Bonus`,
+        xpEarned: 1,
+      });
+    }
+
+    this.remindersService
+      .enqueueEvaluation(currentUser.id, 'login')
+      .catch(() => undefined);
+
+    return newStreak;
+  }
+
+  async initializeUserSession(
+    authenticatedUser: { email?: string } | undefined,
+    timeZoneHeader?: string | string[],
+  ): Promise<UserResponse> {
+    const email = authenticatedUser?.email;
+    if (!email) {
+      throw new Error('Email not found in authentication token');
+    }
+
+    const users = await db.select().from(user).where(eq(user.email, email)).limit(1);
+    if (!users.length) {
+      throw new NotFoundException('User not found');
+    }
+
+    const currentUser = users[0];
+    await this.applyLoginStreakUpdate(currentUser, timeZoneHeader);
+
+    const refreshedUsers = await db
+      .select()
+      .from(user)
+      .where(eq(user.id, currentUser.id))
+      .limit(1);
+
+    if (!refreshedUsers.length) {
+      throw new NotFoundException('User not found');
+    }
+
+    return this.toUserResponse(refreshedUsers[0]);
+  }
+
   async createUser(data: signUpDetails): Promise<UserResponse | Error> {
     try {
       console.log('Creating user in database with data:', data);
@@ -159,25 +312,7 @@ export class AuthService {
           console.error('Failed to send welcome email:', error);
         });
 
-      return {
-        id: createdUser.id,
-        name: createdUser.name,
-        email: createdUser.email,
-        username: createdUser.username,
-        learning: createdUser.learning,
-        verified: createdUser.verified,
-        level: createdUser.level,
-        xp: createdUser.xp,
-        address: createdUser.address,
-        credits: createdUser.credits,
-        isPremium: createdUser.isPremium,
-        premiumUntil: createdUser.premiumUntil,
-        streak: createdUser.streak,
-        referralCode: createdUser.referralCode,
-        lastLoggedIn: createdUser.lastLoggedIn,
-        profilePictureURL: createdUser.profilePictureURL,
-        quizLimit: createdUser.quizLimits,
-      } as UserResponse;
+      return this.toUserResponse(createdUser);
     } catch (error) {
       console.error('❌ Failed to create user in database:', error);
       console.error('Error details:', {
@@ -235,27 +370,8 @@ export class AuthService {
   async getUserByEmail(email: string): Promise<UserResponse | null> {
     try {
       const result = await db.select().from(user).where(eq(user.email, email));
-
-      const userObject = {
-        id: result[0]?.id,
-        name: result[0]?.name,
-        email: result[0]?.email,
-        username: result[0]?.username,
-        learning: result[0]?.learning,
-        verified: result[0]?.verified,
-        level: result[0]?.level,
-        xp: result[0]?.xp,
-        address: result[0]?.address,
-        credits: result[0]?.credits,
-        isPremium: result[0]?.isPremium,
-        premiumUntil: result[0]?.premiumUntil,
-        streak: result[0]?.streak,
-        referralCode: result[0]?.referralCode,
-        lastLoggedIn: result[0]?.lastLoggedIn,
-        profilePictureURL: result[0]?.profilePictureURL,
-        quizLimit: result[0]?.quizLimits,
-      };
-      return (userObject as UserResponse) || null;
+      if (!result[0]) return null;
+      return this.toUserResponse(result[0]);
     } catch (error) {
       console.error('Failed to get user by email');
       throw error;
@@ -646,51 +762,14 @@ export class AuthService {
 
   async updateUserStreak(
     userId: string,
-    clientStreak: number,
+    timeZoneHeader?: string | string[],
   ): Promise<number> {
     try {
       const users = await db.select().from(user).where(eq(user.id, userId));
       if (users.length === 0) {
         throw new Error(`User with id ${userId} not found`);
       }
-
-      const currentUser = users[0];
-      const now = new Date();
-      const todayMidnight = new Date(now);
-      todayMidnight.setHours(0, 0, 0, 0);
-      const lastLogin = currentUser.lastLoggedIn
-        ? new Date(currentUser.lastLoggedIn)
-        : now;
-      lastLogin.setHours(0, 0, 0, 0);
-      const daysSinceLogin = Math.floor(
-        (todayMidnight.getTime() - lastLogin.getTime()) / (1000 * 60 * 60 * 24),
-      );
-
-      let newStreak = clientStreak;
-      if (daysSinceLogin > 1 && clientStreak === 1) {
-        const shieldActive =
-          currentUser.streakShieldActive &&
-          currentUser.streakShieldExpiry &&
-          new Date(currentUser.streakShieldExpiry) > now;
-        if (shieldActive) {
-          newStreak = currentUser.streak || 1;
-          await db
-            .update(user)
-            .set({ streakShieldActive: false, streakShieldExpiry: null })
-            .where(eq(user.id, userId));
-        }
-      }
-
-      await db
-        .update(user)
-        .set({ streak: newStreak, lastLoggedIn: now })
-        .where(eq(user.id, userId));
-
-      this.remindersService
-        .enqueueEvaluation(userId, 'login')
-        .catch(() => undefined);
-
-      return newStreak;
+      return await this.applyLoginStreakUpdate(users[0], timeZoneHeader);
     } catch (error) {
       console.error('Failed to update user streak', error);
       throw error;

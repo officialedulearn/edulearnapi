@@ -14,6 +14,13 @@ import {
 } from './prompts/quiz-system-prompt';
 import { GeminiClientService } from './gemini-client.service';
 
+type QuizQuestion = {
+  question?: string;
+  options?: string[];
+  correctAnswer?: string;
+  explanation?: string;
+};
+
 @Injectable()
 export class QuizGenerationService {
   constructor(
@@ -73,6 +80,118 @@ export class QuizGenerationService {
     cleaned = cleaned.replace(/,\s*,/g, ',');
 
     return cleaned.trim();
+  }
+
+  private attemptQuizJSONArrayFix(jsonStr: string): string | null {
+    try {
+      let fixed = jsonStr.trim();
+
+      const arrayStart = fixed.indexOf('[');
+      const arrayEnd = fixed.lastIndexOf(']');
+
+      if (arrayStart !== -1) {
+        fixed =
+          arrayEnd !== -1 && arrayEnd > arrayStart
+            ? fixed.substring(arrayStart, arrayEnd + 1)
+            : fixed.substring(arrayStart);
+      }
+
+      fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
+
+      let openBraces = 0;
+      let openBrackets = 0;
+      let inString = false;
+      let escaped = false;
+
+      for (let i = 0; i < fixed.length; i++) {
+        const char = fixed[i];
+
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+
+        if (char === '\\') {
+          escaped = true;
+          continue;
+        }
+
+        if (char === '"') {
+          inString = !inString;
+          continue;
+        }
+
+        if (!inString) {
+          if (char === '{') openBraces++;
+          else if (char === '}') openBraces--;
+          else if (char === '[') openBrackets++;
+          else if (char === ']') openBrackets--;
+        }
+      }
+
+      if (inString) {
+        fixed += '"';
+      }
+
+      while (openBraces > 0) {
+        fixed += '}';
+        openBraces--;
+      }
+      while (openBrackets > 0) {
+        fixed += ']';
+        openBrackets--;
+      }
+
+      return fixed;
+    } catch (error) {
+      console.error('Error attempting quiz JSON fix:', error);
+      return null;
+    }
+  }
+
+  private parseQuizJSONArray(
+    cleanedResponse: string,
+    contextLabel: 'quiz' | 'scheduled quiz',
+  ): QuizQuestion[] {
+    try {
+      const parsed = JSON.parse(cleanedResponse) as unknown;
+      if (!Array.isArray(parsed)) {
+        throw new Error('Response is not a JSON array');
+      }
+      return parsed as QuizQuestion[];
+    } catch (parseError) {
+      console.error(`Failed to parse ${contextLabel} JSON:`, parseError);
+      console.error(
+        `Cleaned ${contextLabel} JSON that failed (first 1000 chars):`,
+        cleanedResponse.substring(0, 1000),
+      );
+      console.error(
+        `Cleaned ${contextLabel} JSON that failed (last 500 chars):`,
+        cleanedResponse.substring(Math.max(0, cleanedResponse.length - 500)),
+      );
+
+      const fixed = this.attemptQuizJSONArrayFix(cleanedResponse);
+      if (fixed && fixed !== cleanedResponse) {
+        try {
+          const repaired = JSON.parse(fixed) as unknown;
+          if (Array.isArray(repaired)) {
+            console.warn(
+              `Recovered malformed ${contextLabel} JSON with repair pass.`,
+            );
+            return repaired as QuizQuestion[];
+          }
+        } catch (repairError) {
+          console.error(
+            `Repair parse for ${contextLabel} JSON failed:`,
+            repairError,
+          );
+        }
+      }
+
+      throw new Error(
+        `Failed to parse quiz questions from AI response. The AI returned malformed JSON. Please try again.`,
+      );
+    }
   }
 
   async generateQuiz({
@@ -273,23 +392,7 @@ export class QuizGenerationService {
         );
       }
 
-      let quizQuestions;
-      try {
-        quizQuestions = JSON.parse(cleanedResponse);
-      } catch (parseError) {
-        console.error('Failed to parse quiz JSON:', parseError);
-        console.error(
-          'Cleaned JSON that failed (first 1000 chars):',
-          cleanedResponse.substring(0, 1000),
-        );
-        console.error(
-          'Cleaned JSON that failed (last 500 chars):',
-          cleanedResponse.substring(Math.max(0, cleanedResponse.length - 500)),
-        );
-        throw new Error(
-          `Failed to parse quiz questions from AI response. The AI returned malformed JSON. Please try again.`,
-        );
-      }
+      const quizQuestions = this.parseQuizJSONArray(cleanedResponse, 'quiz');
 
       if (!Array.isArray(quizQuestions) || quizQuestions.length === 0) {
         throw new Error(
@@ -427,12 +530,12 @@ export class QuizGenerationService {
       ].join('\n');
       const systemInstruction =
         buildScheduledQuizSystemInstruction(difficulty);
-      let result;
+      let quizQuestions: QuizQuestion[] | null = null;
       let attempts = 0;
-      const maxAttempts = 2;
+      const maxAttempts = 3;
       while (attempts < maxAttempts) {
         try {
-          result = await Promise.race([
+          const result = (await Promise.race([
             this.geminiClient.genAI.models.generateContent({
               model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
               contents,
@@ -487,7 +590,59 @@ export class QuizGenerationService {
                 90000,
               ),
             ),
-          ]);
+          ])) as { text?: string };
+
+          const response = result.text ?? '';
+          if (!response || !response.trim().length) {
+            throw new Error(
+              'AI service returned empty response. Please try again.',
+            );
+          }
+
+          const cleanedResponse = this.cleanQuizJSON(response);
+          if (!cleanedResponse.endsWith(']')) {
+            throw new Error(
+              'Quiz generation was truncated. Retrying with adjusted parameters...',
+            );
+          }
+
+          const parsedQuestions = this.parseQuizJSONArray(
+            cleanedResponse,
+            'scheduled quiz',
+          );
+
+          if (parsedQuestions.length === 0) {
+            throw new Error(
+              'The topic could not be used to generate quiz questions. Try a more specific topic.',
+            );
+          }
+          if (parsedQuestions.length !== 10) {
+            throw new Error(
+              `Generated quiz has incorrect number of questions (${parsedQuestions.length}/10). Expected exactly 10 questions.`,
+            );
+          }
+
+          for (let i = 0; i < parsedQuestions.length; i++) {
+            const q = parsedQuestions[i];
+            if (
+              !q.question ||
+              !Array.isArray(q.options) ||
+              q.options.length !== 4 ||
+              !q.correctAnswer ||
+              !q.explanation
+            ) {
+              throw new Error(
+                `Question ${i + 1} has invalid structure. All questions must have: question, 4 options, correctAnswer, and explanation.`,
+              );
+            }
+            if (!q.options.includes(q.correctAnswer)) {
+              throw new Error(
+                `Question ${i + 1}: correctAnswer "${q.correctAnswer}" does not match any of the provided options.`,
+              );
+            }
+          }
+
+          quizQuestions = parsedQuestions;
           break;
         } catch (attemptError) {
           attempts++;
@@ -507,66 +662,8 @@ export class QuizGenerationService {
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
       }
-      if (!result) {
-        throw new Error('Failed to get response from AI service');
-      }
-      const response = result.text ?? '';
-      if (!response || !response.trim().length) {
-        throw new Error(
-          'AI service returned empty response. Please try again.',
-        );
-      }
-      const cleanedResponse = this.cleanQuizJSON(response);
-      if (!cleanedResponse.endsWith(']')) {
-        throw new Error(
-          'Quiz generation was truncated. Retrying with adjusted parameters...',
-        );
-      }
-      let quizQuestions: unknown;
-      try {
-        quizQuestions = JSON.parse(cleanedResponse);
-      } catch (parseError) {
-        console.error('Failed to parse scheduled quiz JSON:', parseError);
-        throw new Error(
-          'Failed to parse quiz questions from AI response. Please try again.',
-        );
-      }
-      if (!Array.isArray(quizQuestions)) {
-        throw new Error('Invalid quiz response from AI.');
-      }
-      if (quizQuestions.length === 0) {
-        throw new Error(
-          'The topic could not be used to generate quiz questions. Try a more specific topic.',
-        );
-      }
-      if (quizQuestions.length !== 10) {
-        throw new Error(
-          `Generated quiz has incorrect number of questions (${quizQuestions.length}/10). Expected exactly 10 questions.`,
-        );
-      }
-      for (let i = 0; i < quizQuestions.length; i++) {
-        const q = quizQuestions[i] as {
-          question?: string;
-          options?: string[];
-          correctAnswer?: string;
-          explanation?: string;
-        };
-        if (
-          !q.question ||
-          !Array.isArray(q.options) ||
-          q.options.length !== 4 ||
-          !q.correctAnswer ||
-          !q.explanation
-        ) {
-          throw new Error(
-            `Question ${i + 1} has invalid structure. All questions must have: question, 4 options, correctAnswer, and explanation.`,
-          );
-        }
-        if (!q.options.includes(q.correctAnswer)) {
-          throw new Error(
-            `Question ${i + 1}: correctAnswer "${q.correctAnswer}" does not match any of the provided options.`,
-          );
-        }
+      if (!quizQuestions) {
+        throw new Error('Failed to generate quiz from AI service');
       }
       try {
         await this.authService.deductUserCredits(userId);

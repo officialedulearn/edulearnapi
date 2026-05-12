@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { asc, desc, eq, and, lt } from 'drizzle-orm';
+import { asc, desc, eq, and, lt, count } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../../drizzle';
 import {
@@ -152,6 +152,14 @@ export class ChatService {
         : msg,
     );
     return await db.insert(message).values(sanitizedMessages);
+  }
+
+  async countMessagesInChat(chatId: string): Promise<number> {
+    const [row] = await db
+      .select({ n: count() })
+      .from(message)
+      .where(eq(message.chatId, chatId));
+    return Number(row?.n ?? 0);
   }
 
   async getMessagesInChat(

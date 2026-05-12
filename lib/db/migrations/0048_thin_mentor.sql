@@ -1,0 +1,1 @@
+CREATE INDEX "xp_activity_user_created_at_idx" ON "activity" USING btree ("userId","createdAt");

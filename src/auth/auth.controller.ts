@@ -69,6 +69,23 @@ export class AuthController {
     return user as UserResponse;
   }
 
+  @HttpCode(200)
+  @Post('init')
+  @UseGuards(JwtAuthGuard)
+  async initializeSession(@Request() req): Promise<UserResponse> {
+    try {
+      return await this.authService.initializeUserSession(
+        req.user,
+        req.headers?.['x-timezone'],
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(error.message || 'Failed to initialize user');
+    }
+  }
+
   @Get('id/:id')
   @UseGuards(FlexibleAuthGuard)
   async getUserById(@Request() req, @Param('id') id: string) {
@@ -196,7 +213,7 @@ export class AuthController {
     try {
       const newStreak = await this.authService.updateUserStreak(
         userId,
-        body.streak,
+        req.headers?.['x-timezone'],
       );
       return { streak: newStreak };
     } catch (error) {

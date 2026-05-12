@@ -93,6 +93,18 @@ describe('Authorization Security (e2e)', () => {
   });
 
   describe('Auth Endpoints', () => {
+    it('should allow user to initialize their own session', () => {
+      return request(app.getHttpServer())
+        .post('/auth/init')
+        .set('Authorization', `Bearer ${user1Token}`)
+        .set('x-timezone', 'Africa/Lagos')
+        .expect(200);
+    });
+
+    it('should reject user init without authentication token', () => {
+      return request(app.getHttpServer()).post('/auth/init').expect(401);
+    });
+
     it('should allow user to update their own XP', () => {
       return request(app.getHttpServer())
         .put(`/auth/xp/${user1Id}`)

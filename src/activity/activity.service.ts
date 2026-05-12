@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import db from '../../drizzle';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { eq, and, sql, desc, lt } from 'drizzle-orm';
 import {
   xpActivity,
   user,
@@ -218,7 +218,12 @@ export class ActivityService {
     try {
       if (!pagination) {
         return await db
-          .select()
+          .select({
+            id: xpActivity.id,
+            title: xpActivity.title,
+            xpEarned: xpActivity.xpEarned,
+            createdAt: xpActivity.createdAt,
+          })
           .from(xpActivity)
           .where(eq(xpActivity.userId, userId))
           .orderBy(xpActivity.createdAt);
@@ -235,7 +240,12 @@ export class ActivityService {
 
       const total = Number(countResult?.count ?? 0);
       const activities = await db
-        .select()
+        .select({
+          id: xpActivity.id,
+          title: xpActivity.title,
+          xpEarned: xpActivity.xpEarned,
+          createdAt: xpActivity.createdAt,
+        })
         .from(xpActivity)
         .where(eq(xpActivity.userId, userId))
         .orderBy(desc(xpActivity.createdAt))

@@ -241,10 +241,17 @@ export class AiTutorChatService {
     messages,
     chatId,
     userId,
+    preloadedChatState,
+    roadmapStepStart,
   }: {
     messages: Array<Message>;
     chatId: string;
     userId: string;
+    preloadedChatState?: {
+      persistedMessages: Array<Message>;
+      persistedMessageCount: number;
+    };
+    roadmapStepStart?: boolean;
   }): Promise<Message> {
     const recentUserMessage = getMostRecentUserMessage(messages);
     if (!recentUserMessage) {
@@ -286,11 +293,15 @@ export class AiTutorChatService {
       }
     }
 
-    const existingMessages = await this.chatService.getMessagesInChat(chatId);
+    const existingMessages = preloadedChatState
+      ? preloadedChatState.persistedMessages
+      : await this.chatService.getMessagesInChat(chatId);
     const conversationContext = deriveConversationContext(existingMessages);
 
     if (!user?.isPremium) {
-      const messageCount = existingMessages.length;
+      const messageCount = preloadedChatState
+        ? preloadedChatState.persistedMessageCount
+        : existingMessages.length;
 
       if (messageCount >= 30) {
         const messageLimitMessage = {
@@ -387,20 +398,32 @@ export class AiTutorChatService {
 
       const formattedMessages = messages.map(toGeminiMessageParts);
 
+      const model = roadmapStepStart
+        ? 'gemini-2.5-flash'
+        : user?.isPremium
+          ? 'gemini-2.5-pro'
+          : 'gemini-2.5-flash';
+
+      const genConfig = {
+        maxOutputTokens: roadmapStepStart ? 2000 : 5000,
+        temperature: 1,
+        systemInstruction: systemInstruction,
+        ...(roadmapStepStart
+          ? {}
+          : {
+              tools: [
+                {
+                  functionDeclarations: [...GEMINI_TUTOR_FUNCTION_DECLARATIONS],
+                },
+              ],
+            }),
+      };
+
       const result = await Promise.race([
         this.geminiClient.genAI.models.generateContent({
-          model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+          model,
           contents: formattedMessages,
-          config: {
-            tools: [
-              {
-                functionDeclarations: [...GEMINI_TUTOR_FUNCTION_DECLARATIONS],
-              },
-            ],
-            maxOutputTokens: 5000,
-            temperature: 1,
-            systemInstruction: systemInstruction,
-          },
+          config: genConfig,
         }),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Request timeout')), 30000),

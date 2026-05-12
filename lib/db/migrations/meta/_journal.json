@@ -337,6 +337,20 @@
       "when": 1778112442988,
       "tag": "0047_purple_vanisher",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1778585737672,
+      "tag": "0048_thin_mentor",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1778621490406,
+      "tag": "0049_tired_harry_osborn",
+      "breakpoints": true
     }
   ]
 }

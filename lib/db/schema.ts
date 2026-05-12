@@ -125,15 +125,24 @@ export const quiz = pgTable('quiz', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 });
 
-export const message = pgTable('message', {
-  id: uuid('id').primaryKey().notNull().defaultRandom(),
-  chatId: uuid('chatId')
-    .notNull()
-    .references(() => chat.id),
-  role: varchar('role').notNull(),
-  content: json('content').notNull(),
-  createdAt: timestamp('createdAt').notNull(),
-});
+export const message = pgTable(
+  'message',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    chatId: uuid('chatId')
+      .notNull()
+      .references(() => chat.id),
+    role: varchar('role').notNull(),
+    content: json('content').notNull(),
+    createdAt: timestamp('createdAt').notNull(),
+  },
+  (table) => ({
+    messageChatIdCreatedAtIdx: index('message_chat_id_created_at_idx').on(
+      table.chatId,
+      table.createdAt,
+    ),
+  }),
+);
 
 export type Message = InferSelectModel<typeof message>;
 
@@ -146,7 +155,12 @@ export const xpActivity = pgTable('activity', {
   title: text('title'),
   xpEarned: integer('xpEarned').notNull(),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
-});
+}, (table) => ({
+  xpActivityUserIdCreatedAtIdx: index('xp_activity_user_created_at_idx').on(
+    table.userId,
+    table.createdAt,
+  ),
+}));
 
 export type XpActivity = InferSelectModel<typeof xpActivity>;
 
