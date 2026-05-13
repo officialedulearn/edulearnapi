@@ -3,53 +3,13 @@ import db from '../../../drizzle';
 import { user } from '../../../lib/db/schema';
 import { eq } from 'drizzle-orm';
 
-const AUTH_USER_CACHE_TTL_MS = 60_000;
-const AUTH_USER_CACHE_MAX_ENTRIES = 1000;
-
-const authUserIdByEmail = new Map<string, { id: string; expiresAt: number }>();
-
-function cacheAuthUserId(email: string, id: string): void {
-  if (authUserIdByEmail.size >= AUTH_USER_CACHE_MAX_ENTRIES) {
-    const oldestKey = authUserIdByEmail.keys().next().value;
-    if (oldestKey) {
-      authUserIdByEmail.delete(oldestKey);
-    }
-  }
-
-  authUserIdByEmail.set(email.toLowerCase(), {
-    id,
-    expiresAt: Date.now() + AUTH_USER_CACHE_TTL_MS,
-  });
-}
-
-async function getAuthenticatedDatabaseUserId(
-  authenticatedUser: any,
-): Promise<string> {
-  const email = authenticatedUser.email;
-  if (!email) {
-    throw new UnauthorizedException('Email not found in JWT token');
-  }
-
-  const cacheKey = email.toLowerCase();
-  const cachedUser = authUserIdByEmail.get(cacheKey);
-  if (cachedUser && cachedUser.expiresAt > Date.now()) {
-    return cachedUser.id;
-  }
-
-  const users = await db
-    .select({ id: user.id })
-    .from(user)
-    .where(eq(user.email, email))
-    .limit(1);
-
-  if (!users.length) {
-    authUserIdByEmail.delete(cacheKey);
-    throw new UnauthorizedException('User not found in database');
-  }
-
-  cacheAuthUserId(email, users[0].id);
-
-  return users[0].id;
+function getTokenUserId(authenticatedUser: any): string | undefined {
+  return (
+    authenticatedUser?.sub ||
+    authenticatedUser?.id ||
+    authenticatedUser?.user?.id ||
+    authenticatedUser?.user_metadata?.sub
+  );
 }
 
 export async function verifyUserAuthorization(
@@ -69,8 +29,26 @@ export async function verifyUserAuthorization(
     return;
   }
 
-  const authenticatedUserId =
-    await getAuthenticatedDatabaseUserId(authenticatedUser);
+  if (getTokenUserId(authenticatedUser) === targetUserId) {
+    return;
+  }
+
+  const email = authenticatedUser.email;
+  if (!email) {
+    throw new UnauthorizedException('Email not found in JWT token');
+  }
+
+  const users = await db
+    .select()
+    .from(user)
+    .where(eq(user.email, email))
+    .limit(1);
+
+  if (!users.length) {
+    throw new UnauthorizedException('User not found in database');
+  }
+
+  const authenticatedUserId = users[0].id;
 
   if (authenticatedUserId !== targetUserId) {
     throw new ForbiddenException(
@@ -84,7 +62,7 @@ export function getAuthenticatedUserId(authenticatedUser: any): string {
     throw new UnauthorizedException('Authentication required');
   }
 
-  const userId = authenticatedUser.sub || authenticatedUser.id;
+  const userId = getTokenUserId(authenticatedUser);
 
   if (!userId) {
     throw new UnauthorizedException('Invalid authentication token');
@@ -109,7 +87,22 @@ export async function getDatabaseUserId(
     );
   }
 
-  return await getAuthenticatedDatabaseUserId(authenticatedUser);
+  const email = authenticatedUser.email;
+  if (!email) {
+    throw new UnauthorizedException('Email not found in JWT token');
+  }
+
+  const users = await db
+    .select()
+    .from(user)
+    .where(eq(user.email, email))
+    .limit(1);
+
+  if (!users.length) {
+    throw new UnauthorizedException('User not found in database');
+  }
+
+  return users[0].id;
 }
 
 export async function verifyUserEmail(authenticatedUser: any): Promise<string> {
@@ -147,8 +140,26 @@ export async function verifyUserViewAuthorization(
     return;
   }
 
-  const authenticatedUserId =
-    await getAuthenticatedDatabaseUserId(authenticatedUser);
+  if (getTokenUserId(authenticatedUser) === targetUserId) {
+    return;
+  }
+
+  const email = authenticatedUser.email;
+  if (!email) {
+    throw new UnauthorizedException('Email not found in JWT token');
+  }
+
+  const users = await db
+    .select()
+    .from(user)
+    .where(eq(user.email, email))
+    .limit(1);
+
+  if (!users.length) {
+    throw new UnauthorizedException('User not found in database');
+  }
+
+  const authenticatedUserId = users[0].id;
 
   if (authenticatedUserId === targetUserId) {
     return;
@@ -189,8 +200,22 @@ export async function verifyChatAccess(
     return;
   }
 
-  const authenticatedUserId =
-    await getAuthenticatedDatabaseUserId(authenticatedUser);
+  const email = authenticatedUser.email;
+  if (!email) {
+    throw new UnauthorizedException('Email not found in authentication token');
+  }
+
+  const users = await db
+    .select()
+    .from(user)
+    .where(eq(user.email, email))
+    .limit(1);
+
+  if (!users.length) {
+    throw new UnauthorizedException('User not found in database');
+  }
+
+  const authenticatedUserId = users[0].id;
 
   if (chat.userId !== authenticatedUserId) {
     throw new ForbiddenException(
