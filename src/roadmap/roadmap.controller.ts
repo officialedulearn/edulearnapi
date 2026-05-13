@@ -65,13 +65,19 @@ export class RoadmapController {
   async startRoadmapStep(
     @Request() req,
     @Param('stepId') stepId: string,
-    @Body() body: { userId: string },
+    @Body() body: { userId: string; mode?: 'sync' | 'background' },
   ) {
-    const { userId } = body;
+    const { userId, mode } = body;
     if (!userId) {
       throw new NotFoundException('User ID is required');
     }
     await verifyUserAuthorization(req.user, userId, 'starting roadmap step');
+    if (mode === 'background') {
+      return await this.roadmapService.startRoadmapStepInBackground(
+        stepId,
+        userId,
+      );
+    }
     return await this.roadmapService.startRoadmapStep(
       stepId,
       userId,

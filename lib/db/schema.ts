@@ -310,6 +310,7 @@ export const notifications = pgTable('notifications', {
     enum: [
       'quiz_ready',
       'roadmap_ready',
+      'roadmap_step_ready',
       'mention',
       'leaderboard_update',
       'streak_warning',

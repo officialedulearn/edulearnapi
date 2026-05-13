@@ -3,12 +3,13 @@ import {
   NotFoundException,
   Inject,
   forwardRef,
+  BadRequestException,
 } from '@nestjs/common';
 import { AuthService } from 'src/auth/auth.service';
 import { roadmap, roadMapStep, chat, message } from 'lib/db/schema';
 import db from '../../drizzle';
 import { GoogleGenAI } from '@google/genai';
-import { eq, and, desc, asc } from 'drizzle-orm';
+import { eq, and, desc, asc, count } from 'drizzle-orm';
 import { ChatService } from 'src/chat/chat.service';
 import { generateUUID } from 'lib/utils';
 import { AiService } from 'src/ai/ai.service';
@@ -16,6 +17,12 @@ import { NftRewardService } from 'src/ai/nft-reward.service';
 import { RewardsService } from 'src/rewards/rewards.service';
 import { RemindersService } from 'src/reminders/reminders.service';
 import { RedisService } from 'src/redis/redis.service';
+import { NotificationsService } from 'src/common/services/notifications.service';
+import { RoadmapStepStartBullmqService } from './roadmap-step-start-bullmq.service';
+import type {
+  RoadmapStepStartJobData,
+  StartRoadmapStepBackgroundResponse,
+} from './roadmap-step-start.types';
 
 const ROADMAP_CACHE_TTL_SECONDS = 300;
 
@@ -32,6 +39,8 @@ export class RoadmapService {
     private readonly rewardsService: RewardsService,
     private readonly remindersService: RemindersService,
     private readonly redisService: RedisService,
+    private readonly stepStartQueue: RoadmapStepStartBullmqService,
+    private readonly notificationsService: NotificationsService,
   ) {
     this.genAI = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY,
@@ -151,6 +160,15 @@ export class RoadmapService {
     const user = await this.authService.getUserById(userId);
     if (!user) {
       throw new NotFoundException(`User with id ${userId} not found`);
+    }
+
+    const totalRoadmaps = await db.select({count: count()})
+    .from(roadmap)
+    .where(eq(roadmap.userId, userId))
+    .execute();
+
+    if (user.isPremium = false && totalRoadmaps.length >= 3) {
+      throw new BadRequestException('User has reached the maximum number of roadmaps');
     }
 
     const chat = await this.chatService.createChat({
@@ -490,7 +508,7 @@ CRITICAL JSON RULES:
     }
   }
 
-  async startRoadmapStep(stepId: string, userId: string, aiService: any) {
+  private async getAuthorizedRoadmapStep(stepId: string, userId: string) {
     const steps = await db
       .select()
       .from(roadMapStep)
@@ -511,6 +529,20 @@ CRITICAL JSON RULES:
       );
     }
 
+    return { step, roadmapData };
+  }
+
+  private async generateRoadmapStepChatResponse({
+    step,
+    roadmapData,
+    userId,
+    aiService,
+  }: {
+    step: typeof roadMapStep.$inferSelect;
+    roadmapData: typeof roadmap.$inferSelect;
+    userId: string;
+    aiService: Pick<AiService, 'generateResponse'>;
+  }) {
     const [persistedMessageCount, recentMessages] = await Promise.all([
       this.chatService.countMessagesInChat(roadmapData.chatId),
       this.chatService.getMessagesInChat(roadmapData.chatId, {
@@ -540,13 +572,30 @@ CRITICAL JSON RULES:
       roadmapStepStart: true,
     });
 
+    return { userMessage, aiResponse };
+  }
+
+  async startRoadmapStep(stepId: string, userId: string, aiService: any) {
+    const { step, roadmapData } = await this.getAuthorizedRoadmapStep(
+      stepId,
+      userId,
+    );
+
+    const { userMessage, aiResponse } =
+      await this.generateRoadmapStepChatResponse({
+        step,
+        roadmapData,
+        userId,
+        aiService,
+      });
+
     await db
       .update(roadMapStep)
       .set({ done: true })
       .where(eq(roadMapStep.id, stepId));
 
     console.log(
-      `✅ Marked step ${stepId} (${step.title}) as done for user ${userId}`,
+      `Marked step ${stepId} (${step.title}) as done for user ${userId}`,
     );
 
     await this.invalidateRoadmapCache({ roadmapId: step.roadmapId, userId });
@@ -560,6 +609,92 @@ CRITICAL JSON RULES:
       userMessage,
       aiResponse,
     };
+  }
+
+  async startRoadmapStepInBackground(
+    stepId: string,
+    userId: string,
+  ): Promise<StartRoadmapStepBackgroundResponse> {
+    const { step, roadmapData } = await this.getAuthorizedRoadmapStep(
+      stepId,
+      userId,
+    );
+
+    if (step.done) {
+      return {
+        status: 'already_started',
+        chatId: roadmapData.chatId,
+        roadmapId: roadmapData.id,
+        step,
+        message:
+          'Your agent is already preparing this step. We will notify you when it is ready.',
+      };
+    }
+
+    const { enqueued } = await this.stepStartQueue.enqueueStepStart({
+      userId,
+      stepId,
+      roadmapId: roadmapData.id,
+      chatId: roadmapData.chatId,
+    });
+
+    await db
+      .update(roadMapStep)
+      .set({ done: true })
+      .where(eq(roadMapStep.id, stepId));
+
+    console.log(
+      `Marked step ${stepId} (${step.title}) as done for user ${userId}`,
+    );
+
+    await this.invalidateRoadmapCache({ roadmapId: step.roadmapId, userId });
+
+    this.remindersService
+      .enqueueEvaluation(userId, 'roadmap_updated')
+      .catch(() => undefined);
+
+    return {
+      status: enqueued ? 'queued' : 'already_started',
+      chatId: roadmapData.chatId,
+      roadmapId: roadmapData.id,
+      step,
+      message:
+        'Your agent is preparing this step. We will notify you when it is ready.',
+    };
+  }
+
+  async processRoadmapStepStartJob(data: RoadmapStepStartJobData) {
+    const { step, roadmapData } = await this.getAuthorizedRoadmapStep(
+      data.stepId,
+      data.userId,
+    );
+
+    await this.generateRoadmapStepChatResponse({
+      step,
+      roadmapData,
+      userId: data.userId,
+      aiService: this.aiService,
+    });
+
+    await this.notificationsService.createNotification({
+      userId: data.userId,
+      title: 'Your roadmap step is ready',
+      content: `${step.title} is ready in your agent chat.`,
+      type: 'roadmap_step_ready',
+      metadata: {
+        roadmapId: roadmapData.id,
+        stepId: step.id,
+        chatId: roadmapData.chatId,
+      },
+      data: {
+        screen: 'chat',
+        id: roadmapData.chatId,
+        chatId: roadmapData.chatId,
+        roadmapId: roadmapData.id,
+        stepId: step.id,
+        url: `edulearnv2://chat/${roadmapData.chatId}`,
+      },
+    });
   }
 
   async editRoadmapStep(

@@ -46,6 +46,23 @@ export const validateNotificationMetadata = (
         );
       }
       break;
+    case 'roadmap_step_ready':
+      if (!hasString(meta.roadmapId)) {
+        throw new BadRequestException(
+          'roadmap_step_ready notification metadata requires roadmapId',
+        );
+      }
+      if (!hasString(meta.stepId)) {
+        throw new BadRequestException(
+          'roadmap_step_ready notification metadata requires stepId',
+        );
+      }
+      if (!hasString(meta.chatId)) {
+        throw new BadRequestException(
+          'roadmap_step_ready notification metadata requires chatId',
+        );
+      }
+      break;
     case 'mention':
       if (!hasString(meta.communityId)) {
         throw new BadRequestException(

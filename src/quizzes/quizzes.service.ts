@@ -314,6 +314,13 @@ export class QuizzesService {
         .where(eq(publicQuizParticipation.id, dto.participationId));
     }
 
+    await db 
+    .update(user)
+    .set({
+      quizCompleted: sql`${user.quizCompleted} + 1`,
+    })
+    .where(eq(user.id, userId));
+    
     const payload = {
       score: correctCount,
       totalQuestions: questions.length,

@@ -7,6 +7,8 @@ import { AiModule } from 'src/ai/ai.module';
 import { RewardsModule } from 'src/rewards/rewards.module';
 import { RemindersModule } from 'src/reminders/reminders.module';
 import { RedisModule } from 'src/redis/redis.module';
+import { RoadmapStepStartBullmqService } from './roadmap-step-start-bullmq.service';
+import { RoadmapStepStartProcessorService } from './roadmap-step-start-processor.service';
 
 @Module({
   imports: [
@@ -18,7 +20,11 @@ import { RedisModule } from 'src/redis/redis.module';
     RedisModule,
   ],
   controllers: [RoadmapController],
-  providers: [RoadmapService],
+  providers: [
+    RoadmapService,
+    RoadmapStepStartBullmqService,
+    RoadmapStepStartProcessorService,
+  ],
   exports: [RoadmapService],
 })
 export class RoadmapModule {}

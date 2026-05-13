@@ -14,6 +14,25 @@ describe('validateNotificationMetadata', () => {
     );
   });
 
+  it('accepts roadmap_step_ready with roadmapId, stepId, and chatId', () => {
+    expect(() =>
+      validateNotificationMetadata('roadmap_step_ready', {
+        roadmapId: 'roadmap-1',
+        stepId: 'step-1',
+        chatId: 'chat-1',
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects roadmap_step_ready without chatId', () => {
+    expect(() =>
+      validateNotificationMetadata('roadmap_step_ready', {
+        roadmapId: 'roadmap-1',
+        stepId: 'step-1',
+      }),
+    ).toThrow(BadRequestException);
+  });
+
   it('accepts mention with communityId', () => {
     expect(() =>
       validateNotificationMetadata('mention', { communityId: 'room-1' }),
@@ -32,4 +51,3 @@ describe('validateNotificationMetadata', () => {
     ).not.toThrow();
   });
 });
-
