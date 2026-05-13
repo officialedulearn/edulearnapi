@@ -14,13 +14,52 @@ import {
 import db from '../../drizzle';
 import { eq, and, desc, asc } from 'drizzle-orm';
 import { AuthService } from 'src/auth/auth.service';
+import { RedisService } from 'src/redis/redis.service';
+
+const FLASHCARD_DECK_LIST_TTL_SEC = 5 * 60;
+
+type FlashcardDeckListResponse = {
+  decks: FlashcardDeck[];
+};
+
+const parseFlashcardDeckListCache = (
+  raw: string,
+): FlashcardDeckListResponse | null => {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') return null;
+    const decks = (parsed as { decks?: unknown }).decks;
+    if (!Array.isArray(decks)) return null;
+    return { decks: decks as FlashcardDeck[] };
+  } catch {
+    return null;
+  }
+};
 
 @Injectable()
 export class FlashcardService {
   constructor(
     @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
+    private readonly redisService: RedisService,
   ) {}
+
+  private buildFlashcardDeckListCacheKey(
+    userId: string,
+    limit: number,
+    offset: number,
+    version: number,
+  ) {
+    return `flashcard_decks:${userId}:v${version}:l${limit}:o${offset}`;
+  }
+
+  private async bumpFlashcardDeckListVersion(userId: string): Promise<void> {
+    try {
+      await this.redisService.bumpFlashcardDeckListVersion(userId);
+    } catch (error) {
+      console.error('Flashcard deck cache version bump failed:', error);
+    }
+  }
 
   private async checkUserCredits(userId: string): Promise<number> {
     try {
@@ -123,6 +162,7 @@ export class FlashcardService {
       }
       throw deductErr;
     }
+    await this.bumpFlashcardDeckListVersion(userId);
 
     const cardRows = await db
       .select()
@@ -137,9 +177,23 @@ export class FlashcardService {
     userId: string,
     limit = 20,
     offset = 0,
-  ): Promise<{ decks: FlashcardDeck[] }> {
+  ): Promise<FlashcardDeckListResponse> {
     const lim = Math.min(Math.max(1, limit), 100);
     const off = Math.max(0, offset);
+
+    let cacheKey: string | null = null;
+    try {
+      const version = await this.redisService.getFlashcardDeckListVersion(userId);
+      cacheKey = this.buildFlashcardDeckListCacheKey(userId, lim, off, version);
+      const raw = await this.redisService.getFlashcardDeckListPayload(cacheKey);
+      if (raw) {
+        const cached = parseFlashcardDeckListCache(raw);
+        if (cached) return cached;
+      }
+    } catch (error) {
+      console.error('Flashcard deck cache read failed:', error);
+    }
+
     const decks = await db
       .select()
       .from(flashcardDeck)
@@ -147,6 +201,19 @@ export class FlashcardService {
       .orderBy(desc(flashcardDeck.createdAt))
       .limit(lim)
       .offset(off);
+
+    if (cacheKey) {
+      try {
+        await this.redisService.setFlashcardDeckListPayload(
+          cacheKey,
+          FLASHCARD_DECK_LIST_TTL_SEC,
+          JSON.stringify({ decks }),
+        );
+      } catch (error) {
+        console.error('Flashcard deck cache write failed:', error);
+      }
+    }
+
     return { decks };
   }
 
@@ -182,5 +249,6 @@ export class FlashcardService {
     if (!res.length) {
       throw new NotFoundException('Deck not found');
     }
+    await this.bumpFlashcardDeckListVersion(userId);
   }
 }

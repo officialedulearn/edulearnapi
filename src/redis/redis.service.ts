@@ -269,4 +269,33 @@ export class RedisService {
   async getStudySuggestionsTtlSeconds(key: string): Promise<number> {
     return this.redis.ttl(key);
   }
+
+  // ==================== FLASHCARD DECK LIST CACHE ====================
+
+  private flashcardDeckListVersionKey(userId: string): string {
+    return `flashcard_decks_version:${userId}`;
+  }
+
+  async getFlashcardDeckListVersion(userId: string): Promise<number> {
+    const raw = await this.redis.get(this.flashcardDeckListVersionKey(userId));
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 1;
+    return Math.floor(parsed);
+  }
+
+  async bumpFlashcardDeckListVersion(userId: string): Promise<number> {
+    return this.redis.incr(this.flashcardDeckListVersionKey(userId));
+  }
+
+  async getFlashcardDeckListPayload(key: string): Promise<string | null> {
+    return this.redis.get(key);
+  }
+
+  async setFlashcardDeckListPayload(
+    key: string,
+    ttlSeconds: number,
+    payload: string,
+  ): Promise<void> {
+    await this.redis.setEx(key, ttlSeconds, payload);
+  }
 }
