@@ -1,6 +1,6 @@
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import postgres from 'postgres';
+import * as postgres from 'postgres';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
