@@ -1,7 +1,18 @@
 import { UnauthorizedException, ForbiddenException } from '@nestjs/common';
-import db from '../../../drizzle';
-import { user } from '../../../lib/db/schema';
-import { eq } from 'drizzle-orm';
+
+function getTokenUserId(authenticatedUser: any): string {
+  const userId =
+    authenticatedUser?.sub ||
+    authenticatedUser?.id ||
+    authenticatedUser?.user?.id ||
+    authenticatedUser?.user_metadata?.sub;
+
+  if (!userId) {
+    throw new UnauthorizedException('Invalid authentication token');
+  }
+
+  return userId;
+}
 
 export async function verifyUserAuthorization(
   authenticatedUser: any,
@@ -20,22 +31,7 @@ export async function verifyUserAuthorization(
     return;
   }
 
-  const email = authenticatedUser.email;
-  if (!email) {
-    throw new UnauthorizedException('Email not found in JWT token');
-  }
-
-  const users = await db
-    .select()
-    .from(user)
-    .where(eq(user.email, email))
-    .limit(1);
-
-  if (!users.length) {
-    throw new UnauthorizedException('User not found in database');
-  }
-
-  const authenticatedUserId = users[0].id;
+  const authenticatedUserId = getTokenUserId(authenticatedUser);
 
   if (authenticatedUserId !== targetUserId) {
     throw new ForbiddenException(
@@ -49,13 +45,7 @@ export function getAuthenticatedUserId(authenticatedUser: any): string {
     throw new UnauthorizedException('Authentication required');
   }
 
-  const userId = authenticatedUser.sub || authenticatedUser.id;
-
-  if (!userId) {
-    throw new UnauthorizedException('Invalid authentication token');
-  }
-
-  return userId;
+  return getTokenUserId(authenticatedUser);
 }
 
 export async function getDatabaseUserId(
@@ -74,22 +64,7 @@ export async function getDatabaseUserId(
     );
   }
 
-  const email = authenticatedUser.email;
-  if (!email) {
-    throw new UnauthorizedException('Email not found in JWT token');
-  }
-
-  const users = await db
-    .select()
-    .from(user)
-    .where(eq(user.email, email))
-    .limit(1);
-
-  if (!users.length) {
-    throw new UnauthorizedException('User not found in database');
-  }
-
-  return users[0].id;
+  return getTokenUserId(authenticatedUser);
 }
 
 export async function verifyUserEmail(authenticatedUser: any): Promise<string> {
@@ -127,36 +102,8 @@ export async function verifyUserViewAuthorization(
     return;
   }
 
-  const email = authenticatedUser.email;
-  if (!email) {
-    throw new UnauthorizedException('Email not found in JWT token');
-  }
-
-  const users = await db
-    .select()
-    .from(user)
-    .where(eq(user.email, email))
-    .limit(1);
-
-  if (!users.length) {
-    throw new UnauthorizedException('User not found in database');
-  }
-
-  const authenticatedUserId = users[0].id;
-
-  if (authenticatedUserId === targetUserId) {
-    return;
-  }
-
-  const targetUser = await db
-    .select()
-    .from(user)
-    .where(eq(user.id, targetUserId))
-    .limit(1);
-
-  if (!targetUser.length) {
-    throw new UnauthorizedException('Target user not found');
-  }
+  getTokenUserId(authenticatedUser);
+  return;
 }
 
 export async function verifyChatAccess(
@@ -183,22 +130,7 @@ export async function verifyChatAccess(
     return;
   }
 
-  const email = authenticatedUser.email;
-  if (!email) {
-    throw new UnauthorizedException('Email not found in authentication token');
-  }
-
-  const users = await db
-    .select()
-    .from(user)
-    .where(eq(user.email, email))
-    .limit(1);
-
-  if (!users.length) {
-    throw new UnauthorizedException('User not found in database');
-  }
-
-  const authenticatedUserId = users[0].id;
+  const authenticatedUserId = getTokenUserId(authenticatedUser);
 
   if (chat.userId !== authenticatedUserId) {
     throw new ForbiddenException(

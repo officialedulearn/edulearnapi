@@ -48,6 +48,7 @@ import { RemindersService } from 'src/reminders/reminders.service';
 
 export interface UserResponse extends User {
   quizLimit: number;
+  nfts: number;
 }
 
 @Injectable()
@@ -72,9 +73,18 @@ export class AuthService {
     private leaderboardService: LeaderboardService,
     private cloudinaryService: CloudinaryService,
     private readonly remindersService: RemindersService,
+
   ) {}
 
-  private toUserResponse(dbUser: User): UserResponse {
+  private async countUserRewards(userId: string): Promise<number> {
+    const [{ count: nftCount }] = await db
+      .select({ count: count() })
+      .from(userReward)
+      .where(eq(userReward.userId, userId));
+    return nftCount;
+  }
+
+  private toUserResponse(dbUser: User, nfts = 0): UserResponse {
     return {
       id: dbUser.id,
       name: dbUser.name,
@@ -93,6 +103,8 @@ export class AuthService {
       lastLoggedIn: dbUser.lastLoggedIn,
       profilePictureURL: dbUser.profilePictureURL,
       quizLimit: dbUser.quizLimits,
+      quizCompleted: dbUser.quizCompleted,
+      nfts,
     } as UserResponse;
   }
 
@@ -268,34 +280,23 @@ export class AuthService {
     timeZoneHeader?: string | string[],
   ): Promise<UserResponse> {
     const authenticatedUserId = authenticatedUser?.sub || authenticatedUser?.id;
-    const authenticatedUserEmail = authenticatedUser?.email;
 
-    if (!authenticatedUserId && !authenticatedUserEmail) {
+    if (!authenticatedUserId) {
       throw new Error('User identity not found in authentication token');
     }
 
-    const lockKey = authenticatedUserId || authenticatedUserEmail || 'unknown';
+    const lockKey = authenticatedUserId;
     const existingInFlight = this.initSessionInFlight.get(lockKey);
     if (existingInFlight) {
       return existingInFlight;
     }
 
     const workPromise = (async () => {
-      let users = authenticatedUserId
-        ? await db
-            .select()
-            .from(user)
-            .where(eq(user.id, authenticatedUserId))
-            .limit(1)
-        : [];
-
-      if (!users.length && authenticatedUserEmail) {
-        users = await db
-          .select()
-          .from(user)
-          .where(eq(user.email, authenticatedUserEmail))
-          .limit(1);
-      }
+      const users = await db
+        .select()
+        .from(user)
+        .where(eq(user.id, authenticatedUserId))
+        .limit(1);
 
       if (!users.length) {
         throw new NotFoundException('User not found');
@@ -307,7 +308,8 @@ export class AuthService {
         timeZoneHeader,
       );
 
-      return this.toUserResponse(updatedUser);
+      const nfts = await this.countUserRewards(updatedUser.id);
+      return this.toUserResponse(updatedUser, nfts);
     })();
 
     this.initSessionInFlight.set(lockKey, workPromise);
@@ -484,12 +486,7 @@ export class AuthService {
       const result = await db.select().from(user).where(eq(user.id, id));
       if (!result[0]) return null;
 
-      const [{ count: nftCount }] = await db
-        .select({
-          count: count(),
-        })
-        .from(userReward)
-        .where(eq(userReward.userId, id));
+      const nftCount = await this.countUserRewards(id);
       return {
         ...result[0],
         nfts: nftCount,
