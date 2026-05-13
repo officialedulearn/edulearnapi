@@ -22,6 +22,8 @@
     "seed:communities": "ts-node -r tsconfig-paths/register scripts/seed-communities.ts",
     "check:orphaned-users": "ts-node -r tsconfig-paths/register scripts/check-orphaned-users.ts",
     "cleanup:orphaned-users": "ts-node -r tsconfig-paths/register scripts/cleanup-orphaned-users.ts",
+    "migrate:user-ids:plan": "ts-node -r tsconfig-paths/register scripts/migrate-user-ids-to-supabase.ts",
+    "migrate:user-ids:apply": "ts-node -r tsconfig-paths/register scripts/migrate-user-ids-to-supabase.ts --apply",
     "updatepfps": "ts-node -r tsconfig-paths/register scripts/updatepfps.ts",
     "migrate": "drizzle-kit push",
     "migrate:legacy": "ts-node -r tsconfig-paths/register lib/db/migrate.ts",

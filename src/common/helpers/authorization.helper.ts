@@ -3,15 +3,6 @@ import db from '../../../drizzle';
 import { user } from '../../../lib/db/schema';
 import { eq } from 'drizzle-orm';
 
-function getTokenUserId(authenticatedUser: any): string | undefined {
-  return (
-    authenticatedUser?.sub ||
-    authenticatedUser?.id ||
-    authenticatedUser?.user?.id ||
-    authenticatedUser?.user_metadata?.sub
-  );
-}
-
 export async function verifyUserAuthorization(
   authenticatedUser: any,
   targetUserId: string,
@@ -26,10 +17,6 @@ export async function verifyUserAuthorization(
   }
 
   if (authenticatedUser.role === 'marketplace') {
-    return;
-  }
-
-  if (getTokenUserId(authenticatedUser) === targetUserId) {
     return;
   }
 
@@ -62,7 +49,7 @@ export function getAuthenticatedUserId(authenticatedUser: any): string {
     throw new UnauthorizedException('Authentication required');
   }
 
-  const userId = getTokenUserId(authenticatedUser);
+  const userId = authenticatedUser.sub || authenticatedUser.id;
 
   if (!userId) {
     throw new UnauthorizedException('Invalid authentication token');
@@ -137,10 +124,6 @@ export async function verifyUserViewAuthorization(
     authenticatedUser.role === 'reviewer' ||
     authenticatedUser.role === 'marketplace'
   ) {
-    return;
-  }
-
-  if (getTokenUserId(authenticatedUser) === targetUserId) {
     return;
   }
 

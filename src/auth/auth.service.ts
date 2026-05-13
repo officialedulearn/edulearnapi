@@ -1,4 +1,9 @@
-import { Injectable, Inject, forwardRef, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  forwardRef,
+  NotFoundException,
+} from '@nestjs/common';
 import { and, eq, desc, ilike, or, inArray, count } from 'drizzle-orm';
 import db from '../../drizzle';
 import {
@@ -47,7 +52,10 @@ export interface UserResponse extends User {
 
 @Injectable()
 export class AuthService {
-  private readonly initSessionInFlight = new Map<string, Promise<UserResponse>>();
+  private readonly initSessionInFlight = new Map<
+    string,
+    Promise<UserResponse>
+  >();
 
   constructor(
     private activityService: ActivityService,
@@ -64,7 +72,7 @@ export class AuthService {
     private leaderboardService: LeaderboardService,
     private cloudinaryService: CloudinaryService,
     private readonly remindersService: RemindersService,
-  ) { }
+  ) {}
 
   private toUserResponse(dbUser: User): UserResponse {
     return {
@@ -254,7 +262,9 @@ export class AuthService {
   }
 
   async initializeUserSession(
-    authenticatedUser: { email?: string; sub?: string; id?: string } | undefined,
+    authenticatedUser:
+      | { email?: string; sub?: string; id?: string }
+      | undefined,
     timeZoneHeader?: string | string[],
   ): Promise<UserResponse> {
     const authenticatedUserId = authenticatedUser?.sub || authenticatedUser?.id;
@@ -271,17 +281,21 @@ export class AuthService {
     }
 
     const workPromise = (async () => {
-      const users = authenticatedUserId
+      let users = authenticatedUserId
         ? await db
+            .select()
+            .from(user)
+            .where(eq(user.id, authenticatedUserId))
+            .limit(1)
+        : [];
+
+      if (!users.length && authenticatedUserEmail) {
+        users = await db
           .select()
           .from(user)
-          .where(eq(user.id, authenticatedUserId))
-          .limit(1)
-        : await db
-          .select()
-          .from(user)
-          .where(eq(user.email, authenticatedUserEmail as string))
+          .where(eq(user.email, authenticatedUserEmail))
           .limit(1);
+      }
 
       if (!users.length) {
         throw new NotFoundException('User not found');
