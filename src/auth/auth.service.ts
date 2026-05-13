@@ -271,17 +271,21 @@ export class AuthService {
     }
 
     const workPromise = (async () => {
-      const users = authenticatedUserId
+      let users = authenticatedUserId
         ? await db
+            .select()
+            .from(user)
+            .where(eq(user.id, authenticatedUserId))
+            .limit(1)
+        : [];
+
+      if (!users.length && authenticatedUserEmail) {
+        users = await db
           .select()
           .from(user)
-          .where(eq(user.id, authenticatedUserId))
-          .limit(1)
-        : await db
-          .select()
-          .from(user)
-          .where(eq(user.email, authenticatedUserEmail as string))
+          .where(eq(user.email, authenticatedUserEmail))
           .limit(1);
+      }
 
       if (!users.length) {
         throw new NotFoundException('User not found');
