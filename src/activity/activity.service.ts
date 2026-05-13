@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import db from '../../drizzle';
-import { eq, and, sql, desc, lt } from 'drizzle-orm';
+import { eq, and, sql, desc } from 'drizzle-orm';
 import {
   xpActivity,
   user,
@@ -20,17 +20,31 @@ export class ActivityService {
   ) {}
 
   private buildActivityPaginationMeta(
-    total: number,
     limit: number,
     page: number,
+    dataCount: number,
+    hasNextPage: boolean,
+    total?: number,
   ) {
-    const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+    const hasExactTotal = total !== undefined;
+    const totalPages = hasExactTotal
+      ? total > 0
+        ? Math.ceil(total / limit)
+        : 0
+      : page + (hasNextPage ? 1 : 0);
+    const visibleTotal =
+      total ?? (page - 1) * limit + dataCount + (hasNextPage ? 1 : 0);
+    const resolvedHasNextPage =
+      hasExactTotal ? page < totalPages : hasNextPage;
+
     return {
       page,
       limit,
-      total,
+      count: dataCount,
+      total: visibleTotal,
       totalPages,
-      hasNextPage: page < totalPages,
+      hasExactTotal,
+      hasNextPage: resolvedHasNextPage,
       hasPrevPage: page > 1,
     };
   }
@@ -213,21 +227,15 @@ export class ActivityService {
 
   async getActivitiesByUser(
     userId: string,
-    pagination?: { limit: number; page: number },
+    pagination?: { limit: number; page: number; includeTotal?: boolean },
   ) {
     try {
-
       const safeLimit = Math.max(1, Math.min(100, pagination?.limit ?? 10));
       const safePage = Math.max(1, pagination?.page ?? 1);
       const offset = (safePage - 1) * safeLimit;
+      const includeTotal = pagination?.includeTotal === true;
 
-      const [countResult] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(xpActivity)
-        .where(eq(xpActivity.userId, userId));
-
-      const total = Number(countResult?.count ?? 0);
-      const activities = await db
+      const activitiesQuery = db
         .select({
           id: xpActivity.id,
           title: xpActivity.title,
@@ -237,12 +245,46 @@ export class ActivityService {
         .from(xpActivity)
         .where(eq(xpActivity.userId, userId))
         .orderBy(desc(xpActivity.createdAt))
-        .limit(safeLimit)
+        .limit(includeTotal ? safeLimit : safeLimit + 1)
         .offset(offset);
+
+      if (includeTotal) {
+        const [activities, [countResult]] = await Promise.all([
+          activitiesQuery,
+          db
+            .select({ count: sql<number>`count(*)` })
+            .from(xpActivity)
+            .where(eq(xpActivity.userId, userId)),
+        ]);
+
+        const total = Number(countResult?.count ?? 0);
+
+        return {
+          data: activities,
+          pagination: this.buildActivityPaginationMeta(
+            safeLimit,
+            safePage,
+            activities.length,
+            safePage * safeLimit < total,
+            total,
+          ),
+        };
+      }
+
+      const activityRows = await activitiesQuery;
+      const hasNextPage = activityRows.length > safeLimit;
+      const activities = hasNextPage
+        ? activityRows.slice(0, safeLimit)
+        : activityRows;
 
       return {
         data: activities,
-        pagination: this.buildActivityPaginationMeta(total, safeLimit, safePage),
+        pagination: this.buildActivityPaginationMeta(
+          safeLimit,
+          safePage,
+          activities.length,
+          hasNextPage,
+        ),
       };
     } catch (error) {
       console.error(

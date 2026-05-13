@@ -1,5 +1,5 @@
 import { Injectable, Inject, forwardRef, NotFoundException } from '@nestjs/common';
-import { eq, desc, ilike, or, inArray, count } from 'drizzle-orm';
+import { and, eq, desc, ilike, or, inArray, count } from 'drizzle-orm';
 import db from '../../drizzle';
 import {
   user,
@@ -47,6 +47,8 @@ export interface UserResponse extends User {
 
 @Injectable()
 export class AuthService {
+  private readonly initSessionInFlight = new Map<string, Promise<UserResponse>>();
+
   constructor(
     private activityService: ActivityService,
     @Inject(forwardRef(() => WalletService))
@@ -84,6 +86,40 @@ export class AuthService {
       profilePictureURL: dbUser.profilePictureURL,
       quizLimit: dbUser.quizLimits,
     } as UserResponse;
+  }
+
+  private getLevelFromXp(
+    xp: number,
+  ): 'novice' | 'beginner' | 'intermediate' | 'advanced' | 'expert' {
+    if (xp >= 5000) return 'expert';
+    if (xp >= 3000) return 'advanced';
+    if (xp >= 1500) return 'intermediate';
+    if (xp >= 500) return 'beginner';
+    return 'novice';
+  }
+
+  private maybeAwardBeginnerRewardAsync(
+    userId: string,
+    previousXp: number,
+    nextXp: number,
+  ) {
+    if (previousXp >= 500 || nextXp < 500) return;
+
+    this.rewardService
+      .awardRewardToUser(userId, '5e077518-2122-450d-b469-8388175a5a5f')
+      .catch((error) => {
+        if (
+          error?.message &&
+          typeof error.message === 'string' &&
+          error.message.includes('already has this reward')
+        ) {
+          return;
+        }
+        console.error(
+          `Failed to award beginner NFT reward from streak init for user ${userId}:`,
+          error,
+        );
+      });
   }
 
   private resolveTimeZone(timeZoneHeader?: string | string[]): string {
@@ -125,10 +161,11 @@ export class AuthService {
   private async applyLoginStreakUpdate(
     currentUser: User,
     timeZoneHeader?: string | string[],
-  ): Promise<number> {
+  ): Promise<User> {
     const now = new Date();
     const timeZone = this.resolveTimeZone(timeZoneHeader);
     const previousStreak = currentUser.streak || 1;
+    const previousXp = currentUser.xp || 0;
 
     const lastLogin = currentUser.lastLoggedIn
       ? new Date(currentUser.lastLoggedIn)
@@ -158,62 +195,114 @@ export class AuthService {
       }
     }
 
-    if (shouldConsumeShield) {
-      await db
-        .update(user)
-        .set({ streakShieldActive: false, streakShieldExpiry: null })
-        .where(eq(user.id, currentUser.id));
+    const shouldGrantStreakBonus = newStreak > previousStreak && newStreak >= 3;
+    const nextXp = shouldGrantStreakBonus ? previousXp + 1 : previousXp;
+    const nextLevel = shouldGrantStreakBonus
+      ? this.getLevelFromXp(nextXp)
+      : currentUser.level;
+
+    const updatePayload: Partial<User> = {
+      streak: newStreak,
+      lastLoggedIn: now,
+      ...(shouldConsumeShield
+        ? { streakShieldActive: false, streakShieldExpiry: null }
+        : {}),
+      ...(shouldGrantStreakBonus ? { xp: nextXp, level: nextLevel } : {}),
+    };
+
+    const [updatedUser] = await db
+      .update(user)
+      .set(updatePayload)
+      .where(
+        and(
+          eq(user.id, currentUser.id),
+          eq(user.lastLoggedIn, currentUser.lastLoggedIn),
+        ),
+      )
+      .returning();
+
+    if (!updatedUser) {
+      const latestUsers = await db
+        .select()
+        .from(user)
+        .where(eq(user.id, currentUser.id))
+        .limit(1);
+
+      if (!latestUsers.length) {
+        throw new NotFoundException('User not found');
+      }
+
+      return latestUsers[0];
     }
 
-    await db
-      .update(user)
-      .set({ streak: newStreak, lastLoggedIn: now })
-      .where(eq(user.id, currentUser.id));
-
-    if (newStreak > previousStreak && newStreak >= 3) {
-      await this.activityService.createActivity({
+    if (shouldGrantStreakBonus) {
+      await db.insert(xpActivity).values({
         userId: currentUser.id,
         type: 'streak',
         title: `${newStreak}-day XP Streak Bonus`,
         xpEarned: 1,
       });
+
+      this.maybeAwardBeginnerRewardAsync(currentUser.id, previousXp, nextXp);
     }
 
     this.remindersService
       .enqueueEvaluation(currentUser.id, 'login')
       .catch(() => undefined);
 
-    return newStreak;
+    return updatedUser;
   }
 
   async initializeUserSession(
-    authenticatedUser: { email?: string } | undefined,
+    authenticatedUser: { email?: string; sub?: string; id?: string } | undefined,
     timeZoneHeader?: string | string[],
   ): Promise<UserResponse> {
-    const email = authenticatedUser?.email;
-    if (!email) {
-      throw new Error('Email not found in authentication token');
+    const authenticatedUserId = authenticatedUser?.sub || authenticatedUser?.id;
+    const authenticatedUserEmail = authenticatedUser?.email;
+
+    if (!authenticatedUserId && !authenticatedUserEmail) {
+      throw new Error('User identity not found in authentication token');
     }
 
-    const users = await db.select().from(user).where(eq(user.email, email)).limit(1);
-    if (!users.length) {
-      throw new NotFoundException('User not found');
+    const lockKey = authenticatedUserId || authenticatedUserEmail || 'unknown';
+    const existingInFlight = this.initSessionInFlight.get(lockKey);
+    if (existingInFlight) {
+      return existingInFlight;
     }
 
-    const currentUser = users[0];
-    await this.applyLoginStreakUpdate(currentUser, timeZoneHeader);
+    const workPromise = (async () => {
+      const users = authenticatedUserId
+        ? await db
+          .select()
+          .from(user)
+          .where(eq(user.id, authenticatedUserId))
+          .limit(1)
+        : await db
+          .select()
+          .from(user)
+          .where(eq(user.email, authenticatedUserEmail as string))
+          .limit(1);
 
-    const refreshedUsers = await db
-      .select()
-      .from(user)
-      .where(eq(user.id, currentUser.id))
-      .limit(1);
+      if (!users.length) {
+        throw new NotFoundException('User not found');
+      }
 
-    if (!refreshedUsers.length) {
-      throw new NotFoundException('User not found');
+      const currentUser = users[0];
+      const updatedUser = await this.applyLoginStreakUpdate(
+        currentUser,
+        timeZoneHeader,
+      );
+
+      return this.toUserResponse(updatedUser);
+    })();
+
+    this.initSessionInFlight.set(lockKey, workPromise);
+
+    try {
+      return await workPromise;
+    } finally {
+      this.initSessionInFlight.delete(lockKey);
     }
-
-    return this.toUserResponse(refreshedUsers[0]);
   }
 
   async createUser(data: signUpDetails): Promise<UserResponse | Error> {
@@ -774,7 +863,11 @@ export class AuthService {
       if (users.length === 0) {
         throw new Error(`User with id ${userId} not found`);
       }
-      return await this.applyLoginStreakUpdate(users[0], timeZoneHeader);
+      const updatedUser = await this.applyLoginStreakUpdate(
+        users[0],
+        timeZoneHeader,
+      );
+      return updatedUser.streak || 1;
     } catch (error) {
       console.error('Failed to update user streak', error);
       throw error;

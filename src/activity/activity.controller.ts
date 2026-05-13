@@ -99,6 +99,7 @@ export class ActivityController {
     @Param('userId') userId: string,
     @Query('limit') limit?: string,
     @Query('page') page?: string,
+    @Query('includeTotal') includeTotal?: string,
   ) {
     if (!userId) {
       throw new BadRequestException('User ID is required');
@@ -130,6 +131,7 @@ export class ActivityController {
         return await this.activityService.getActivitiesByUser(userId, {
           limit: parsedLimit,
           page: parsedPage,
+          includeTotal: includeTotal === 'true',
         });
       }
 
