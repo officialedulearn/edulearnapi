@@ -246,30 +246,49 @@ export const community = pgTable('community', {
 
 export type Community = InferSelectModel<typeof community>;
 
-export const roomMessage = pgTable('room_message', {
-  id: uuid('id').primaryKey().notNull().defaultRandom(),
-  roomId: uuid('roomId')
-    .notNull()
-    .references(() => community.id),
-  userId: uuid('userId')
-    .notNull()
-    .references(() => user.id),
-  content: text('content').notNull(),
-  createdAt: timestamp('createdAt').notNull().defaultNow(),
-});
+export const roomMessage = pgTable(
+  'room_message',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    roomId: uuid('roomId')
+      .notNull()
+      .references(() => community.id),
+    userId: uuid('userId')
+      .notNull()
+      .references(() => user.id),
+    content: text('content').notNull(),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => ({
+    roomCreatedIdx: index('room_message_room_id_created_at_idx').on(
+      table.roomId,
+      table.createdAt,
+    ),
+  }),
+);
 
 export type roomMessage = InferSelectModel<typeof roomMessage>;
 
-export const messageReaction = pgTable('message_reaction', {
-  id: uuid('id').primaryKey().notNull().defaultRandom(),
-  messageId: uuid('messageId')
-    .notNull()
-    .references(() => roomMessage.id),
-  userId: uuid('userId')
-    .notNull()
-    .references(() => user.id),
-  reaction: text('reaction').notNull(),
-});
+export const messageReaction = pgTable(
+  'message_reaction',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    messageId: uuid('messageId')
+      .notNull()
+      .references(() => roomMessage.id),
+    userId: uuid('userId')
+      .notNull()
+      .references(() => user.id),
+    reaction: text('reaction').notNull(),
+  },
+  (table) => ({
+    messageIdx: index('message_reaction_message_id_idx').on(table.messageId),
+    messageUserIdx: index('message_reaction_message_id_user_id_idx').on(
+      table.messageId,
+      table.userId,
+    ),
+  }),
+);
 
 export type MessageReaction = InferSelectModel<typeof messageReaction>;
 
@@ -285,20 +304,29 @@ export const mention = pgTable('mention', {
 
 export type Mention = InferSelectModel<typeof mention>;
 
-export const community_members = pgTable('community_members', {
-  id: uuid('id').primaryKey().defaultRandom().notNull(),
-  userId: uuid('userId')
-    .notNull()
-    .references(() => user.id),
-  communityId: uuid('communityId')
-    .notNull()
-    .references(() => community.id),
-  role: varchar('role', {
-    enum: ['mod', 'member'],
-  })
-    .notNull()
-    .default('member'),
-});
+export const community_members = pgTable(
+  'community_members',
+  {
+    id: uuid('id').primaryKey().defaultRandom().notNull(),
+    userId: uuid('userId')
+      .notNull()
+      .references(() => user.id),
+    communityId: uuid('communityId')
+      .notNull()
+      .references(() => community.id),
+    role: varchar('role', {
+      enum: ['mod', 'member'],
+    })
+      .notNull()
+      .default('member'),
+  },
+  (table) => ({
+    communityUserIdx: index('community_members_community_id_user_id_idx').on(
+      table.communityId,
+      table.userId,
+    ),
+  }),
+);
 
 export type CommunityMembers = InferSelectModel<typeof community_members>;
 
@@ -318,6 +346,7 @@ export const notifications = pgTable('notifications', {
       'system_announcement',
     ],
   }).notNull().default('system_announcement'),
+  read: boolean('read').default(false),
   metadata: json('metadata'),
   userId: uuid('userId')
     .notNull()

@@ -82,6 +82,7 @@
     "bn.js": "^5.2.2",
     "bs58": "^6.0.0",
     "bullmq": "^5.75.2",
+    "cache-manager": "^7.2.8",
     "cache-manager-ioredis": "^2.1.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",

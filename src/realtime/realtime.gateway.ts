@@ -15,31 +15,11 @@ import { RedisService } from '../redis/redis.service';
 import { CommunityService } from '../community/community.service';
 import { RealtimePublisherService } from './realtime.publisher';
 import type { RealtimeSubscription } from './realtime.types';
+import { displayNameFromJwtClaims } from '../common/helpers/jwt-display.helper';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
   username?: string;
-}
-
-function displayNameFromJwtPayload(
-  payload: Record<string, unknown>,
-): string | undefined {
-  const meta = (payload.user_metadata ?? {}) as Record<string, unknown>;
-  const email = payload.email;
-  const fromEmail =
-    typeof email === 'string' && email.includes('@')
-      ? email.split('@')[0]
-      : undefined;
-  const pick = (v: unknown) =>
-    typeof v === 'string' && v.length > 0 ? v : undefined;
-  return (
-    pick(payload.username) ||
-    pick(meta.username) ||
-    pick(meta.preferred_username) ||
-    pick(meta.full_name) ||
-    pick(meta.name) ||
-    fromEmail
-  );
 }
 
 @WebSocketGateway({
@@ -102,7 +82,7 @@ export class RealtimeGateway
         .catch(() => null);
       client.username =
         resolvedName ??
-        displayNameFromJwtPayload(payload as Record<string, unknown>) ??
+        displayNameFromJwtClaims(payload as Record<string, unknown>) ??
         'User';
 
       await this.redisService.addOnlineUser(userId);

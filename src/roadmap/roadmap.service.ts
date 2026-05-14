@@ -24,7 +24,7 @@ import type {
   StartRoadmapStepBackgroundResponse,
 } from './roadmap-step-start.types';
 
-const ROADMAP_CACHE_TTL_SECONDS = 300;
+const ROADMAP_CACHE_TTL_SECONDS = 60 * 60 * 24; // 24 hours
 
 @Injectable()
 export class RoadmapService {

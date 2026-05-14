@@ -17,7 +17,6 @@ import { PublishQuizDto } from './dto/publish-quiz.dto';
 import { SubmitPublicQuizDto } from './dto/submit-public-quiz.dto';
 import { ActivityService } from '../activity/activity.service';
 import { RemindersService } from 'src/reminders/reminders.service';
-
 type SortOption = 'recent' | 'popular';
 
 interface QuizQuestion {
@@ -32,7 +31,7 @@ export class QuizzesService {
   constructor(
     @Inject(forwardRef(() => ActivityService))
     private readonly activityService: ActivityService,
-    private readonly remindersService: RemindersService,
+    private readonly remindersService: RemindersService
   ) {}
 
   private async getQuizByIdOrThrow(id: string) {

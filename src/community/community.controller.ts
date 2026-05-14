@@ -17,6 +17,7 @@ import { RedisService } from '../redis/redis.service';
 import { RealtimePublisherService } from '../realtime/realtime.publisher';
 import { FlexibleAuthGuard } from '../auth/guards/flexible-auth.guard';
 import { verifyUserAuthorization } from '../common/helpers/authorization.helper';
+import { displayNameFromJwtClaims } from '../common/helpers/jwt-display.helper';
 
 @Controller('community')
 @UseGuards(FlexibleAuthGuard)
@@ -148,6 +149,43 @@ export class CommunityController {
   async getUserCommunities(@Request() req, @Param('userId') userId: string) {
     await verifyUserAuthorization(req.user, userId, 'viewing communities');
     return await this.communityService.getUserCommunities(userId);
+  }
+
+  @Get(':communityId/chat-bootstrap')
+  async getCommunityChatBootstrap(
+    @Request() req,
+    @Param('communityId') communityId: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('userId') userId?: string,
+  ) {
+    const dbUserId = userId || req.user.sub;
+    if (!dbUserId) {
+      throw new ForbiddenException('User ID is required');
+    }
+
+    const isMember = await this.communityService.isUserMember(
+      dbUserId,
+      communityId,
+    );
+    if (!isMember) {
+      throw new ForbiddenException('You must be a member to view this chat');
+    }
+
+    const bootstrap = await this.communityService.getCommunityChatBootstrap(
+      communityId,
+      dbUserId,
+      {
+        messagesLimit: limit ? parseInt(limit) : 20,
+        messagesOffset: offset ? parseInt(offset) : 0,
+      },
+    );
+
+    if (!bootstrap) {
+      throw new NotFoundException(`Community with id ${communityId} not found`);
+    }
+
+    return bootstrap;
   }
 
   @Get(':communityId/mod')
@@ -343,11 +381,26 @@ export class CommunityController {
 
     await this.redisService.clearTyping(communityId, dbUserId);
 
-    const fullMessage = await this.communityService.getMessageById(message.id);
+    const [fullMessage, modData] = await Promise.all([
+      this.communityService.getMessageById(message.id),
+      this.communityService.getCommunityMod(communityId).catch(() => null),
+    ]);
+
+    if (!fullMessage) {
+      throw new NotFoundException('Message failed to persist');
+    }
+
+    const moderatorUserId = modData?.user.id ?? null;
     const messagePayload = {
       ...fullMessage,
       roomId: communityId,
       mentionedUserIds: body.mentionedUserIds,
+      reactionCounts: {} as Record<string, number>,
+      groupedReactionCounts: [] as { reaction: string; count: number }[],
+      currentUserReaction: null as string | null,
+      myReaction: null as string | null,
+      isModeratorMessage:
+        moderatorUserId !== null && fullMessage.user.id === moderatorUserId,
     };
 
     this.realtimePublisher.publishToCommunityRoom(
@@ -370,28 +423,32 @@ export class CommunityController {
       throw new ForbiddenException('User ID is required');
     }
 
-    const isMember = await this.communityService.isUserMember(
-      dbUserId,
-      communityId,
-    );
-    if (!isMember) {
+    let canType = await this.redisService.isUserInRoom(communityId, dbUserId);
+    if (!canType) {
+      canType = await this.communityService.isUserMember(
+        dbUserId,
+        communityId,
+      );
+    }
+    if (!canType) {
       throw new ForbiddenException('You must be a member to send typing state');
     }
 
     if (body.isTyping) {
-      await this.redisService.setTyping(communityId, dbUserId, 3);
+      await this.redisService.setTyping(communityId, dbUserId, 6);
     } else {
       await this.redisService.clearTyping(communityId, dbUserId);
     }
+
+    const username =
+      displayNameFromJwtClaims(req.user as Record<string, unknown>) ?? 'User';
 
     this.realtimePublisher.publishToCommunityRoom(
       communityId,
       body.isTyping ? 'community.typing.started' : 'community.typing.stopped',
       {
         userId: dbUserId,
-        username:
-          (await this.communityService.getDisplayNameForSocket(dbUserId)) ??
-          undefined,
+        username,
         communityId,
         timestamp: new Date().toISOString(),
       },
@@ -425,6 +482,7 @@ export class CommunityController {
       communityId,
       limit ? parseInt(limit) : 20,
       offset ? parseInt(offset) : 0,
+      dbUserId,
     );
   }
 

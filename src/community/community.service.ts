@@ -1,5 +1,5 @@
 import { Injectable, Inject, forwardRef, BadRequestException } from '@nestjs/common';
-import { eq, and, desc, sql, ilike, or } from 'drizzle-orm';
+import { eq, and, desc, sql, ilike, or, inArray } from 'drizzle-orm';
 import db from '../../drizzle';
 import {
   community,
@@ -26,6 +26,85 @@ export class CommunityService {
     @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
   ) {}
+
+  private async buildReactionEnrichment(messageIds: string[], viewerUserId?: string | null): Promise<
+    Record<
+      string,
+      {
+        reactionCounts: Record<string, number>;
+        groupedReactionCounts: { reaction: string; count: number }[];
+        currentUserReaction: string | null;
+      }
+    >
+  > {
+    const emptyShape = (): {
+      reactionCounts: Record<string, number>;
+      groupedReactionCounts: { reaction: string; count: number }[];
+      currentUserReaction: string | null;
+    } => ({
+      reactionCounts: {},
+      groupedReactionCounts: [],
+      currentUserReaction: null,
+    });
+
+    const out: Record<
+      string,
+      {
+        reactionCounts: Record<string, number>;
+        groupedReactionCounts: { reaction: string; count: number }[];
+        currentUserReaction: string | null;
+      }
+    > = {};
+    if (messageIds.length === 0) {
+      return out;
+    }
+
+    for (const id of messageIds) {
+      out[id] = emptyShape();
+    }
+
+    const aggregates = await db
+      .select({
+        messageId: messageReaction.messageId,
+        reaction: messageReaction.reaction,
+        count: sql<number>`count(*)`,
+      })
+      .from(messageReaction)
+      .where(inArray(messageReaction.messageId, messageIds))
+      .groupBy(messageReaction.messageId, messageReaction.reaction);
+
+    for (const row of aggregates) {
+      const bucket = out[row.messageId] ?? emptyShape();
+      bucket.reactionCounts[row.reaction] = Number(row.count);
+      bucket.groupedReactionCounts.push({
+        reaction: row.reaction,
+        count: Number(row.count),
+      });
+      out[row.messageId] = bucket;
+    }
+
+    if (viewerUserId) {
+      const mine = await db
+        .select({
+          messageId: messageReaction.messageId,
+          reaction: messageReaction.reaction,
+        })
+        .from(messageReaction)
+        .where(
+          and(
+            inArray(messageReaction.messageId, messageIds),
+            eq(messageReaction.userId, viewerUserId),
+          ),
+        );
+      for (const row of mine) {
+        const bucket = out[row.messageId] ?? emptyShape();
+        bucket.currentUserReaction = row.reaction;
+        out[row.messageId] = bucket;
+      }
+    }
+
+    return out;
+  }
 
   async createCommunity(data: {
     title: string;
@@ -335,8 +414,16 @@ export class CommunityService {
     roomId: string,
     limit: number = 50,
     offset: number = 0,
+    viewerUserId?: string | null,
+    opts?: { moderatorUserIdKnown?: string | null },
   ) {
-    return await db
+    const moderatorUserId =
+      opts && 'moderatorUserIdKnown' in opts
+        ? opts.moderatorUserIdKnown ?? null
+        : (await this.getCommunityMod(roomId).catch(() => null))?.user.id ??
+          null;
+
+    const rows = await db
       .select({
         id: roomMessage.id,
         content: roomMessage.content,
@@ -355,6 +442,80 @@ export class CommunityService {
       .orderBy(desc(roomMessage.createdAt))
       .limit(limit)
       .offset(offset);
+
+    const ids = rows.map((r) => r.id);
+    const enrichment = await this.buildReactionEnrichment(ids, viewerUserId);
+
+    return rows.map((row) => {
+      const e = enrichment[row.id] ?? {
+        reactionCounts: {} as Record<string, number>,
+        groupedReactionCounts: [] as { reaction: string; count: number }[],
+        currentUserReaction: null as string | null,
+      };
+      return {
+        ...row,
+        reactionCounts: e.reactionCounts,
+        groupedReactionCounts: e.groupedReactionCounts,
+        currentUserReaction: e.currentUserReaction,
+        myReaction: e.currentUserReaction,
+        isModeratorMessage:
+          moderatorUserId != null && row.user.id === moderatorUserId,
+      };
+    });
+  }
+
+  async getCommunityChatBootstrap(
+    communityId: string,
+    viewerUserId: string,
+    options?: {
+      messagesLimit?: number;
+      messagesOffset?: number;
+    },
+  ) {
+    const limit = options?.messagesLimit ?? 20;
+    const offset = options?.messagesOffset ?? 0;
+
+    const [communityRow, moderator] = await Promise.all([
+      this.getCommunityById(communityId),
+      this.getCommunityMod(communityId).catch(() => null),
+    ]);
+    if (!communityRow) {
+      return null;
+    }
+
+    const [role, members, membersCount, messages] = await Promise.all([
+      this.getMemberRole(viewerUserId, communityId),
+      this.getCommunityMembers(communityId),
+      this.getCommunityMemberCount(communityId),
+      this.getRoomMessages(communityId, limit, offset, viewerUserId, {
+        moderatorUserIdKnown: moderator?.user.id ?? null,
+      }),
+    ]);
+
+    const pendingJoinRequests =
+      moderator && moderator.user.id === viewerUserId
+        ? await this.getPendingJoinRequests(communityId)
+        : [];
+
+    return {
+      community: communityRow,
+      viewer: {
+        userId: viewerUserId,
+        role,
+        isModerator: role === 'mod',
+      },
+      moderator,
+      members,
+      membersCount,
+      pendingJoinRequests,
+      messages,
+      messagesPagination: {
+        limit,
+        offset,
+        hasMore: messages.length === limit,
+        nextOffset: offset + messages.length,
+      },
+    };
   }
 
   async getMessageById(messageId: string) {

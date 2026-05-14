@@ -121,12 +121,12 @@ export class RedisService {
   // ==================== TYPING INDICATORS ====================
 
   /**
-   * Set typing indicator with TTL (3 seconds)
+   * Set typing indicator with TTL (refresh while typing via throttled REST)
    */
   async setTyping(
     communityId: string,
     userId: string,
-    ttl: number = 3,
+    ttl: number = 6,
   ): Promise<void> {
     const key = `typing:${communityId}:${userId}`;
     await this.redis.setEx(key, ttl, '1');
