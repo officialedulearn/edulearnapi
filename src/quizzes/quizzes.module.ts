@@ -8,6 +8,7 @@ import { QuizScheduleBullmqService } from './quiz-schedule-bullmq.service';
 import { QuizScheduleProcessorService } from './quiz-schedule-processor.service';
 import { QuizScheduleService } from './quiz-schedule.service';
 import { RemindersModule } from 'src/reminders/reminders.module';
+import { CacheModule } from '@nestjs/cache-manager';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { RemindersModule } from 'src/reminders/reminders.module';
     forwardRef(() => AiModule),
     ChatModule,
     RemindersModule,
+    CacheModule.register(),
   ],
   controllers: [QuizzesController],
   providers: [
