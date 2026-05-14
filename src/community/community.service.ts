@@ -1,5 +1,5 @@
 import { Injectable, Inject, forwardRef, BadRequestException } from '@nestjs/common';
-import { eq, and, desc, sql, ilike, or, inArray } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, ilike, or, inArray } from 'drizzle-orm';
 import db from '../../drizzle';
 import {
   community,
@@ -63,7 +63,7 @@ export class CommunityService {
       out[id] = emptyShape();
     }
 
-    const aggregates = await db
+    const aggregatesPromise = db
       .select({
         messageId: messageReaction.messageId,
         reaction: messageReaction.reaction,
@@ -72,6 +72,28 @@ export class CommunityService {
       .from(messageReaction)
       .where(inArray(messageReaction.messageId, messageIds))
       .groupBy(messageReaction.messageId, messageReaction.reaction);
+
+    const minePromise = viewerUserId
+      ? db
+          .select({
+            messageId: messageReaction.messageId,
+            reaction: messageReaction.reaction,
+          })
+          .from(messageReaction)
+          .where(
+            and(
+              inArray(messageReaction.messageId, messageIds),
+              eq(messageReaction.userId, viewerUserId),
+            ),
+          )
+      : Promise.resolve(
+          [] as { messageId: string; reaction: string }[],
+        );
+
+    const [aggregates, mineRows] = await Promise.all([
+      aggregatesPromise,
+      minePromise,
+    ]);
 
     for (const row of aggregates) {
       const bucket = out[row.messageId] ?? emptyShape();
@@ -83,24 +105,10 @@ export class CommunityService {
       out[row.messageId] = bucket;
     }
 
-    if (viewerUserId) {
-      const mine = await db
-        .select({
-          messageId: messageReaction.messageId,
-          reaction: messageReaction.reaction,
-        })
-        .from(messageReaction)
-        .where(
-          and(
-            inArray(messageReaction.messageId, messageIds),
-            eq(messageReaction.userId, viewerUserId),
-          ),
-        );
-      for (const row of mine) {
-        const bucket = out[row.messageId] ?? emptyShape();
-        bucket.currentUserReaction = row.reaction;
-        out[row.messageId] = bucket;
-      }
+    for (const row of mineRows) {
+      const bucket = out[row.messageId] ?? emptyShape();
+      bucket.currentUserReaction = row.reaction;
+      out[row.messageId] = bucket;
     }
 
     return out;
@@ -181,8 +189,11 @@ export class CommunityService {
     return member;
   }
 
-  async getCommunityMembers(communityId: string) {
-    return await db
+  async getCommunityMembers(
+    communityId: string,
+    options?: { limit?: number },
+  ) {
+    const q = db
       .select({
         id: community_members.id,
         role: community_members.role,
@@ -196,7 +207,13 @@ export class CommunityService {
       })
       .from(community_members)
       .innerJoin(user, eq(community_members.userId, user.id))
-      .where(eq(community_members.communityId, communityId));
+      .where(eq(community_members.communityId, communityId))
+      .orderBy(desc(community_members.role), asc(user.username));
+
+    if (options?.limit != null && options.limit > 0) {
+      return await q.limit(options.limit);
+    }
+    return await q;
   }
 
   async getUserCommunities(userId: string) {
@@ -470,10 +487,18 @@ export class CommunityService {
     options?: {
       messagesLimit?: number;
       messagesOffset?: number;
+      /** When set (e.g. from controller), skips a duplicate membership/role query. */
+      viewerRole?: 'mod' | 'member';
+      /** Cap members returned for chat @-mention list; total count stays in membersCount. */
+      membersPreviewLimit?: number;
     },
   ) {
     const limit = options?.messagesLimit ?? 20;
     const offset = options?.messagesOffset ?? 0;
+    const membersCap = Math.min(
+      Math.max(options?.membersPreviewLimit ?? 250, 1),
+      500,
+    );
 
     const [communityRow, moderator] = await Promise.all([
       this.getCommunityById(communityId),
@@ -483,14 +508,23 @@ export class CommunityService {
       return null;
     }
 
-    const [role, members, membersCount, messages] = await Promise.all([
-      this.getMemberRole(viewerUserId, communityId),
-      this.getCommunityMembers(communityId),
+    const role =
+      options?.viewerRole ??
+      (await this.getMemberRole(viewerUserId, communityId));
+    if (!role) {
+      return null;
+    }
+
+    const [members, membersCount, messages] = await Promise.all([
+      this.getCommunityMembers(communityId, { limit: membersCap }),
       this.getCommunityMemberCount(communityId),
       this.getRoomMessages(communityId, limit, offset, viewerUserId, {
         moderatorUserIdKnown: moderator?.user.id ?? null,
       }),
     ]);
+
+    const membersPreviewTruncated =
+      members.length >= membersCap && membersCount > membersCap;
 
     const pendingJoinRequests =
       moderator && moderator.user.id === viewerUserId
@@ -507,6 +541,8 @@ export class CommunityService {
       moderator,
       members,
       membersCount,
+      membersPreviewTruncated,
+      membersPreviewLimit: membersCap,
       pendingJoinRequests,
       messages,
       messagesPagination: {

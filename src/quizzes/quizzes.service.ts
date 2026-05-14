@@ -17,7 +17,11 @@ import { PublishQuizDto } from './dto/publish-quiz.dto';
 import { SubmitPublicQuizDto } from './dto/submit-public-quiz.dto';
 import { ActivityService } from '../activity/activity.service';
 import { RemindersService } from 'src/reminders/reminders.service';
+import {CACHE_MANAGER} from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
+
 type SortOption = 'recent' | 'popular';
+
 
 interface QuizQuestion {
   question: string;
@@ -31,7 +35,8 @@ export class QuizzesService {
   constructor(
     @Inject(forwardRef(() => ActivityService))
     private readonly activityService: ActivityService,
-    private readonly remindersService: RemindersService
+    private readonly remindersService: RemindersService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache
   ) {}
 
   private async getQuizByIdOrThrow(id: string) {
@@ -86,10 +91,16 @@ export class QuizzesService {
     offset: number = 0,
     sort: SortOption = 'recent',
   ) {
+    const cacheKey = `public-quizzes:findAll:${sort}:${limit}:${offset}`;
+  
+    const cached = await this.cacheManager.get<any[]>(cacheKey);
+    if (cached) return cached;
+  
     const orderBy =
       sort === 'popular'
         ? [desc(publicQuiz.attemptCount), desc(publicQuiz.viewCount)]
         : [desc(publicQuiz.createdAt)];
+  
     const rows = await db
       .select({
         id: publicQuiz.id,
@@ -106,7 +117,8 @@ export class QuizzesService {
       .orderBy(...orderBy)
       .limit(limit)
       .offset(offset);
-    return rows.map((r) => ({
+  
+    const result = rows.map((r) => ({
       id: r.id,
       title: r.title,
       description: r.description,
@@ -116,6 +128,10 @@ export class QuizzesService {
       createdAt: r.createdAt,
       creatorUsername: r.creatorUsername ?? null,
     }));
+  
+    await this.cacheManager.set(cacheKey, result, 20_000); // 20s TTL
+  
+    return result;
   }
 
   async findMine(userId: string, limit: number = 20, offset: number = 0) {

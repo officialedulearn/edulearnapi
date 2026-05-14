@@ -158,18 +158,27 @@ export class CommunityController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
     @Query('userId') userId?: string,
+    @Query('membersLimit') membersLimit?: string,
   ) {
     const dbUserId = userId || req.user.sub;
     if (!dbUserId) {
       throw new ForbiddenException('User ID is required');
     }
 
-    const isMember = await this.communityService.isUserMember(
+    const role = await this.communityService.getMemberRole(
       dbUserId,
       communityId,
     );
-    if (!isMember) {
+    if (!role) {
       throw new ForbiddenException('You must be a member to view this chat');
+    }
+
+    let membersPreviewLimit = 250;
+    if (membersLimit != null && membersLimit !== '') {
+      const n = parseInt(membersLimit, 10);
+      if (!Number.isNaN(n)) {
+        membersPreviewLimit = Math.min(Math.max(n, 1), 500);
+      }
     }
 
     const bootstrap = await this.communityService.getCommunityChatBootstrap(
@@ -178,6 +187,8 @@ export class CommunityController {
       {
         messagesLimit: limit ? parseInt(limit) : 20,
         messagesOffset: offset ? parseInt(offset) : 0,
+        viewerRole: role,
+        membersPreviewLimit,
       },
     );
 

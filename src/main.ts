@@ -14,8 +14,12 @@ import { LoggingInterceptor } from 'interceptors/logger.interceptor';
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter(),
-    { rawBody: true },
+    new FastifyAdapter({
+      trustProxy: true,
+    }),
+    {
+      rawBody: true,
+    },
   );
 
   const fastifyInstance = app.getHttpAdapter().getInstance();
@@ -46,35 +50,6 @@ async function bootstrap() {
     new LoggingInterceptor(),
   );
 
-  const internalConfig = new DocumentBuilder()
-    .setTitle('EduLearn API')
-    .setDescription('Complete API documentation for internal use')
-    .setVersion('1.0')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        name: 'JWT',
-        description: 'Enter JWT token',
-        in: 'header',
-      },
-      'JWT-auth',
-    )
-    .addApiKey(
-      {
-        type: 'apiKey',
-        name: 'x-api-key',
-        in: 'header',
-      },
-      'api-key',
-    )
-    .build();
-
-  const internalDocument = SwaggerModule.createDocument(app, internalConfig);
-  SwaggerModule.setup('api/docs', app, internalDocument, {
-    customSiteTitle: 'EduLearn API Documentation',
-  });
 
   await app.listen(process.env.PORT ?? 3001, '0.0.0.0');
 }
