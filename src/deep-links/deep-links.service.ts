@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
-
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 type LinkType = 'referral' | 'publicQuiz' | 'communityInvite';
 
 type LandingPageInput = {
@@ -57,6 +58,7 @@ export class DeepLinksService {
     process.env.DEEP_LINK_ANDROID_SHA256_FINGERPRINTS ||
       '00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00',
   );
+  @Inject(CACHE_MANAGER) private cacheManager: Cache;
 
   getAppleAppSiteAssociation() {
     return {
@@ -85,9 +87,14 @@ export class DeepLinksService {
     ];
   }
 
-  buildReferralLandingPage(referralCode: string) {
+  async buildReferralLandingPage(referralCode: string) {
+    const cacheKey = `deep-links:referral:${referralCode}`;
+    const cached = await this.cacheManager.get<string | null>(cacheKey);
+    if (cached) {
+      return cached;
+    }
     const sanitizedCode = this.normalizeUpperToken(referralCode);
-    return this.buildLandingPage({
+    const html = this.buildLandingPage({
       linkType: 'referral',
       value: sanitizedCode,
       title: 'Join EduLearn with a referral',
@@ -95,11 +102,18 @@ export class DeepLinksService {
         'Open EduLearn to sign up with this referral code and start learning.',
       canonicalPath: `/ref/${encodeURIComponent(sanitizedCode)}`,
     });
+    await this.cacheManager.set<string>(cacheKey, html, 60 * 60 * 24);
+    return html;
   }
 
-  buildQuizLandingPage(quizId: string) {
+  async buildQuizLandingPage(quizId: string) {
+    const cacheKey = `deep-links:quiz:${quizId}`;
+    const cached = await this.cacheManager.get<string | null>(cacheKey);
+    if (cached) {
+      return cached;
+    }
     const sanitizedQuizId = this.normalizeToken(quizId);
-    return this.buildLandingPage({
+    const html = this.buildLandingPage({
       linkType: 'publicQuiz',
       value: sanitizedQuizId,
       title: 'Open this EduLearn quiz',
@@ -107,17 +121,26 @@ export class DeepLinksService {
         'Launch the EduLearn app to participate in this public quiz.',
       canonicalPath: `/quizzes/${encodeURIComponent(sanitizedQuizId)}`,
     });
+    await this.cacheManager.set<string>(cacheKey, html, 60 * 60 * 24);
+    return html;
   }
 
-  buildCommunityLandingPage(inviteCode: string) {
+  async buildCommunityLandingPage(inviteCode: string) {
+    const cacheKey = `deep-links:community:${inviteCode}`;
+    const cached = await this.cacheManager.get<string | null>(cacheKey);
+    if (cached) {
+      return cached;
+    }
     const sanitizedInviteCode = this.normalizeUpperToken(inviteCode);
-    return this.buildLandingPage({
+    const html = this.buildLandingPage({
       linkType: 'communityInvite',
       value: sanitizedInviteCode,
       title: 'Join this EduLearn community',
       description: 'Open EduLearn to join this community invite.',
       canonicalPath: `/community/${encodeURIComponent(sanitizedInviteCode)}`,
     });
+    await this.cacheManager.set<string>(cacheKey, html, 60 * 60 * 24);
+    return html;
   }
 
   buildNotFoundPage() {

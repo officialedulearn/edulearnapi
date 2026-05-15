@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import db from '../../drizzle';
-import { and, eq, sql, desc, asc, max, min } from 'drizzle-orm';
+import { and, eq, sql, desc, asc, max, min, count } from 'drizzle-orm';
 import {
   publicQuiz,
   PublicQuizParticipation,
@@ -19,6 +19,7 @@ import { ActivityService } from '../activity/activity.service';
 import { RemindersService } from 'src/reminders/reminders.service';
 import {CACHE_MANAGER} from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
+import { PublicQuiz } from '../../lib/db/schema';
 
 type SortOption = 'recent' | 'popular';
 
@@ -49,6 +50,16 @@ export class QuizzesService {
       throw new NotFoundException(`Quiz ${id} not found`);
     }
     return quiz;
+  }
+
+  private async incrementQuizViewCount(id: string): Promise<void> {
+    await db
+      .update(publicQuiz)
+      .set({
+        viewCount: sql`${publicQuiz.viewCount} + 1`,
+      })
+      .where(eq(publicQuiz.id, id));
+    return;
   }
 
   async publish(userId: string, dto: PublishQuizDto) {
@@ -94,7 +105,12 @@ export class QuizzesService {
     const cacheKey = `public-quizzes:findAll:${sort}:${limit}:${offset}`;
   
     const cached = await this.cacheManager.get<any[]>(cacheKey);
-    if (cached) return cached;
+    if (cached) {
+      console.log('CACHE HIT:', cacheKey);
+      return cached;
+    }
+    
+    console.log('CACHE MISS:', cacheKey);
   
     const orderBy =
       sort === 'popular'
@@ -165,17 +181,21 @@ export class QuizzesService {
   }
 
   async findOne(id: string) {
+    const cacheKey = `public-quiz:${id}`;
+  
+    const cached = await this.cacheManager.get<PublicQuiz | null>(cacheKey);
+    if (cached) {
+      await this.incrementQuizViewCount(id); // fire-and-forget or awaited
+      return cached;
+    }
+  
     const quiz = await this.getQuizByIdOrThrow(id);
-    await db
-      .update(publicQuiz)
-      .set({
-        viewCount: sql`${publicQuiz.viewCount} + 1`,
-      })
-      .where(eq(publicQuiz.id, id));
-    return {
-      ...quiz,
-      viewCount: quiz.viewCount + 1,
-    };
+  
+    await this.cacheManager.set(cacheKey, quiz, 60 * 60 * 24 * 7); // 7 days
+  
+    await this.incrementQuizViewCount(id);
+  
+    return quiz;
   }
 
   async startParticipation(quizId: string, userId: string) {
@@ -205,6 +225,44 @@ export class QuizzesService {
       participationId: row.id,
       quizId: row.quizId,
       joinedAt: row.joinedAt,
+    };
+  }
+
+  async startQuiz(quizId: string, userId: string) {
+    const quiz = await this.findOne(quizId); // cached quiz content
+  
+    const [countRow] = await db
+      .select({ count: count() })
+      .from(publicQuizParticipation)
+      .where(
+        and(
+          eq(publicQuizParticipation.quizId, quizId),
+          eq(publicQuizParticipation.userId, userId),
+        ),
+      );
+  
+    const participationCount = Number(countRow?.count ?? 0);
+  
+    if (participationCount >= 4) {
+      throw new BadRequestException('You can join this quiz at most 4 times.');
+    }
+  
+    const [row] = await db
+      .insert(publicQuizParticipation)
+      .values({ quizId, userId })
+      .returning({
+        id: publicQuizParticipation.id,
+        quizId: publicQuizParticipation.quizId,
+        joinedAt: publicQuizParticipation.joinedAt,
+      });
+  
+    return {
+      quiz,
+      participation: {
+        participationId: row.id,
+        quizId: row.quizId,
+        joinedAt: row.joinedAt,
+      },
     };
   }
 

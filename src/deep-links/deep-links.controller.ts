@@ -1,7 +1,8 @@
-import { Controller, Get, Header, Param, Req, Res } from '@nestjs/common';
+import { Controller, Get, Header, Param, Req, Res, UseInterceptors } from '@nestjs/common';
 import { RouteConstraints } from '@nestjs/platform-fastify';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { DeepLinksService } from './deep-links.service';
+import { CacheInterceptor, CacheTTL, CacheKey } from '@nestjs/cache-manager';
 
 const DEEP_LINK_HOST = (process.env.DEEP_LINK_HOST || 'mobile.edulearn.fun')
   .toLowerCase()
@@ -14,6 +15,9 @@ const COMMUNITY_INVITE_PATTERN = /^[A-Za-z0-9]{6,64}$/;
 export class DeepLinksController {
   constructor(private readonly deepLinksService: DeepLinksService) {}
 
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(60 * 60 * 24)
+  @CacheKey('deep-links:apple-app-site-association')
   @RouteConstraints({ host: DEEP_LINK_HOST })
   @Get('.well-known/apple-app-site-association')
   @Header('Content-Type', 'application/json; charset=utf-8')
@@ -22,6 +26,9 @@ export class DeepLinksController {
     return this.deepLinksService.getAppleAppSiteAssociation();
   }
 
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(60 * 60 * 24)
+  @CacheKey('deep-links:assetlinks.json')
   @RouteConstraints({ host: DEEP_LINK_HOST })
   @Get('.well-known/assetlinks.json')
   @Header('Content-Type', 'application/json; charset=utf-8')
