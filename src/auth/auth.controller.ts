@@ -22,7 +22,7 @@ import {
   verifyUserEmail,
 } from '../common/helpers/authorization.helper';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { Throttle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { UserResponse } from './auth.service';
 import type { FastifyRequest } from 'fastify';
 import { parseProfileImageMultipart } from '../common/helpers/multipart-image.helper';
@@ -69,6 +69,7 @@ export class AuthController {
     return user as UserResponse;
   }
 
+  @SkipThrottle()
   @HttpCode(200)
   @Post('init')
   @UseGuards(JwtAuthGuard)
