@@ -17,7 +17,7 @@ import { PublishQuizDto } from './dto/publish-quiz.dto';
 import { SubmitPublicQuizDto } from './dto/submit-public-quiz.dto';
 import { ActivityService } from '../activity/activity.service';
 import { RemindersService } from 'src/reminders/reminders.service';
-import {CACHE_MANAGER} from '@nestjs/cache-manager';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { PublicQuiz } from '../../lib/db/schema';
 
@@ -38,7 +38,7 @@ export class QuizzesService {
     private readonly activityService: ActivityService,
     private readonly remindersService: RemindersService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache
-  ) {}
+  ) { }
 
   private async getQuizByIdOrThrow(id: string) {
     const [quiz] = await db
@@ -103,20 +103,20 @@ export class QuizzesService {
     sort: SortOption = 'recent',
   ) {
     const cacheKey = `public-quizzes:findAll:${sort}:${limit}:${offset}`;
-  
+
     const cached = await this.cacheManager.get<any[]>(cacheKey);
     if (cached) {
       console.log('CACHE HIT:', cacheKey);
       return cached;
     }
-    
+
     console.log('CACHE MISS:', cacheKey);
-  
+
     const orderBy =
       sort === 'popular'
         ? [desc(publicQuiz.attemptCount), desc(publicQuiz.viewCount)]
         : [desc(publicQuiz.createdAt)];
-  
+
     const rows = await db
       .select({
         id: publicQuiz.id,
@@ -133,7 +133,7 @@ export class QuizzesService {
       .orderBy(...orderBy)
       .limit(limit)
       .offset(offset);
-  
+
     const result = rows.map((r) => ({
       id: r.id,
       title: r.title,
@@ -144,9 +144,9 @@ export class QuizzesService {
       createdAt: r.createdAt,
       creatorUsername: r.creatorUsername ?? null,
     }));
-  
+
     await this.cacheManager.set(cacheKey, result, 20_000); // 20s TTL
-  
+
     return result;
   }
 
@@ -182,19 +182,19 @@ export class QuizzesService {
 
   async findOne(id: string) {
     const cacheKey = `public-quiz:${id}`;
-  
+
     const cached = await this.cacheManager.get<PublicQuiz | null>(cacheKey);
     if (cached) {
       await this.incrementQuizViewCount(id); // fire-and-forget or awaited
       return cached;
     }
-  
+
     const quiz = await this.getQuizByIdOrThrow(id);
-  
+
     await this.cacheManager.set(cacheKey, quiz, 60 * 60 * 24 * 7); // 7 days
-  
+
     await this.incrementQuizViewCount(id);
-  
+
     return quiz;
   }
 
@@ -230,7 +230,7 @@ export class QuizzesService {
 
   async startQuiz(quizId: string, userId: string) {
     const quiz = await this.findOne(quizId); // cached quiz content
-  
+
     const [countRow] = await db
       .select({ count: count() })
       .from(publicQuizParticipation)
@@ -240,28 +240,47 @@ export class QuizzesService {
           eq(publicQuizParticipation.userId, userId),
         ),
       );
-  
+
+
     const participationCount = Number(countRow?.count ?? 0);
-  
+
     if (participationCount >= 4) {
       throw new BadRequestException('You can join this quiz at most 4 times.');
     }
-  
-    const [row] = await db
-      .insert(publicQuizParticipation)
-      .values({ quizId, userId })
-      .returning({
-        id: publicQuizParticipation.id,
-        quizId: publicQuizParticipation.quizId,
-        joinedAt: publicQuizParticipation.joinedAt,
-      });
-  
-    return {
-      quiz,
-      participation: {
+
+
+    const success = await db.transaction(async (tx) => {
+      const [row] = await tx.insert(publicQuizParticipation)
+        .values({ quizId, userId })
+        .returning({
+          id: publicQuizParticipation.id,
+          quizId: publicQuizParticipation.quizId,
+          joinedAt: publicQuizParticipation.joinedAt,
+        });
+
+      await tx.update(publicQuiz)
+        .set({
+          attemptCount: sql`${publicQuiz.attemptCount} + 1`,
+        })
+        .where(eq(publicQuiz.id, quizId));
+
+      return {
         participationId: row.id,
         quizId: row.quizId,
         joinedAt: row.joinedAt,
+      };
+    });
+
+    if (!success) {
+      throw new BadRequestException('Failed to start quiz');
+    }
+
+    return {
+      quiz,
+      participation: {
+        participationId: success.participationId,
+        quizId: success.quizId,
+        joinedAt: success.joinedAt,
       },
     };
   }
@@ -278,7 +297,7 @@ export class QuizzesService {
       .where(eq(publicQuizParticipation.quizId, quizId))
       .groupBy(publicQuizParticipation.userId)
       .as("bestScores");
-  
+
     const leaderboard = await db
       .select({
         userId: bestScores.userId,
@@ -293,7 +312,7 @@ export class QuizzesService {
       .innerJoin(user, eq(user.id, bestScores.userId))
       .orderBy(desc(bestScores.maxScore), asc(bestScores.firstJoined))
       .limit(10);
-  
+
     return leaderboard.map(({ ...row }) => ({
       userId: row.userId,
       score: row.score,
@@ -387,13 +406,13 @@ export class QuizzesService {
         .where(eq(publicQuizParticipation.id, dto.participationId));
     }
 
-    await db 
-    .update(user)
-    .set({
-      quizCompleted: sql`${user.quizCompleted} + 1`,
-    })
-    .where(eq(user.id, userId));
-    
+    await db
+      .update(user)
+      .set({
+        quizCompleted: sql`${user.quizCompleted} + 1`,
+      })
+      .where(eq(user.id, userId));
+
     const payload = {
       score: correctCount,
       totalQuestions: questions.length,
