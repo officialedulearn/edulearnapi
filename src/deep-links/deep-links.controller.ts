@@ -39,7 +39,7 @@ export class DeepLinksController {
 
   @RouteConstraints({ host: DEEP_LINK_HOST })
   @Get('ref/:referralCode')
-  openReferral(
+  async openReferral(
     @Param('referralCode') referralCode: string,
     @Req() req: FastifyRequest,
     @Res() reply: FastifyReply,
@@ -52,13 +52,13 @@ export class DeepLinksController {
     }
 
     this.deepLinksService.logHit(req, 'referral', referralCode);
-    const html = this.deepLinksService.buildReferralLandingPage(referralCode);
+    const html = await this.deepLinksService.buildReferralLandingPage(referralCode);
     return reply.type('text/html; charset=utf-8').status(200).send(html);
   }
 
   @RouteConstraints({ host: DEEP_LINK_HOST })
   @Get('quizzes/:quizId')
-  openQuiz(
+  async openQuiz(
     @Param('quizId') quizId: string,
     @Req() req: FastifyRequest,
     @Res() reply: FastifyReply,
@@ -71,13 +71,13 @@ export class DeepLinksController {
     }
 
     this.deepLinksService.logHit(req, 'publicQuiz', quizId);
-    const html = this.deepLinksService.buildQuizLandingPage(quizId);
+    const html = await this.deepLinksService.buildQuizLandingPage(quizId);
     return reply.type('text/html; charset=utf-8').status(200).send(html);
   }
 
   @RouteConstraints({ host: DEEP_LINK_HOST })
   @Get('community/:inviteCode')
-  openCommunity(
+  async openCommunity(
     @Param('inviteCode') inviteCode: string,
     @Req() req: FastifyRequest,
     @Res() reply: FastifyReply,
@@ -90,7 +90,7 @@ export class DeepLinksController {
     }
 
     this.deepLinksService.logHit(req, 'communityInvite', inviteCode);
-    const html = this.deepLinksService.buildCommunityLandingPage(inviteCode);
+    const html = await this.deepLinksService.buildCommunityLandingPage(inviteCode);
     return reply.type('text/html; charset=utf-8').status(200).send(html);
   }
 }

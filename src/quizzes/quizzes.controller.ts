@@ -98,13 +98,14 @@ export class QuizzesController {
   @Post('public/:id/participate')
   @UseGuards(JwtAuthGuard)
   async startParticipation(@Request() req, @Param('id') id: string) {
-    return this.quizzesService.startParticipation(id, req.user.id);
+    const userId = req.user.sub;
+    return this.quizzesService.startParticipation(id, userId);
   }
 
   @Post('public/:id/start')
   @UseGuards(JwtAuthGuard)
   async startQuiz(@Request() req, @Param('id') id: string) {
-    return this.quizzesService.startQuiz(id, req.user.id);
+    return this.quizzesService.startQuiz(id, req.user.sub);
   }
 
   @Post('public/:id/attempt')
