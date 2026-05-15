@@ -12,6 +12,7 @@ import {
   integer,
   numeric,
   index,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -56,7 +57,10 @@ export const user = pgTable('user', {
   streakShieldActive: boolean('streak_shield_active').default(false),
   streakShieldExpiry: timestamp('streak_shield_expiry'),
   streakShieldPurchases: integer('streak_shield_purchases').default(0),
-});
+}, (table) => ({
+  emailIdx: uniqueIndex('user_email_idx').on(table.email),
+  usernameIdx: uniqueIndex('user_username_idx').on(table.username),
+}));
 
 export type User = InferSelectModel<typeof user>;
 

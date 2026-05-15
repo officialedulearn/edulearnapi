@@ -4,7 +4,7 @@ import {
   forwardRef,
   NotFoundException,
 } from '@nestjs/common';
-import { and, eq, desc, ilike, or, inArray, count } from 'drizzle-orm';
+import { and, eq, desc, ilike, or, inArray, count, SQL } from 'drizzle-orm';
 import db from '../../drizzle';
 import {
   user,
@@ -498,54 +498,47 @@ export class AuthService {
     }
   }
 
-  async checkUserAvailability(
-    email?: string,
-    username?: string,
-  ): Promise<{
-    emailAvailable: boolean;
-    usernameAvailable: boolean;
-    message?: string;
-  }> {
-    try {
-      let emailAvailable = true;
-      let usernameAvailable = true;
-      const messages: string[] = [];
-
-      if (email) {
-        const existingUserByEmail = await db
-          .select()
-          .from(user)
-          .where(eq(user.email, email))
-          .limit(1);
-
-        if (existingUserByEmail.length > 0) {
-          emailAvailable = false;
-          messages.push('Email is already registered');
-        }
-      }
-
-      if (username) {
-        const existingUserByUsername = await db
-          .select()
-          .from(user)
-          .where(eq(user.username, username))
-          .limit(1);
-
-        if (existingUserByUsername.length > 0) {
-          usernameAvailable = false;
-          messages.push('Username is already taken');
-        }
-      }
-
+  async checkUserAvailability(email?: string, username?: string) {
+    const messages: string[] = [];
+  
+    if (!email && !username) {
       return {
-        emailAvailable,
-        usernameAvailable,
-        message: messages.length > 0 ? messages.join('. ') : undefined,
+        emailAvailable: true,
+        usernameAvailable: true,
       };
-    } catch (error) {
-      console.error('Failed to check user availability:', error);
-      throw error;
     }
+  
+    const conditions: SQL[] = [];
+    
+  
+    if (email) conditions.push(eq(user.email, email));
+    if (username) conditions.push(eq(user.username, username));
+  
+    const existingUsers = await db
+      .select({
+        email: user.email,
+        username: user.username,
+      })
+      .from(user)
+      .where(or(...conditions))
+      .limit(2);
+  
+    const emailTaken = email
+      ? existingUsers.some((u) => u.email === email)
+      : false;
+  
+    const usernameTaken = username
+      ? existingUsers.some((u) => u.username === username)
+      : false;
+  
+    if (emailTaken) messages.push('Email is already registered');
+    if (usernameTaken) messages.push('Username is already taken');
+  
+    return {
+      emailAvailable: !emailTaken,
+      usernameAvailable: !usernameTaken,
+      message: messages.length > 0 ? messages.join('. ') : undefined,
+    };
   }
   async getUserByAddress(address: string): Promise<User | null> {
     try {
