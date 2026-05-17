@@ -8,11 +8,13 @@ import { ExpoPushService } from 'src/common/services/expo-push.service';
 import { CardsModule } from 'src/cards/cards.module';
 import { LeaderboardModule } from 'src/leaderboard/leaderboard.module';
 import { MonthlyLeaderboardModule } from 'src/monthly-leaderboard/monthly-leaderboard.module';
+import { SubscriptionModule } from 'src/subscription/subscription.module';
 
 @Module({
   imports: [
     forwardRef(() => AuthModule),
     forwardRef(() => WalletModule),
+    forwardRef(() => SubscriptionModule),
     TwitterModule,
     CardsModule,
     LeaderboardModule,

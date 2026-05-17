@@ -30,3 +30,8 @@ export interface ReminderEvaluationResult {
   nextCheckAt: Date;
   why?: string;
 }
+
+export type ReminderEnqueueResult =
+  | { enqueued: true; staleJobRemoved?: boolean }
+  | { enqueued: false; reason: 'already_queued'; jobState: string }
+  | { enqueued: false; reason: 'queue_error'; message: string };

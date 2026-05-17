@@ -1,6 +1,7 @@
 import type { InferSelectModel } from 'drizzle-orm';
 import {
   pgTable,
+  pgEnum,
   varchar,
   timestamp,
   json,
@@ -15,6 +16,17 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+
+export const subscriptionTierEnum = pgEnum('subscription_tier', [
+  'basic',
+  'pro',
+  'ultra',
+]);
+
+export const billingPeriodEnum = pgEnum('billing_period', [
+  'monthly',
+  'yearly',
+]);
 
 export const user = pgTable('user', {
   id: uuid('id').primaryKey().notNull(),
@@ -630,3 +642,72 @@ export const reminderEmailLog = pgTable(
 );
 
 export type ReminderEmailLog = InferSelectModel<typeof reminderEmailLog>;
+
+export const subscription = pgTable(
+  'subscription',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    tier: subscriptionTierEnum('tier').notNull(),
+    name: text('name').notNull(),
+    description: text('description'),
+    priceMonthly: numeric('priceMonthly', { precision: 10, scale: 2 })
+      .notNull()
+      .default('0.00'),
+    dailyCredits: integer('dailyCredits').notNull().default(10),
+    dailyQuizLimit: integer('dailyQuizLimit').notNull().default(5),
+    dailyImageUploadLimit: integer('dailyImageUploadLimit')
+      .notNull()
+      .default(2),
+    aiModel: text('aiModel').notNull().default('gemini-2.5-flash'),
+    maxRoadmaps: integer('maxRoadmaps').notNull().default(3),
+    streakShieldIncluded: boolean('streakShieldIncluded')
+      .notNull()
+      .default(false),
+    prioritySupport: boolean('prioritySupport').notNull().default(false),
+    exclusiveBadges: boolean('exclusiveBadges').notNull().default(false),
+    benefits: json('benefits').$type<string[]>().default([]),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => ({
+    tierIdx: uniqueIndex('subscription_tier_idx').on(table.tier),
+  }),
+);
+
+export type Subscription = InferSelectModel<typeof subscription>;
+
+export const userSubscription = pgTable(
+  'user_subscription',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    userId: uuid('userId')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    subscriptionId: uuid('subscriptionId')
+      .notNull()
+      .references(() => subscription.id),
+    billingPeriod: billingPeriodEnum('billingPeriod')
+      .notNull()
+      .default('monthly'),
+    startedAt: timestamp('startedAt').notNull().defaultNow(),
+    expiresAt: timestamp('expiresAt'),
+    isActive: boolean('isActive').notNull().default(true),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+    updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: uniqueIndex('user_subscription_user_id_idx').on(table.userId),
+    subscriptionIdIdx: index('user_subscription_subscription_id_idx').on(
+      table.subscriptionId,
+    ),
+    activeUserIdx: index('user_subscription_user_active_idx').on(
+      table.userId,
+      table.isActive,
+    ),
+    activeExpiresIdx: index('user_subscription_active_expires_idx').on(
+      table.isActive,
+      table.expiresAt,
+    ),
+  }),
+);
+
+export type UserSubscription = InferSelectModel<typeof userSubscription>;

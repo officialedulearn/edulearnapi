@@ -33,7 +33,8 @@
     "migrate:clean": "ts-node -r tsconfig-paths/register scripts/clean-duplicate-migrations.ts",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
-    "sync:quiz-completed": "ts-node -r tsconfig-paths/register scripts/sync-quiz-completed-from-activities.ts"
+    "sync:quiz-completed": "ts-node -r tsconfig-paths/register scripts/sync-quiz-completed-from-activities.ts",
+    "benchmark:gemini:stream": "ts-node scripts/benchmark-gemini-stream-latency.ts"
   },
   "dependencies": {
     "@fastify/compress": "^8.3.1",

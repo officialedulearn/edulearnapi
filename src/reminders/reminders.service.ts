@@ -13,11 +13,13 @@ import {
   REMINDER_EVALUATE_JOB_NAME,
   reminderEvalJobId,
   reminderNextCheckJobId,
+  REMINDER_EVAL_JOB_STUCK_MS,
   REMINDER_MAX_EMAILS_PER_USER_PER_7_DAYS,
   REMINDER_MAX_NEXT_CHECK_DAYS,
   REMINDER_MIN_NEXT_CHECK_DAYS,
 } from './reminders.constants';
 import type {
+  ReminderEnqueueResult,
   ReminderEvaluationResult,
   ReminderReason,
 } from './reminders.types';
@@ -65,47 +67,94 @@ export class RemindersService {
     private readonly resendService: ResendService,
   ) {}
 
-  async enqueueEvaluation(userId: string, reason: ReminderReason) {
-    const queue = this.bullmq.getQueue();
-    const jobId = reminderEvalJobId(userId);
-    const existing = await queue.getJob(jobId);
-    if (existing) return { enqueued: false, reason: 'already_queued' as const };
-    await queue.add(
-      REMINDER_EVALUATE_JOB_NAME,
-      { userId, reason },
-      {
-        jobId,
-        removeOnComplete: true,
-        removeOnFail: true,
-        attempts: 1,
-      },
-    );
-    return { enqueued: true };
+  async enqueueEvaluation(
+    userId: string,
+    reason: ReminderReason,
+  ): Promise<ReminderEnqueueResult> {
+    try {
+      const queue = this.bullmq.getQueue();
+      const jobId = reminderEvalJobId(userId);
+      let staleJobRemoved = false;
+      const existing = await queue.getJob(jobId);
+      if (existing) {
+        const jobState = await existing.getState();
+        const ageMs = Date.now() - (existing.timestamp ?? 0);
+        const stuckEvalJob =
+          jobState === 'waiting' &&
+          ageMs > REMINDER_EVAL_JOB_STUCK_MS;
+        if (stuckEvalJob) {
+          this.logger.warn(
+            `Removing stuck reminder-eval job userId=${userId} ageMs=${ageMs} state=${jobState}`,
+          );
+          await existing.remove();
+          staleJobRemoved = true;
+        } else {
+          this.logger.log(
+            `enqueueEvaluation skip userId=${userId} reason=${reason} jobState=${jobState}`,
+          );
+          return { enqueued: false, reason: 'already_queued', jobState };
+        }
+      }
+
+      await queue.add(
+        REMINDER_EVALUATE_JOB_NAME,
+        { userId, reason },
+        {
+          jobId,
+          removeOnComplete: true,
+          removeOnFail: true,
+          attempts: 1,
+        },
+      );
+      const out: ReminderEnqueueResult = staleJobRemoved
+        ? { enqueued: true, staleJobRemoved: true }
+        : { enqueued: true };
+      this.logger.log(
+        `enqueueEvaluation enqueued userId=${userId} reason=${reason} staleJobRemoved=${staleJobRemoved}`,
+      );
+      return out;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        `enqueueEvaluation failed userId=${userId} reason=${reason}: ${message}`,
+        err instanceof Error ? err.stack : undefined,
+      );
+      return { enqueued: false, reason: 'queue_error', message };
+    }
   }
 
   async scheduleNextCheck(userId: string, nextCheckAt: Date) {
-    const queue = this.bullmq.getQueue();
-    const jobId = reminderNextCheckJobId(userId);
-    const existing = await queue.getJob(jobId);
-    if (existing) {
-      try {
-        await existing.remove();
-      } catch {
-        // ignore: best-effort
+    try {
+      const queue = this.bullmq.getQueue();
+      const jobId = reminderNextCheckJobId(userId);
+      const existing = await queue.getJob(jobId);
+      if (existing) {
+        try {
+          await existing.remove();
+        } catch {
+          /* best-effort */
+        }
       }
+      const delay = Math.max(0, nextCheckAt.getTime() - Date.now());
+      await queue.add(
+        REMINDER_EVALUATE_JOB_NAME,
+        { userId, reason: 'scheduled' },
+        {
+          jobId,
+          delay,
+          removeOnComplete: true,
+          removeOnFail: true,
+          attempts: 1,
+        },
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        `scheduleNextCheck failed userId=${userId}: ${message}`,
+        err instanceof Error ? err.stack : undefined,
+      );
+      throw err;
     }
-    const delay = Math.max(0, nextCheckAt.getTime() - Date.now());
-    await queue.add(
-      REMINDER_EVALUATE_JOB_NAME,
-      { userId, reason: 'scheduled' },
-      {
-        jobId,
-        delay,
-        removeOnComplete: true,
-        removeOnFail: true,
-        attempts: 1,
-      },
-    );
   }
 
   async setReminderDisabled(userId: string, disabled: boolean, reason?: string) {
@@ -146,6 +195,9 @@ export class RemindersService {
   }): Promise<ReminderEvaluationResult> {
     const { userId, reason, dryRun } = params;
     const now = new Date();
+    this.logger.log(
+      `evaluateUser start userId=${userId} reason=${reason} dryRun=${Boolean(dryRun)}`,
+    );
 
     const [u] = await db.select().from(user).where(eq(user.id, userId)).limit(1);
     if (!u) {
@@ -350,6 +402,10 @@ export class RemindersService {
 
     const sendRequested = Boolean(aiDecision.send);
     const sendAllowed = sendRequested && !blockedBy;
+
+    this.logger.log(
+      `evaluateUser decision userId=${userId} sendRequested=${sendRequested} sendAllowed=${sendAllowed} blockedBy=${blockedBy ?? 'none'} nextCheckInDays=${nextCheckInDays}`,
+    );
 
     const subject = sendAllowed ? String(aiDecision.subject || '').trim() : '';
     const tip = sendAllowed ? String(aiDecision.tip || '').trim() : '';

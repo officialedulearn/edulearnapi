@@ -10,9 +10,20 @@ export class ReminderBullmqService implements OnModuleDestroy {
   private connection: Redis | null = null;
   private queue: Queue<ReminderEvaluateJobData> | null = null;
 
+  private maskRedisUrl(url: string): string {
+    try {
+      const u = new URL(url);
+      if (u.password) u.password = '****';
+      return u.toString();
+    } catch {
+      return '(invalid REDIS_URL)';
+    }
+  }
+
   getQueue(): Queue<ReminderEvaluateJobData> {
     if (!this.queue) {
       const url = process.env.REDIS_URL || 'redis://localhost:6379';
+      this.logger.log(`Reminder queue connecting ${this.maskRedisUrl(url)}`);
       this.connection = new Redis(url, { maxRetriesPerRequest: null });
       this.connection.on('error', (err) =>
         this.logger.error(`Reminder Redis: ${err.message}`),

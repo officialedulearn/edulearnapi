@@ -1,9 +1,118 @@
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq, lt } from 'drizzle-orm';
 import db from '../../drizzle';
-import { user, userReward } from '../../lib/db/schema';
+import {
+  subscription,
+  user,
+  userReward,
+  userSubscription,
+} from '../../lib/db/schema';
 import { RewardsService } from '../rewards/rewards.service';
 import { WalletService } from '../wallet/wallet.service';
+
+export type SubscriptionTier = 'basic' | 'pro' | 'ultra';
+export type BillingPeriod = 'monthly' | 'yearly';
+
+export function computeSubscriptionExpiry(
+  billingPeriod: BillingPeriod,
+  from: Date = new Date(),
+): Date {
+  const expiry = new Date(from);
+  if (billingPeriod === 'yearly') {
+    expiry.setFullYear(expiry.getFullYear() + 1);
+  } else {
+    expiry.setMonth(expiry.getMonth() + 1);
+  }
+  return expiry;
+}
+
+export interface TierBenefits {
+  tier: SubscriptionTier;
+  name: string;
+  description: string;
+  priceMonthly: number;
+  dailyCredits: number;
+  dailyQuizLimit: number;
+  dailyImageUploadLimit: number;
+  aiModel: string;
+  maxRoadmaps: number;
+  streakShieldIncluded: boolean;
+  prioritySupport: boolean;
+  exclusiveBadges: boolean;
+  benefits: string[];
+}
+
+export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, TierBenefits> = {
+  basic: {
+    tier: 'basic',
+    name: 'Basic',
+    description: 'Get started with core learning features for free.',
+    priceMonthly: 0,
+    dailyCredits: 10,
+    dailyQuizLimit: 5,
+    dailyImageUploadLimit: 2,
+    aiModel: 'gemini-2.5-flash',
+    maxRoadmaps: 3,
+    streakShieldIncluded: false,
+    prioritySupport: false,
+    exclusiveBadges: false,
+    benefits: [
+      '10 daily AI credits',
+      '5 daily quiz generations',
+      '2 daily image uploads',
+      'Up to 3 active roadmaps',
+      'Standard AI model (Gemini Flash)',
+    ],
+  },
+  pro: {
+    tier: 'pro',
+    name: 'Pro',
+    description: 'Unlock advanced AI, unlimited roadmaps and a streak shield.',
+    priceMonthly: 9.99,
+    dailyCredits: 30,
+    dailyQuizLimit: 15,
+    dailyImageUploadLimit: 5,
+    aiModel: 'gemini-2.5-pro',
+    maxRoadmaps: -1,
+    streakShieldIncluded: true,
+    prioritySupport: false,
+    exclusiveBadges: true,
+    benefits: [
+      '30 daily AI credits',
+      '15 daily quiz generations',
+      '5 daily image uploads',
+      'Unlimited roadmaps',
+      'Advanced AI model (Gemini Pro)',
+      'Monthly streak shield included',
+      'Exclusive Pro badge',
+    ],
+  },
+  ultra: {
+    tier: 'ultra',
+    name: 'Ultra',
+    description:
+      'The full EduLearn experience — maximum limits and priority access.',
+    priceMonthly: 19.99,
+    dailyCredits: 100,
+    dailyQuizLimit: 50,
+    dailyImageUploadLimit: 20,
+    aiModel: 'gemini-2.5-pro',
+    maxRoadmaps: -1,
+    streakShieldIncluded: true,
+    prioritySupport: true,
+    exclusiveBadges: true,
+    benefits: [
+      '100 daily AI credits',
+      '50 daily quiz generations',
+      '20 daily image uploads',
+      'Unlimited roadmaps',
+      'Advanced AI model (Gemini Pro)',
+      'Always-on streak shield',
+      'Priority AI inference',
+      'Exclusive Ultra badge & cosmetics',
+    ],
+  },
+};
 
 @Injectable()
 export class SubscriptionService {
@@ -15,6 +124,103 @@ export class SubscriptionService {
     @Inject(forwardRef(() => WalletService))
     private readonly walletService: WalletService,
   ) {}
+
+  getAllTiers(): TierBenefits[] {
+    return [
+      SUBSCRIPTION_TIERS.basic,
+      SUBSCRIPTION_TIERS.pro,
+      SUBSCRIPTION_TIERS.ultra,
+    ];
+  }
+
+  async getUserSubscription(userId: string): Promise<{
+    tier: SubscriptionTier;
+    benefits: TierBenefits;
+    isActive: boolean;
+    billingPeriod: BillingPeriod | null;
+    startedAt: Date | null;
+    expiresAt: Date | null;
+  }> {
+    const rows = await db
+      .select({
+        tier: subscription.tier,
+        billingPeriod: userSubscription.billingPeriod,
+        startedAt: userSubscription.startedAt,
+        expiresAt: userSubscription.expiresAt,
+        isActive: userSubscription.isActive,
+      })
+      .from(userSubscription)
+      .innerJoin(
+        subscription,
+        eq(userSubscription.subscriptionId, subscription.id),
+      )
+      .where(
+        and(
+          eq(userSubscription.userId, userId),
+          eq(userSubscription.isActive, true),
+        ),
+      )
+      .limit(1);
+
+    if (rows.length === 0) {
+      return {
+        tier: 'basic',
+        benefits: SUBSCRIPTION_TIERS.basic,
+        isActive: true,
+        billingPeriod: null,
+        startedAt: null,
+        expiresAt: null,
+      };
+    }
+
+    const row = rows[0];
+    const tier = row.tier as SubscriptionTier;
+    const expired = row.expiresAt ? row.expiresAt.getTime() < Date.now() : false;
+
+    return {
+      tier: expired ? 'basic' : tier,
+      benefits: expired
+        ? SUBSCRIPTION_TIERS.basic
+        : SUBSCRIPTION_TIERS[tier],
+      isActive: row.isActive && !expired,
+      billingPeriod: row.billingPeriod as BillingPeriod,
+      startedAt: row.startedAt,
+      expiresAt: row.expiresAt,
+    };
+  }
+
+  async expireUserSubscriptions(): Promise<{ expiredCount: number }> {
+    const now = new Date();
+    const expiredRows = await db
+      .select({ id: userSubscription.id, userId: userSubscription.userId })
+      .from(userSubscription)
+      .where(
+        and(
+          eq(userSubscription.isActive, true),
+          lt(userSubscription.expiresAt, now),
+        ),
+      );
+
+    if (expiredRows.length === 0) {
+      this.logger.log('No expired user subscriptions to process');
+      return { expiredCount: 0 };
+    }
+
+    await db
+      .update(userSubscription)
+      .set({ isActive: false, updatedAt: now })
+      .where(
+        and(
+          eq(userSubscription.isActive, true),
+          lt(userSubscription.expiresAt, now),
+        ),
+      );
+
+    this.logger.log(
+      `Deactivated ${expiredRows.length} expired user subscription(s)`,
+    );
+    return { expiredCount: expiredRows.length };
+  }
 
   async updateUserPremiumStatus(
     appUserId: string,

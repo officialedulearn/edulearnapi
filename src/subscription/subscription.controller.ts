@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
   Headers,
   Param,
@@ -195,6 +196,21 @@ export class SubscriptionController {
       this.logger.error('Error processing webhook', error.stack);
       throw new BadRequestException('Failed to process webhook');
     }
+  }
+
+  @Get('tiers')
+  getTiers() {
+    return { tiers: this.subscriptionService.getAllTiers() };
+  }
+
+  @Get('me/:userId')
+  @UseGuards(JwtAuthGuard)
+  async getMySubscription(
+    @Request() req: { user: any },
+    @Param('userId') userId: string,
+  ) {
+    await verifyUserAuthorization(req.user, userId, 'view subscription');
+    return this.subscriptionService.getUserSubscription(userId);
   }
 
   @Post('purchase/streak-shield/:userId')

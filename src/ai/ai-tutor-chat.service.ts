@@ -862,13 +862,56 @@ export class AiTutorChatService {
     messages,
     chatId,
     userId,
+    latencyTrace,
   }: {
     messages: Array<Message>;
     chatId: string;
     userId: string;
+    latencyTrace?: {
+      streamId?: string;
+      requestReceivedAtMs?: number;
+      sseConnectedAtMs?: number;
+    };
   }): any {
     return new Observable((subscriber) => {
       (async () => {
+        const streamStartedHr = process.hrtime.bigint();
+        const requestReceivedAtMs = latencyTrace?.requestReceivedAtMs ?? Date.now();
+        const traceStreamId =
+          latencyTrace?.streamId ??
+          `stream-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const sinceStreamStartMs = () =>
+          Number(process.hrtime.bigint() - streamStartedHr) / 1_000_000;
+        const logStreamLatency = (
+          stage: string,
+          extra: Record<string, unknown> = {},
+        ) => {
+          console.log(
+            JSON.stringify({
+              aiStreamLatency: true,
+              streamId: traceStreamId,
+              stage,
+              at: new Date().toISOString(),
+              sinceRequestMs: Date.now() - requestReceivedAtMs,
+              sinceStreamStartMs: Number(sinceStreamStartMs().toFixed(2)),
+              ...extra,
+            }),
+          );
+        };
+        const completeStream = (reason: string, extra: Record<string, unknown> = {}) =>
+          logStreamLatency('stream_completed', { reason, ...extra });
+        let firstGeminiChunkSeen = false;
+        let firstChunkFlushed = false;
+        let emittedTokenCount = 0;
+        let chunkCount = 0;
+
+        logStreamLatency('stream_handler_started', {
+          sseConnectDelayMs:
+            typeof latencyTrace?.sseConnectedAtMs === 'number'
+              ? latencyTrace.sseConnectedAtMs - requestReceivedAtMs
+              : null,
+        });
+
         try {
           const recentUserMessage = getMostRecentUserMessage(messages);
           if (!recentUserMessage) {
@@ -955,6 +998,7 @@ export class AiTutorChatService {
                 },
               });
 
+              completeStream('message_limit');
               subscriber.complete();
               return;
             }
@@ -1025,11 +1069,12 @@ export class AiTutorChatService {
               data: { id: assistantMessage.id, chatId, complete: true },
             });
 
+            completeStream('bypass_model');
             subscriber.complete();
             return;
           }
 
-          const userCredits = await this.checkUserCredits(userId);
+          const userCredits = Number(user?.credits ?? 0);
           if (userCredits < 0.5) {
             const outOfCreditsText =
               "You've run out of credits! To continue using EduLearn AI, please purchase $EDLN tokens to get more credits or upgrade your plan in the app settings. Premium users get more daily credits and additional benefits.";
@@ -1059,6 +1104,7 @@ export class AiTutorChatService {
               },
             });
 
+            completeStream('out_of_credits');
             subscriber.complete();
             return;
           }
@@ -1083,12 +1129,39 @@ export class AiTutorChatService {
             }
           }
 
+          const estimatedPromptChars =
+            systemInstruction.length +
+            formattedMessages.reduce((sum, m) => {
+              const partTextLen = (m.parts || []).reduce((partSum, p: any) => {
+                if (typeof p?.text === 'string') return partSum + p.text.length;
+                return partSum;
+              }, 0);
+              return sum + partTextLen;
+            }, 0);
+
+          logStreamLatency('auth_context_fetch_completed', {
+            modelCandidate: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+            messageCount: messages.length,
+            historyCount: existingMessages.length,
+            memoryChars: userMemory.length,
+            systemPromptChars: systemInstruction.length,
+            estimatedPromptChars,
+            toolsCount: GEMINI_TUTOR_FUNCTION_DECLARATIONS.length,
+          });
+
           const tools = [
             { functionDeclarations: [...GEMINI_TUTOR_FUNCTION_DECLARATIONS] },
           ];
+          const model = user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+
+          logStreamLatency('gemini_request_started', {
+            model,
+            toolsEnabled: true,
+            maxOutputTokens: 5000,
+          });
 
           const stream = await this.geminiClient.genAI.models.generateContentStream({
-            model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+            model,
             contents: formattedMessages,
             config: {
               tools,
@@ -1104,6 +1177,14 @@ export class AiTutorChatService {
           const functionCallsByName = new Map<string, any>();
 
           for await (const chunk of stream) {
+            chunkCount += 1;
+            if (!firstGeminiChunkSeen) {
+              firstGeminiChunkSeen = true;
+              logStreamLatency('first_gemini_chunk_received', {
+                chunkIndex: chunkCount,
+              });
+            }
+
             const candidate = chunk.candidates?.[0];
             const parts = candidate?.content?.parts || [];
 
@@ -1121,6 +1202,14 @@ export class AiTutorChatService {
                   subscriber.next({
                     data: { token: word, type: 'content' },
                   });
+                  emittedTokenCount += 1;
+                  if (!firstChunkFlushed) {
+                    firstChunkFlushed = true;
+                    logStreamLatency('first_chunk_flushed_to_client', {
+                      chunkIndex: chunkCount,
+                      tokenPreview: word.slice(0, 40),
+                    });
+                  }
 
                   await new Promise((resolve) => setTimeout(resolve, 15));
                 }
@@ -1172,6 +1261,15 @@ export class AiTutorChatService {
             subscriber.next({
               data: { token: status, type: 'content' },
             });
+            emittedTokenCount += 1;
+            if (!firstChunkFlushed) {
+              firstChunkFlushed = true;
+              logStreamLatency('first_chunk_flushed_to_client', {
+                chunkIndex: chunkCount,
+                tokenPreview: status.slice(0, 40),
+                source: 'post_stream_status',
+              });
+            }
             fullResponse = status + fullResponse;
           }
 
@@ -1553,6 +1651,15 @@ export class AiTutorChatService {
                 type: 'acknowledgement',
               },
             });
+            emittedTokenCount += 1;
+            if (!firstChunkFlushed) {
+              firstChunkFlushed = true;
+              logStreamLatency('first_chunk_flushed_to_client', {
+                chunkIndex: chunkCount,
+                tokenPreview: acknowledgements.slice(0, 40),
+                source: 'acknowledgement',
+              });
+            }
             fullResponse = acknowledgements + '\n\n' + fullResponse;
           }
 
@@ -1575,8 +1682,16 @@ export class AiTutorChatService {
             },
           });
 
+          completeStream('ok', {
+            chunkCount,
+            emittedTokenCount,
+            functionCallCount: functionCalls.length,
+          });
           subscriber.complete();
         } catch (error) {
+          logStreamLatency('stream_error', {
+            message: error instanceof Error ? error.message : String(error),
+          });
           console.error('Error in stream:', error);
           subscriber.error(error);
         }

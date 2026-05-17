@@ -323,7 +323,10 @@ export class AdminService {
 
   async evaluateReminderNow(userId: string) {
     const result = await this.remindersService.enqueueEvaluation(userId, 'manual');
-    return { ok: true, ...result };
+    const ok =
+      result.enqueued ||
+      (!result.enqueued && result.reason === 'already_queued');
+    return { ok, ...result };
   }
 
   async previewReminder(userId: string) {

@@ -12,6 +12,7 @@ import { ResendService } from 'src/resend/resend.service';
 import { CardsService } from 'src/cards/cards.service';
 import { LeaderboardService } from 'src/leaderboard/leaderboard.service';
 import { MonthlyLeaderboardService } from 'src/monthly-leaderboard/monthly-leaderboard.service';
+import { SubscriptionService } from 'src/subscription/subscription.service';
 
 @Injectable()
 export class CronTasksService {
@@ -35,6 +36,8 @@ export class CronTasksService {
     private cardService: CardsService,
     private leaderboardService: LeaderboardService,
     private monthlyLeaderboardService: MonthlyLeaderboardService,
+    @Inject(forwardRef(() => SubscriptionService))
+    private subscriptionService: SubscriptionService,
   ) {}
 
   @Cron('0 0 1 * *', { timeZone: 'UTC' })
@@ -268,6 +271,20 @@ export class CronTasksService {
       );
     } catch (error) {
       this.logger.error('Failed to process premium expirations', error);
+    }
+  }
+
+  @Cron('0 0 * * *')
+  async handleUserSubscriptionExpiration() {
+    this.logger.log('Checking for expired user subscriptions');
+    try {
+      const { expiredCount } =
+        await this.subscriptionService.expireUserSubscriptions();
+      this.logger.log(
+        `User subscription expiration check completed — deactivated ${expiredCount} row(s)`,
+      );
+    } catch (error) {
+      this.logger.error('Failed to process user subscription expirations', error);
     }
   }
 

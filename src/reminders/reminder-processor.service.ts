@@ -29,6 +29,14 @@ export class ReminderProcessorService implements OnModuleInit, OnModuleDestroy {
       async (job: Job<ReminderEvaluateJobData>) => this.processJob(job),
       { connection: this.workerConnection, concurrency: 2 },
     );
+    this.worker.on('ready', () => {
+      this.logger.log(
+        `Reminder worker ready queue=${REMINDER_QUEUE_NAME} concurrency=2`,
+      );
+    });
+    this.worker.on('error', (err: Error) => {
+      this.logger.error(`Reminder worker error: ${err.message}`, err.stack);
+    });
     this.worker.on('failed', (job, err) => {
       this.logger.error(
         `Reminder job ${job?.id} failed: ${err?.message}`,
@@ -55,7 +63,9 @@ export class ReminderProcessorService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn('Reminder job missing userId');
       return;
     }
-    this.logger.log(`Evaluating reminders for ${userId} (reason=${reason})`);
+    this.logger.log(
+      `Evaluating reminders jobId=${job.id} userId=${userId} reason=${reason}`,
+    );
     await this.remindersService.evaluateUser({ userId, reason });
   }
 }

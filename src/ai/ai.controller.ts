@@ -20,10 +20,12 @@ import {
   ForbiddenException,
   DefaultValuePipe,
   ParseIntPipe,
+  Header,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Observable } from 'rxjs';
 import type { FastifyRequest } from 'fastify';
+import { RouteConfig } from '@nestjs/platform-fastify';
 import { mkdirSync, createWriteStream } from 'fs';
 import { pipeline } from 'stream/promises';
 import { randomBytes } from 'crypto';
@@ -346,6 +348,7 @@ export class AiController {
     @Request() req,
     @Body() messageDto: GenerateMessagesDto,
   ): Promise<{ streamId: string }> {
+    const requestReceivedAtMs = Date.now();
     await verifyUserAuthorization(
       req.user,
       messageDto.userId,
@@ -355,6 +358,16 @@ export class AiController {
     await this.enforceAttachmentLimitForRequest(messageDto);
 
     const streamId = `stream-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    console.log(
+      JSON.stringify({
+        aiStreamLatency: true,
+        stage: 'request_received',
+        streamId,
+        userId: messageDto.userId,
+        chatId: messageDto.chatId ?? null,
+        requestReceivedAt: new Date(requestReceivedAtMs).toISOString(),
+      }),
+    );
 
     if (!global['streamRequests']) {
       global['streamRequests'] = {};
@@ -362,7 +375,7 @@ export class AiController {
 
     global['streamRequests'][streamId] = {
       ...messageDto,
-      createdAt: Date.now(),
+      createdAt: requestReceivedAtMs,
     };
 
     setTimeout(
@@ -378,10 +391,14 @@ export class AiController {
   }
 
   @Sse('message-stream/:streamId')
+  @RouteConfig({ compress: false })
+  @Header('Cache-Control', 'no-cache, no-transform')
+  @Header('X-Accel-Buffering', 'no')
   messageStream(
     @Request() req,
     @Param('streamId') streamId: string,
   ): Observable<MessageEvent> {
+    const sseConnectedAtMs = Date.now();
     const streamRequest = global['streamRequests']?.[streamId];
 
     if (!streamRequest) {
@@ -402,6 +419,11 @@ export class AiController {
       messages: streamRequest.messages,
       chatId: streamRequest.chatId,
       userId: streamRequest.userId,
+      latencyTrace: {
+        streamId,
+        requestReceivedAtMs: Number(streamRequest.createdAt) || Date.now(),
+        sseConnectedAtMs,
+      },
     });
   }
 }
