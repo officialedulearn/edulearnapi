@@ -940,12 +940,25 @@ export class AiTutorChatService {
             return;
           }
 
-          const user = await this.authService.getUserById(userId);
+          const userRewardsPromise =
+            this.rewardsService.getUserRewards(userId);
+          const [user, userMemory, existingMessages, agentContext] =
+            await Promise.all([
+              this.authService.getUserByIdLite(userId),
+              this.userService.getUserMemory(userId),
+              this.chatService.getMessagesInChat(chatId),
+              this.getAgentPromptContext(userId),
+            ]);
+
+          if (!user) {
+            subscriber.error(new NotFoundException(`User with id ${userId} not found`));
+            return;
+          }
+
           this.enforceUserAttachmentLimit(user, recentUserMessage);
 
-          const userMemory = await this.userService.getUserMemory(userId);
+          const userRewards = await userRewardsPromise;
 
-          const userRewards = await this.rewardsService.getUserRewards(userId);
           const userCertificateIds = new Set(
             userRewards.map((reward) => reward.id),
           );
@@ -961,8 +974,6 @@ export class AiTutorChatService {
             }
           }
 
-          const existingMessages =
-            await this.chatService.getMessagesInChat(chatId);
           const conversationContext =
             deriveConversationContext(existingMessages);
 
@@ -1003,8 +1014,6 @@ export class AiTutorChatService {
               return;
             }
           }
-
-          const agentContext = await this.getAgentPromptContext(userId);
 
           const systemInstruction = buildTutorSystemInstruction({
             user,

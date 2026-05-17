@@ -498,6 +498,18 @@ export class AuthService {
     }
   }
 
+  async getUserByIdLite(id: string): Promise<User | null> {
+    try {
+      const result = await db.select().from(user).where(eq(user.id, id));
+      if (!result[0]) return null;
+
+      return result[0] as any;
+    } catch (error) {
+      console.error('Failed to get user by ID (lite)');
+      throw error;
+    }
+  }
+
   async checkUserAvailability(email?: string, username?: string) {
     const messages: string[] = [];
   

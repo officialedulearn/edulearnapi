@@ -355,8 +355,6 @@ export class AiController {
       'streaming AI response',
     );
 
-    await this.enforceAttachmentLimitForRequest(messageDto);
-
     const streamId = `stream-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     console.log(
       JSON.stringify({
