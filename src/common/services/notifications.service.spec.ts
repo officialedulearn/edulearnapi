@@ -45,6 +45,23 @@ describe('validateNotificationMetadata', () => {
     );
   });
 
+  it('accepts agent_message with chatId and agentId', () => {
+    expect(() =>
+      validateNotificationMetadata('agent_message', {
+        chatId: 'chat-1',
+        agentId: 'agent-1',
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects agent_message without chatId', () => {
+    expect(() =>
+      validateNotificationMetadata('agent_message', {
+        agentId: 'agent-1',
+      }),
+    ).toThrow(BadRequestException);
+  });
+
   it('accepts system_announcement with empty metadata', () => {
     expect(() =>
       validateNotificationMetadata('system_announcement', {}),

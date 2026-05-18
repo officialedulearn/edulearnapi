@@ -16,6 +16,7 @@ import {
 import { NotificationsService } from '../common/services/notifications.service';
 import { ResendService } from '../resend/resend.service';
 import { RemindersService } from '../reminders/reminders.service';
+import { AgentWakeupService } from 'src/agent-wakeup/agent-wakeup.service';
 import {
   NFT_LISTING_BROADCAST_DATA,
   type NftListingBroadcastData,
@@ -61,6 +62,7 @@ export class AdminService {
     private readonly resendService: ResendService,
     private readonly expoPushService: ExpoPushService,
     private readonly remindersService: RemindersService,
+    private readonly agentWakeupService: AgentWakeupService,
   ) {}
 
   private async retryQuery<T>(
@@ -344,6 +346,14 @@ export class AdminService {
       reason,
     );
     return { ok: true, state };
+  }
+
+  async previewAgentWakeup(userId: string) {
+    return await this.agentWakeupService.previewUser(userId);
+  }
+
+  async evaluateAgentWakeupNow(userId: string) {
+    return await this.agentWakeupService.evaluateNow(userId);
   }
 
   async broadcastV25Announcement(): Promise<{

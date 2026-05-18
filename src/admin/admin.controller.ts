@@ -188,6 +188,22 @@ export class AdminController {
     return await this.adminService.setReminderDisabled(body.userId.trim(), false);
   }
 
+  @Post('agent-wakeup/preview')
+  async previewAgentWakeup(@Body() body: { userId: string }) {
+    if (!body.userId?.trim()) {
+      throw new BadRequestException('userId is required');
+    }
+    return await this.adminService.previewAgentWakeup(body.userId.trim());
+  }
+
+  @Post('agent-wakeup/evaluate')
+  async evaluateAgentWakeup(@Body() body: { userId: string }) {
+    if (!body.userId?.trim()) {
+      throw new BadRequestException('userId is required');
+    }
+    return await this.adminService.evaluateAgentWakeupNow(body.userId.trim());
+  }
+
   @Post('emails/v25-announcement')
   async sendV25Announcement() {
     return await this.adminService.broadcastV25Announcement();

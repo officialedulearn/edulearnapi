@@ -28,6 +28,61 @@ export const billingPeriodEnum = pgEnum('billing_period', [
   'yearly',
 ]);
 
+export type UserSettingsPreferences = {
+  pushNotifications: boolean;
+  inAppNotifications: boolean;
+  emailNotifications: boolean;
+  agentWake: boolean;
+  memoryEnabled: boolean;
+};
+
+export const DEFAULT_USER_SETTINGS_PREFERENCES: UserSettingsPreferences = {
+  pushNotifications: true,
+  inAppNotifications: true,
+  emailNotifications: true,
+  agentWake: true,
+  memoryEnabled: true,
+};
+
+const isSettingsRecord = (
+  value: unknown,
+): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const readBoolean = (value: unknown, fallback: boolean): boolean =>
+  typeof value === 'boolean' ? value : fallback;
+
+export function normalizeUserSettingsPreferences(
+  value: unknown,
+): UserSettingsPreferences {
+  if (!isSettingsRecord(value)) {
+    return { ...DEFAULT_USER_SETTINGS_PREFERENCES };
+  }
+
+  return {
+    pushNotifications: readBoolean(
+      value.pushNotifications,
+      DEFAULT_USER_SETTINGS_PREFERENCES.pushNotifications,
+    ),
+    inAppNotifications: readBoolean(
+      value.inAppNotifications,
+      DEFAULT_USER_SETTINGS_PREFERENCES.inAppNotifications,
+    ),
+    emailNotifications: readBoolean(
+      value.emailNotifications,
+      DEFAULT_USER_SETTINGS_PREFERENCES.emailNotifications,
+    ),
+    agentWake: readBoolean(
+      value.agentWake,
+      DEFAULT_USER_SETTINGS_PREFERENCES.agentWake,
+    ),
+    memoryEnabled: readBoolean(
+      value.memoryEnabled,
+      DEFAULT_USER_SETTINGS_PREFERENCES.memoryEnabled,
+    ),
+  };
+}
+
 export const user = pgTable('user', {
   id: uuid('id').primaryKey().notNull(),
   address: text('address').unique(),
@@ -61,6 +116,11 @@ export const user = pgTable('user', {
     '0.00',
   ),
   memory: varchar('memory', { length: 500 }).default(''),
+  settingsPreferences: json('settingsPreferences')
+    .$type<UserSettingsPreferences>()
+    .default(
+      sql`'{"pushNotifications":true,"inAppNotifications":true,"emailNotifications":true,"agentWake":true,"memoryEnabled":true}'::json`,
+    ),
   expoPushToken: text('expoPushToken'),
   profilePictureURL: text('profilePictureURL'),
   oauthProvider: text('oauth_provider'),
@@ -359,6 +419,7 @@ export const notifications = pgTable('notifications', {
       'leaderboard_update',
       'streak_warning',
       'nft_claimed',
+      'agent_message',
       'system_announcement',
     ],
   }).notNull().default('system_announcement'),
@@ -498,6 +559,42 @@ export const publicQuizParticipation = pgTable(
 
 export type PublicQuizParticipation = InferSelectModel<
   typeof publicQuizParticipation
+>;
+
+export const publicQuizAttemptAnswer = pgTable(
+  'public_quiz_attempt_answer',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    userId: uuid('userId')
+      .notNull()
+      .references(() => user.id),
+    quizId: uuid('quizId')
+      .notNull()
+      .references(() => publicQuiz.id),
+    participationId: uuid('participationId')
+      .notNull()
+      .references(() => publicQuizParticipation.id),
+    questionIndex: integer('questionIndex').notNull(),
+    question: text('question').notNull(),
+    selectedAnswer: text('selectedAnswer').notNull(),
+    correctAnswer: text('correctAnswer').notNull(),
+    explanation: text('explanation').notNull(),
+    isCorrect: boolean('isCorrect').notNull(),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => ({
+    participationIdIdx: index(
+      'public_quiz_attempt_answer_participation_id_idx',
+    ).on(table.participationId),
+    userSubmittedIdx: index('public_quiz_attempt_answer_user_created_at_idx').on(
+      table.userId,
+      table.createdAt,
+    ),
+  }),
+);
+
+export type PublicQuizAttemptAnswer = InferSelectModel<
+  typeof publicQuizAttemptAnswer
 >;
 
 export const quizGenerationSchedule = pgTable('quiz_generation_schedule', {
@@ -642,6 +739,36 @@ export const reminderEmailLog = pgTable(
 );
 
 export type ReminderEmailLog = InferSelectModel<typeof reminderEmailLog>;
+
+export const agentWakeupLog = pgTable(
+  'agent_wakeup_log',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    userId: uuid('userId')
+      .notNull()
+      .references(() => user.id),
+    agentId: uuid('agentId').references(() => agent.id),
+    chatId: uuid('chatId').references(() => chat.id),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+    decision: varchar('decision', { enum: ['sent', 'skipped'] }).notNull(),
+    reason: text('reason'),
+    why: text('why'),
+    modelMeta: json('modelMeta'),
+    featuresUsed: json('featuresUsed'),
+  },
+  (table) => ({
+    userCreatedAtIdx: index('agent_wakeup_log_user_created_at_idx').on(
+      table.userId,
+      table.createdAt,
+    ),
+    decisionCreatedAtIdx: index('agent_wakeup_log_decision_created_at_idx').on(
+      table.decision,
+      table.createdAt,
+    ),
+  }),
+);
+
+export type AgentWakeupLog = InferSelectModel<typeof agentWakeupLog>;
 
 export const subscription = pgTable(
   'subscription',

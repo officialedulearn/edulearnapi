@@ -7,10 +7,31 @@ import {
 } from './reminders.constants';
 import type { ReminderAiDecision } from './reminders.types';
 
+const REMINDER_DECISION_MAX_ATTEMPTS = 2;
+
 @Injectable()
 export class ReminderDecisionService {
   private readonly logger = new Logger(ReminderDecisionService.name);
   constructor(private readonly geminiClient: GeminiClientService) {}
+
+  private parseDecisionJson(raw: string): ReminderAiDecision {
+    const parsed = JSON.parse(raw) as ReminderAiDecision;
+    const next = Number(parsed.nextCheckInDays);
+    parsed.nextCheckInDays = Number.isFinite(next)
+      ? Math.max(
+          REMINDER_MIN_NEXT_CHECK_DAYS,
+          Math.min(REMINDER_MAX_NEXT_CHECK_DAYS, Math.floor(next)),
+        )
+      : 7;
+
+    if (!parsed.send) {
+      delete parsed.subject;
+      delete parsed.tip;
+      delete parsed.personalizedRecap;
+    }
+
+    return parsed;
+  }
 
   async decide(params: {
     goalText: string;
@@ -51,54 +72,76 @@ Rules:
 Return ONLY valid JSON (no markdown).
 `;
 
-    const result = await this.geminiClient.genAI.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents:
-        'Decide whether to send a personalized reminder email now, and what to include.',
-      config: {
-        maxOutputTokens: 700,
-        temperature: 0.4,
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            send: { type: Type.BOOLEAN },
-            subject: { type: Type.STRING },
-            tip: { type: Type.STRING },
-            personalizedRecap: { type: Type.STRING },
-            nextCheckInDays: { type: Type.INTEGER },
-            why: { type: Type.STRING },
+    let lastError: Error | null = null;
+    let lastUsage: unknown;
+
+    for (let attempt = 1; attempt <= REMINDER_DECISION_MAX_ATTEMPTS; attempt++) {
+      let rawForLog = '';
+      try {
+        const result = await this.geminiClient.genAI.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents:
+            'Decide whether to send a personalized reminder email now, and what to include.',
+          config: {
+            maxOutputTokens: 2048,
+            temperature: 0.4,
+            thinkingConfig: { thinkingBudget: 0 },
+            systemInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                send: { type: Type.BOOLEAN },
+                subject: { type: Type.STRING },
+                tip: { type: Type.STRING },
+                personalizedRecap: { type: Type.STRING },
+                nextCheckInDays: { type: Type.INTEGER },
+                why: { type: Type.STRING },
+              },
+              required: ['send', 'nextCheckInDays'],
+            },
           },
-          required: ['send', 'nextCheckInDays'],
-        },
-      },
-    });
+        });
 
-    const raw = result.text?.trim();
-    if (!raw) throw new Error('ReminderDecisionService: empty AI response');
-    this.logger.log(`ReminderDecisionService: raw=${raw}`);
-    const parsed = JSON.parse(raw) as ReminderAiDecision;
-    const next = Number(parsed.nextCheckInDays);
-    parsed.nextCheckInDays = Number.isFinite(next)
-      ? Math.max(
-          REMINDER_MIN_NEXT_CHECK_DAYS,
-          Math.min(REMINDER_MAX_NEXT_CHECK_DAYS, Math.floor(next)),
-        )
-      : 7;
+        lastUsage = (result as { usageMetadata?: unknown }).usageMetadata;
+        const raw = result.text?.trim();
+        rawForLog = raw ?? '';
+        if (!raw) {
+          throw new Error('ReminderDecisionService: empty AI response');
+        }
 
-    if (!parsed.send) {
-      delete parsed.subject;
-      delete parsed.tip;
-      delete parsed.personalizedRecap;
+        const finishReason = (result as { candidates?: { finishReason?: string }[] })
+          .candidates?.[0]?.finishReason;
+        if (finishReason === 'MAX_TOKENS') {
+          throw new Error(
+            `ReminderDecisionService: response truncated (finishReason=MAX_TOKENS)`,
+          );
+        }
+
+        const parsed = this.parseDecisionJson(raw);
+        const modelMeta = {
+          model: 'gemini-2.5-flash',
+          usage: lastUsage,
+          attempt,
+        };
+        this.logger.log(`ReminderDecisionService: ${JSON.stringify(parsed)}`);
+        return { decision: parsed, modelMeta };
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        if (rawForLog) {
+          this.logger.warn(
+            `ReminderDecisionService raw (attempt ${attempt}): ${rawForLog.slice(0, 500)}`,
+          );
+        }
+        this.logger.warn(
+          `ReminderDecisionService attempt ${attempt}/${REMINDER_DECISION_MAX_ATTEMPTS} failed: ${lastError.message}`,
+        );
+        if (attempt < REMINDER_DECISION_MAX_ATTEMPTS) {
+          await new Promise((r) => setTimeout(r, 800));
+        }
+      }
     }
 
-    const modelMeta = {
-      model: 'gemini-2.5-flash',
-      usage: (result as any).usageMetadata ?? undefined,
-    };
-    this.logger.log(`ReminderDecisionService: ${JSON.stringify(parsed)}`);
-
-    return { decision: parsed, modelMeta };
+    throw lastError ?? new Error('ReminderDecisionService: decision failed');
   }
 }

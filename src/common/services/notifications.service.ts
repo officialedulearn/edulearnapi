@@ -5,7 +5,11 @@ import {
   Logger,
 } from '@nestjs/common';
 import db from '../../../drizzle';
-import { user, notifications } from '../../../lib/db/schema';
+import {
+  normalizeUserSettingsPreferences,
+  user,
+  notifications,
+} from '../../../lib/db/schema';
 import { ExpoPushService } from 'src/common/services/expo-push.service';
 import { eq, and, desc, asc } from 'drizzle-orm';
 import type { PushNotificationData } from 'src/common/services/expo-push.service';
@@ -77,6 +81,18 @@ export const validateNotificationMetadata = (
         );
       }
       break;
+    case 'agent_message':
+      if (!hasString(meta.chatId)) {
+        throw new BadRequestException(
+          'agent_message notification metadata requires chatId',
+        );
+      }
+      if (!hasString(meta.agentId)) {
+        throw new BadRequestException(
+          'agent_message notification metadata requires agentId',
+        );
+      }
+      break;
     case 'leaderboard_update':
     case 'streak_warning':
     case 'system_announcement':
@@ -97,10 +113,30 @@ export class NotificationsService {
     try {
       validateNotificationMetadata(notification.type, notification.metadata);
       const userResponse = await db
-        .select()
+        .select({
+          expoPushToken: user.expoPushToken,
+          settingsPreferences: user.settingsPreferences,
+        })
         .from(user)
-        .where(eq(user.id, notification.userId));
-      if (sendPush && userResponse[0].expoPushToken) {
+        .where(eq(user.id, notification.userId))
+        .limit(1);
+
+      if (!userResponse.length) {
+        this.logger.warn(
+          `Skipping notification for missing user ${notification.userId}`,
+        );
+        return;
+      }
+
+      const userSettings = normalizeUserSettingsPreferences(
+        userResponse[0].settingsPreferences,
+      );
+
+      if (
+        sendPush &&
+        userSettings.pushNotifications &&
+        userResponse[0].expoPushToken
+      ) {
         await this.expoPushService.sendPushNotification(
           userResponse[0].expoPushToken,
           notification.title,
@@ -108,13 +144,16 @@ export class NotificationsService {
           notification.data,
         );
       }
-      await db.insert(notifications).values({
-        title: notification.title,
-        content: notification.content,
-        type: notification.type,
-        metadata: notification.metadata ?? {},
-        userId: notification.userId,
-      });
+
+      if (userSettings.inAppNotifications) {
+        await db.insert(notifications).values({
+          title: notification.title,
+          content: notification.content,
+          type: notification.type,
+          metadata: notification.metadata ?? {},
+          userId: notification.userId,
+        });
+      }
     } catch (error) {
       this.logger.error(
         'Failed to create notification',

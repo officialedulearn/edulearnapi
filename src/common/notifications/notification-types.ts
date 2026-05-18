@@ -6,6 +6,7 @@ export const NOTIFICATION_TYPES = [
   'leaderboard_update',
   'streak_warning',
   'nft_claimed',
+  'agent_message',
   'system_announcement',
 ] as const;
 
@@ -19,6 +20,7 @@ export type NotificationMetadataMap = {
   leaderboard_update: { period?: 'daily' | 'weekly' | 'monthly' };
   streak_warning: { streakDays?: number };
   nft_claimed: { nftId: string };
+  agent_message: { chatId: string; agentId: string };
   system_announcement: Record<string, never>;
 };
 

@@ -372,6 +372,20 @@
       "when": 1778877438099,
       "tag": "0052_unique_vertigo",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1778956800000,
+      "tag": "0053_user_settings_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1779043200000,
+      "tag": "0054_agent_wakeup_pipeline",
+      "breakpoints": true
     }
   ]
 }

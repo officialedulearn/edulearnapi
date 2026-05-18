@@ -6,9 +6,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import db from '../../drizzle';
-import { and, eq, sql, desc, asc, max, min, count } from 'drizzle-orm';
+import { and, eq, isNull, sql, desc, asc, max, min, count } from 'drizzle-orm';
 import {
   publicQuiz,
+  publicQuizAttemptAnswer,
   PublicQuizParticipation,
   publicQuizParticipation,
   user,
@@ -331,14 +332,15 @@ export class QuizzesService {
     dto: SubmitPublicQuizDto,
   ) {
     const quiz = await this.getQuizByIdOrThrow(quizId);
+    let participationId = dto.participationId ?? null;
 
-    if (dto.participationId) {
+    if (participationId) {
       const [participation] = await db
         .select()
         .from(publicQuizParticipation)
         .where(
           and(
-            eq(publicQuizParticipation.id, dto.participationId),
+            eq(publicQuizParticipation.id, participationId),
             eq(publicQuizParticipation.userId, userId),
             eq(publicQuizParticipation.quizId, quizId),
           ),
@@ -352,6 +354,26 @@ export class QuizzesService {
       if (participation.submittedAt) {
         throw new BadRequestException('This attempt was already submitted');
       }
+    } else {
+      const [latestOpenParticipation] = await db
+        .select({ id: publicQuizParticipation.id })
+        .from(publicQuizParticipation)
+        .where(
+          and(
+            eq(publicQuizParticipation.userId, userId),
+            eq(publicQuizParticipation.quizId, quizId),
+            isNull(publicQuizParticipation.submittedAt),
+          ),
+        )
+        .orderBy(desc(publicQuizParticipation.joinedAt))
+        .limit(1);
+
+      if (!latestOpenParticipation) {
+        throw new BadRequestException(
+          'No active participation found for this quiz attempt',
+        );
+      }
+      participationId = latestOpenParticipation.id;
     }
     const questions = quiz.questions as QuizQuestion[];
     const results: {
@@ -395,16 +417,31 @@ export class QuizzesService {
     };
     const activityResult = await this.activityService.submitQuiz(submitDto);
 
-    if (dto.participationId) {
-      await db
-        .update(publicQuizParticipation)
-        .set({
-          submittedAt: new Date(),
-          score: correctCount,
-          totalQuestions: questions.length,
-        })
-        .where(eq(publicQuizParticipation.id, dto.participationId));
-    }
+    await db
+      .update(publicQuizParticipation)
+      .set({
+        submittedAt: new Date(),
+        score: correctCount,
+        totalQuestions: questions.length,
+      })
+      .where(eq(publicQuizParticipation.id, participationId));
+
+    await db.insert(publicQuizAttemptAnswer).values(
+      results.map((result) => {
+        const sourceQuestion = questions[result.questionIndex];
+        return {
+          userId,
+          quizId,
+          participationId: participationId!,
+          questionIndex: result.questionIndex,
+          question: sourceQuestion.question,
+          selectedAnswer: result.selectedAnswer,
+          correctAnswer: result.correctAnswer,
+          explanation: sourceQuestion.explanation,
+          isCorrect: result.isCorrect,
+        };
+      }),
+    );
 
     await db
       .update(user)

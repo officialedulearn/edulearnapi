@@ -34,6 +34,7 @@ import { UserModule } from './user/user.module';
 import { RemindersModule } from './reminders/reminders.module';
 import { ReferralModule } from './referral/referral.module';
 import { DeepLinksModule } from './deep-links/deep-links.module';
+import { AgentWakeupModule } from './agent-wakeup/agent-wakeup.module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { DeepLinksModule } from './deep-links/deep-links.module';
     RemindersModule,
     ReferralModule,
     DeepLinksModule,
+    AgentWakeupModule,
   ],
   controllers: [AppController],
   providers: [

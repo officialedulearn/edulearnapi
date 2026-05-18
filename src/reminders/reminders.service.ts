@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import db from '../../drizzle';
 import {
   agent,
+  normalizeUserSettingsPreferences,
   publicQuizParticipation,
   roadmap,
   reminderEmailLog,
@@ -204,6 +205,7 @@ export class RemindersService {
       throw new Error(`RemindersService: user ${userId} not found`);
     }
 
+    const userSettings = normalizeUserSettingsPreferences(u.settingsPreferences);
     const emailOk = isValidEmail(u.email);
     const state = await this.getReminderState(userId);
 
@@ -218,6 +220,40 @@ export class RemindersService {
 
     const nextCheckAtDefault = new Date(now);
     nextCheckAtDefault.setUTCDate(nextCheckAtDefault.getUTCDate() + 7);
+
+    if (!userSettings.agentWake || !userSettings.emailNotifications) {
+      const disableReason = !userSettings.agentWake
+        ? 'agent wake is disabled'
+        : 'email notifications are disabled';
+
+      if (!dryRun) {
+        await this.upsertState(userId, {
+          lastEvaluationAt: now,
+          nextCheckAt: nextCheckAtDefault,
+        });
+        await this.scheduleNextCheck(userId, nextCheckAtDefault);
+        await this.logDecision({
+          userId,
+          reason,
+          decision: 'skipped',
+          nextCheckAt: nextCheckAtDefault,
+          why: disableReason,
+          featuresUsed: {
+            agentWakeEnabled: userSettings.agentWake,
+            emailNotificationsEnabled: userSettings.emailNotifications,
+          },
+        });
+      }
+
+      return {
+        userId,
+        reason,
+        send: false,
+        blockedBy: 'disabled',
+        nextCheckAt: nextCheckAtDefault,
+        why: disableReason,
+      };
+    }
 
     if (!emailOk) {
       if (!dryRun) {
