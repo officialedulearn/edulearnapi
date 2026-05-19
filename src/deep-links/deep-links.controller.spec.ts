@@ -67,6 +67,7 @@ describe('DeepLinksController', () => {
 
     expect(res.headers['content-type']).toContain('text/html');
     expect(res.text).toContain('Join EduLearn with a referral');
+    expect(res.text).toContain('class="brand-preview"');
     expect(res.text).toContain('edulearnv2://ref/ABC123');
     expect(res.text).toContain('id="open-app"');
     expect(res.text).toContain('id="install-app"');

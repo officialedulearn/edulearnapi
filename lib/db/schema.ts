@@ -397,6 +397,10 @@ export const community_members = pgTable(
       .default('member'),
   },
   (table) => ({
+    userCommunityIdx: index('community_members_user_id_community_id_idx').on(
+      table.userId,
+      table.communityId,
+    ),
     communityUserIdx: index('community_members_community_id_user_id_idx').on(
       table.communityId,
       table.userId,

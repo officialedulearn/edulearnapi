@@ -298,4 +298,18 @@ export class RedisService {
   ): Promise<void> {
     await this.redis.setEx(key, ttlSeconds, payload);
   }
+
+  // ==================== HUB TRENDS CACHE ====================
+
+  async getHubTrendsPayload(key: string): Promise<string | null> {
+    return this.redis.get(key);
+  }
+
+  async setHubTrendsPayload(
+    key: string,
+    ttlSeconds: number,
+    payload: string,
+  ): Promise<void> {
+    await this.redis.setEx(key, ttlSeconds, payload);
+  }
 }

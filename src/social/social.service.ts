@@ -30,54 +30,61 @@ export class SocialService {
     }
 
     const followerExists = await db
-      .select()
+      .select({
+        id: user.id,
+        username: user.username,
+      })
       .from(user)
       .where(eq(user.id, followerId))
       .limit(1);
 
     if (!followerExists.length) {
-      throw new NotFoundException(`Follower user not found`);
+      throw new NotFoundException('Follower user not found');
     }
 
     const followingExists = await db
-      .select()
+      .select({
+        id: user.id,
+      })
       .from(user)
       .where(eq(user.id, followingId))
       .limit(1);
 
     if (!followingExists.length) {
-      throw new NotFoundException(`User to follow not found`);
+      throw new NotFoundException('User to follow not found');
     }
 
-    const existingFollow = await db
-      .select()
-      .from(userFollows)
-      .where(
-        and(
-          eq(userFollows.followerId, followerId),
-          eq(userFollows.followingId, followingId),
-        ),
-      )
-      .limit(1);
+    const inserted = await db
+      .insert(userFollows)
+      .values({
+        followerId,
+        followingId,
+        emailNotifications: preferences?.emailNotifications ?? true,
+        pushNotifications: preferences?.pushNotifications ?? true,
+        inAppNotifications: preferences?.inAppNotifications ?? true,
+      })
+      .onConflictDoNothing({
+        target: [userFollows.followerId, userFollows.followingId],
+      })
+      .returning({ followerId: userFollows.followerId });
 
-    if (existingFollow.length > 0) {
+    if (!inserted.length) {
       throw new BadRequestException('You are already following this user');
     }
 
-    await db.insert(userFollows).values({
-      followerId,
-      followingId,
-      emailNotifications: preferences?.emailNotifications ?? true,
-      pushNotifications: preferences?.pushNotifications ?? true,
-      inAppNotifications: preferences?.inAppNotifications ?? true,
-    });
-
-    await this.notificationsService.createNotification({
-      title: '👥 New Follower!',
-      content: `${followerExists[0].username} started following you!`,
-      userId: followingId,
-      type: 'system_announcement',
-    });
+    void this.notificationsService
+      .createNotification({
+        title: 'New Follower!',
+        content: `${followerExists[0].username} started following you!`,
+        userId: followingId,
+        type: 'system_announcement',
+      })
+      .catch((error) => {
+        console.error(
+          `Failed to send follow notification ${followerId} -> ${followingId}:`,
+          error,
+        );
+      });
   }
 
   async unfollowUser(followerId: string, followingId: string): Promise<void> {
@@ -352,3 +359,4 @@ export class SocialService {
     await Promise.allSettled(notificationPromises);
   }
 }
+

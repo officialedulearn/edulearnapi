@@ -19,13 +19,39 @@ import {
 import { NotificationsService } from 'src/common/services/notifications.service';
 import { AuthService } from 'src/auth/auth.service';
 
+type UserCommunitiesCacheEntry = {
+  data: Array<{
+    id: string;
+    title: string;
+    imageUrl: string | null;
+    visibility: 'public' | 'private';
+    createdAt: Date;
+    role: 'mod' | 'member';
+  }>;
+  expiresAt: number;
+};
+
 @Injectable()
 export class CommunityService {
+  private readonly USER_COMMUNITIES_CACHE_TTL_MS = 30_000;
+  private readonly userCommunitiesCache = new Map<
+    string,
+    UserCommunitiesCacheEntry
+  >();
+
   constructor(
     private readonly notificationsService: NotificationsService,
     @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
   ) {}
+
+  private invalidateUserCommunitiesCache(userId?: string): void {
+    if (userId) {
+      this.userCommunitiesCache.delete(userId);
+      return;
+    }
+    this.userCommunitiesCache.clear();
+  }
 
   private async buildReactionEnrichment(messageIds: string[], viewerUserId?: string | null): Promise<
     Record<
@@ -170,11 +196,13 @@ export class CommunityService {
       .set(data)
       .where(eq(community.id, communityId))
       .returning();
+    this.invalidateUserCommunitiesCache();
     return updated;
   }
 
   async deleteCommunity(communityId: string): Promise<void> {
     await db.delete(community).where(eq(community.id, communityId));
+    this.invalidateUserCommunitiesCache();
   }
 
   async addMemberToCommunity(data: {
@@ -186,6 +214,7 @@ export class CommunityService {
       .insert(community_members)
       .values(data)
       .returning();
+    this.invalidateUserCommunitiesCache(data.userId);
     return member;
   }
 
@@ -217,7 +246,13 @@ export class CommunityService {
   }
 
   async getUserCommunities(userId: string) {
-    return await db
+    const cached = this.userCommunitiesCache.get(userId);
+    const now = Date.now();
+    if (cached && cached.expiresAt > now) {
+      return cached.data;
+    }
+
+    const rows = await db
       .select({
         id: community.id,
         title: community.title,
@@ -230,6 +265,13 @@ export class CommunityService {
       .innerJoin(community, eq(community_members.communityId, community.id))
       .where(eq(community_members.userId, userId))
       .orderBy(desc(community.createdAt));
+
+    this.userCommunitiesCache.set(userId, {
+      data: rows,
+      expiresAt: now + this.USER_COMMUNITIES_CACHE_TTL_MS,
+    });
+
+    return rows;
   }
 
   async isUserMember(userId: string, communityId: string): Promise<boolean> {
@@ -278,6 +320,7 @@ export class CommunityService {
         ),
       )
       .returning();
+    this.invalidateUserCommunitiesCache(userId);
     return updated;
   }
 
@@ -293,6 +336,7 @@ export class CommunityService {
           eq(community_members.communityId, communityId),
         ),
       );
+    this.invalidateUserCommunitiesCache(userId);
   }
 
   async getCommunityMemberCount(communityId: string): Promise<number> {

@@ -5,6 +5,11 @@ describe('DeepLinksService', () => {
 
   beforeEach(() => {
     service = new DeepLinksService();
+    (service as unknown as { cacheManager: { get: jest.Mock; set: jest.Mock } }).cacheManager =
+      {
+        get: jest.fn().mockResolvedValue(null),
+        set: jest.fn().mockResolvedValue(undefined),
+      };
   });
 
   it('builds apple app site association payload', () => {
@@ -26,9 +31,11 @@ describe('DeepLinksService', () => {
     });
   });
 
-  it('renders referral landing page html with og metadata', () => {
-    const html = service.buildReferralLandingPage('abc123');
+  it('renders referral landing page html with og metadata', async () => {
+    const html = await service.buildReferralLandingPage('abc123');
     expect(html).toContain('<meta property="og:title"');
+    expect(html).toContain('class="brand-preview"');
+    expect(html).toContain('edulearn-preview.png');
     expect(html).toContain('edulearnv2://ref/ABC123');
     expect(html).toContain('window.location.href = deepLinkUrl');
   });

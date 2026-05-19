@@ -31,24 +31,31 @@ export class DeepLinksService {
     process.env.DEEP_LINK_DESKTOP_FALLBACK_URL || 'https://edulearn.fun';
 
   private readonly brandName = process.env.DEEP_LINK_BRAND_NAME || 'EduLearn';
-  private readonly brandSiteUrl = this.normalizeUrl(
+  private readonly brandMediaBase =
+    process.env.DEEP_LINK_BRAND_MEDIA_BASE_URL ||
+    'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media';
+  private readonly brandSiteUrl = this.ensureAbsoluteUrl(
     process.env.DEEP_LINK_BRAND_SITE_URL || 'https://edulearn.fun',
   );
-  private readonly brandSupportUrl = this.normalizeUrl(
+  private readonly brandSupportUrl = this.ensureAbsoluteUrl(
     process.env.DEEP_LINK_BRAND_SUPPORT_URL || 'https://support.edulearn.fun',
   );
-  private readonly brandLogoUrl =
-    process.env.DEEP_LINK_BRAND_LOGO_URL ||
-    `${this.brandSiteUrl}/assets/images/logo.png`;
-  private readonly brandMarkUrl =
-    process.env.DEEP_LINK_BRAND_MARK_URL ||
-    `${this.brandSiteUrl}/assets/images/edulearn.png`;
-  private readonly brandFontUrl =
-    process.env.DEEP_LINK_BRAND_FONT_URL ||
-    `${this.brandSiteUrl}/assets/fonts/Satoshi-Regular.otf`;
-  private readonly brandPreviewImageUrl =
-    process.env.DEEP_LINK_BRAND_PREVIEW_IMAGE_URL ||
-    'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/edulearn-preview.png';
+  private readonly brandLogoUrl = this.resolveBrandAssetUrl(
+    process.env.DEEP_LINK_BRAND_LOGO_URL,
+    `${this.brandMediaBase}/logo.png`,
+  );
+  private readonly brandMarkUrl = this.resolveBrandAssetUrl(
+    process.env.DEEP_LINK_BRAND_MARK_URL,
+    `${this.brandMediaBase}/edulearn.png`,
+  );
+  private readonly brandFontUrl = this.resolveBrandAssetUrl(
+    process.env.DEEP_LINK_BRAND_FONT_URL,
+    `${this.brandSiteUrl}/assets/fonts/Satoshi-Regular.otf`,
+  );
+  private readonly brandPreviewImageUrl = this.resolveBrandAssetUrl(
+    process.env.DEEP_LINK_BRAND_PREVIEW_IMAGE_URL,
+    `${this.brandMediaBase}/edulearn-preview.png`,
+  );
 
   private readonly iosAppId =
     process.env.DEEP_LINK_IOS_APP_ID || 'TEAMID.com.edulearnv2.app';
@@ -196,10 +203,17 @@ export class DeepLinksService {
         text-align: center;
         box-shadow: 0 24px 50px rgba(0, 0, 0, 0.45);
       }
-      .brand-logo {
-        width: min(200px, 70%);
+      .brand-preview {
+        width: min(100%, 320px);
         height: auto;
-        margin: 0 auto 20px;
+        margin: 0 auto 18px;
+        display: block;
+        border-radius: 14px;
+      }
+      .brand-logo {
+        width: min(160px, 55%);
+        height: auto;
+        margin: 0 auto 12px;
         display: block;
       }
       .brand-mark {
@@ -252,6 +266,7 @@ export class DeepLinksService {
   </head>
   <body>
     <main>
+      <img class="brand-preview" src="${escapedPreviewImageUrl}" alt="${escapedBrandName} preview" loading="eager" />
       <img class="brand-logo" src="${escapedBrandLogoUrl}" alt="${escapedBrandName} logo" loading="eager" />
       <img class="brand-mark" src="${escapedBrandMarkUrl}" alt="" aria-hidden="true" />
       <h1>Link not found</h1>
@@ -347,10 +362,17 @@ export class DeepLinksService {
         text-align: center;
         box-shadow: 0 24px 50px rgba(0, 0, 0, 0.45);
       }
-      .brand-logo {
-        width: min(200px, 70%);
+      .brand-preview {
+        width: min(100%, 320px);
         height: auto;
         margin: 0 auto 16px;
+        display: block;
+        border-radius: 14px;
+      }
+      .brand-logo {
+        width: min(160px, 55%);
+        height: auto;
+        margin: 0 auto 12px;
         display: block;
       }
       .brand-mark {
@@ -418,6 +440,7 @@ export class DeepLinksService {
   </head>
   <body>
     <main>
+      <img class="brand-preview" src="${escapedPreviewImageUrl}" alt="${escapedBrandName} preview" loading="eager" />
       <img class="brand-logo" src="${escapedBrandLogoUrl}" alt="${escapedBrandName} logo" loading="eager" />
       <img class="brand-mark" src="${escapedBrandMarkUrl}" alt="" aria-hidden="true" />
       <h1>${escapedTitle}</h1>
@@ -482,8 +505,17 @@ export class DeepLinksService {
       .filter(Boolean);
   }
 
-  private normalizeUrl(value: string) {
-    return value.trim().replace(/\/+$/, '');
+  private resolveBrandAssetUrl(envValue: string | undefined, fallback: string) {
+    const value = envValue?.trim();
+    return this.ensureAbsoluteUrl(value && value.length > 0 ? value : fallback);
+  }
+
+  private ensureAbsoluteUrl(value: string) {
+    const normalized = value.trim().replace(/\/+$/, '');
+    if (/^https?:\/\//i.test(normalized)) {
+      return normalized;
+    }
+    return `https://${normalized.replace(/^\/+/, '')}`;
   }
 
   private escapeHtml(input: string) {

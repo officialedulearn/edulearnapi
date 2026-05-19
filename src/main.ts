@@ -26,7 +26,23 @@ async function bootstrap() {
   await fastifyInstance.register(multipart as never, {
     limits: { fileSize: 10 * 1024 * 1024 },
   });
-  await fastifyInstance.register(fastifyHelmet as never);
+  await fastifyInstance.register(fastifyHelmet as never, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        baseUri: ["'self'"],
+        fontSrc: ["'self'", 'https:', 'data:'],
+        formAction: ["'self'"],
+        frameAncestors: ["'self'"],
+        imgSrc: ["'self'", 'data:', 'https:'],
+        objectSrc: ["'none'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrcAttr: ["'none'"],
+        styleSrc: ["'self'", 'https:', "'unsafe-inline'"],
+        upgradeInsecureRequests: [],
+      },
+    },
+  });
   await fastifyInstance.register(fastifyCompress as never);
 
   app.enableCors({
