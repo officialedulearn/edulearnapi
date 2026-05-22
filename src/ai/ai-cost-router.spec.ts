@@ -3,7 +3,9 @@ import {
   normalizeUserText,
   getAiCostRouterConfig,
   deriveConversationContext,
+  detectAssistantAwaitingUserReply,
   messageContentToPlainText,
+  routeAiCostForUserMessage,
 } from './ai-cost-router';
 
 const SUBST_BODY = `${'paragraph '.repeat(40)}`; // ≥32 words substantive
@@ -23,6 +25,10 @@ describe('ai-cost-router', () => {
     process.env = prevEnv;
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it('normalizes text', () => {
     expect(normalizeUserText('  Hello!!!  ')).toBe('hello');
     expect(normalizeUserText('  ')).toBe('');
@@ -36,16 +42,116 @@ describe('ai-cost-router', () => {
   it('deriveConversationContext marks substantive assistant', () => {
     const empty = deriveConversationContext([]);
     expect(empty.hasRecentSubstantiveAssistant).toBe(false);
+    expect(empty.assistantAwaitingUserReply).toBe(false);
 
     const shortAssist = deriveConversationContext([
       { role: 'assistant', content: { text: 'ok' } },
     ]);
     expect(shortAssist.hasRecentSubstantiveAssistant).toBe(false);
+    expect(shortAssist.assistantAwaitingUserReply).toBe(false);
 
     const longAssist = deriveConversationContext([
       { role: 'assistant', content: { text: SUBST_BODY } },
     ]);
     expect(longAssist.hasRecentSubstantiveAssistant).toBe(true);
+    expect(longAssist.assistantAwaitingUserReply).toBe(false);
+  });
+
+  it('detectAssistantAwaitingUserReply catches confirmation prompts', () => {
+    expect(
+      detectAssistantAwaitingUserReply(
+        'I can generate a roadmap for TypeScript basics. Want me to go ahead?',
+      ),
+    ).toBe(true);
+    expect(
+      detectAssistantAwaitingUserReply(
+        'Ready for me to create a quiz on React hooks?',
+      ),
+    ).toBe(true);
+    expect(
+      detectAssistantAwaitingUserReply(
+        `${SUBST_BODY}\n\nShould I schedule daily flashcards for you?`,
+      ),
+    ).toBe(true);
+    expect(
+      detectAssistantAwaitingUserReply(
+        `${SUBST_BODY}\n\nHere is the full breakdown of closures in JavaScript.`,
+      ),
+    ).toBe(false);
+  });
+
+  it('calls model when user confirms an assistant prompt', () => {
+    const ctx = {
+      hasRecentSubstantiveAssistant: true,
+      assistantAwaitingUserReply: true,
+    };
+    for (const userText of [
+      'okay',
+      'okayy',
+      'okiee',
+      'yes',
+      'yesss',
+      'sure',
+      'go ahead',
+      'sounds good',
+      'yes please',
+    ]) {
+      const d = aiCostRouteForUserMessage({ userText, conversationContext: ctx });
+      expect(d.route).toBe('call_model');
+    }
+  });
+
+  it('treats elongated ack typos as acknowledgements', () => {
+    for (const userText of ['okayy', 'okiee', 'coolll']) {
+      const d = aiCostRouteForUserMessage({ userText });
+      expect(d.route).toBe('bypass_model');
+      if (d.route === 'bypass_model') expect(d.reason).toBe('acknowledgement');
+    }
+  });
+
+  it('does not loose-match unrelated words', () => {
+    const d = aiCostRouteForUserMessage({
+      userText: 'book',
+      conversationContext: {
+        hasRecentSubstantiveAssistant: true,
+        assistantAwaitingUserReply: true,
+      },
+    });
+    expect(d.route).not.toBe('call_model');
+  });
+
+  it('does not substring-match acknowledgement stems inside longer phrases', () => {
+    const d = aiCostRouteForUserMessage({ userText: 'i seek help' });
+    expect(d.route).toBe('call_model');
+  });
+
+  it('calls model when user declines an assistant prompt', () => {
+    const d = aiCostRouteForUserMessage({
+      userText: 'not now',
+      conversationContext: {
+        hasRecentSubstantiveAssistant: true,
+        assistantAwaitingUserReply: true,
+      },
+    });
+    expect(d.route).toBe('call_model');
+  });
+
+  it('routes roadmap confirmation end-to-end from message history', () => {
+    const ctx = deriveConversationContext([
+      {
+        role: 'assistant',
+        content: {
+          text: 'I can build a 7-day practice plan for SQL interviews. Want me to generate it now?',
+        },
+      },
+    ]);
+    expect(ctx.assistantAwaitingUserReply).toBe(true);
+
+    const d = aiCostRouteForUserMessage({
+      userText: 'okay',
+      conversationContext: ctx,
+    });
+    expect(d.route).toBe('call_model');
   });
 
   it('bypasses greeting', () => {
@@ -106,7 +212,10 @@ describe('ai-cost-router', () => {
   it('continuation prompts skip bypass', () => {
     const d = aiCostRouteForUserMessage({
       userText: 'tell me more about that step',
-      conversationContext: { hasRecentSubstantiveAssistant: true },
+      conversationContext: {
+        hasRecentSubstantiveAssistant: true,
+        assistantAwaitingUserReply: false,
+      },
     });
     expect(d.route).toBe('call_model');
   });
@@ -114,7 +223,10 @@ describe('ai-cost-router', () => {
   it('solo why after substantive hits model', () => {
     const d = aiCostRouteForUserMessage({
       userText: 'why',
-      conversationContext: { hasRecentSubstantiveAssistant: true },
+      conversationContext: {
+        hasRecentSubstantiveAssistant: true,
+        assistantAwaitingUserReply: false,
+      },
     });
     expect(d.route).toBe('call_model');
   });
@@ -122,15 +234,21 @@ describe('ai-cost-router', () => {
   it('help after substantive hits model', () => {
     const d = aiCostRouteForUserMessage({
       userText: 'help',
-      conversationContext: { hasRecentSubstantiveAssistant: true },
+      conversationContext: {
+        hasRecentSubstantiveAssistant: true,
+        assistantAwaitingUserReply: false,
+      },
     });
     expect(d.route).toBe('call_model');
   });
 
-  it('cool after substantive bypasses when follow-up enabled', () => {
+  it('cool after substantive bypasses when assistant is not awaiting', () => {
     const d = aiCostRouteForUserMessage({
       userText: 'cool',
-      conversationContext: { hasRecentSubstantiveAssistant: true },
+      conversationContext: {
+        hasRecentSubstantiveAssistant: true,
+        assistantAwaitingUserReply: false,
+      },
     });
     expect(d.route).toBe('bypass_model');
     if (d.route === 'bypass_model') expect(d.reason).toBe('acknowledgement');
@@ -154,5 +272,50 @@ describe('ai-cost-router', () => {
     expect(cfg.enabled).toBe(false);
     const d = aiCostRouteForUserMessage({ userText: 'hey' });
     expect(d.route).toBe('call_model');
+  });
+
+  it('uses remote router service when configured', async () => {
+    process.env.AI_COST_ROUTER_SERVICE_TOKEN = 'test-router-token';
+    process.env.AI_COST_ROUTER_SERVICE_URL = 'https://ai-cost.edulearn.fun';
+
+    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        route: 'bypass_model',
+        reason: 'greeting',
+        normalizedText: 'hey',
+        replyText: 'remote hello',
+      }),
+    } as Response);
+
+    const d = await routeAiCostForUserMessage({ userText: { text: 'hey' } });
+
+    expect(d).toEqual({
+      route: 'bypass_model',
+      reason: 'greeting',
+      normalizedText: 'hey',
+      replyText: 'remote hello',
+    });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://ai-cost.edulearn.fun/v1/route',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer test-router-token',
+          'Content-Type': 'application/json',
+        }),
+      }),
+    );
+  });
+
+  it('falls back to local router when remote router fails', async () => {
+    process.env.AI_COST_ROUTER_SERVICE_TOKEN = 'test-router-token';
+    jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'));
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const d = await routeAiCostForUserMessage({ userText: 'hey' });
+
+    expect(d.route).toBe('bypass_model');
+    if (d.route === 'bypass_model') expect(d.reason).toBe('greeting');
   });
 });

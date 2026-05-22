@@ -21,6 +21,7 @@ export type AiCostRouteDecision =
 
 export type AiCostConversationContext = {
   hasRecentSubstantiveAssistant: boolean;
+  assistantAwaitingUserReply: boolean;
 };
 
 type RouterConfig = {
@@ -30,8 +31,16 @@ type RouterConfig = {
   followupBypass: boolean;
 };
 
+type AiCostRouteParams = {
+  userText: unknown;
+  config?: RouterConfig;
+  conversationContext?: AiCostConversationContext;
+};
+
 const DEFAULT_MIN_CHARS = 6;
 const DEFAULT_MIN_WORDS = 2;
+const DEFAULT_REMOTE_ROUTER_URL = 'https://ai-cost.edulearn.fun';
+const DEFAULT_REMOTE_ROUTER_TIMEOUT_MS = 1500;
 
 /** Last assistant bubble before current user utterance counts as substantive for follow-up shortcuts. */
 const SUBST_ASSIST_WORDS_MIN = 32;
@@ -210,6 +219,189 @@ const CONTINUATION_PATTERNS: RegExp[] = [
 
 const SOLO_INTERROGATIVE = /^(why|how|what|when|where|who)(\?)?$/;
 
+const AWAITING_PROMPT_PATTERNS: RegExp[] = [
+  /\bwant me to\b/i,
+  /\bshall i\b/i,
+  /\bshould i\b/i,
+  /\bwould you like(?: me)? to\b/i,
+  /\bready for me to\b/i,
+  /\bcan i (?:go ahead and )?(?:generate|create|build|make|start|schedule|quiz|set up|prepare)\b/i,
+  /\b(?:go ahead|proceed|continue)\??\s*$/i,
+  /\bsound good\??\s*$/i,
+  /\bdoes that (?:work|sound good|make sense)\??\s*$/i,
+  /\bis that ok(?:ay)?\??\s*$/i,
+  /\blet me know if\b/i,
+  /\bjust say (?:yes|ok|okay)\b/i,
+  /\breply (?:with )?(?:yes|ok|okay)\b/i,
+  /\b(?:want|like) (?:a|an|the|your) (?:roadmap|quiz|plan|schedule|flashcards?)\b/i,
+  /\b(?:generate|create|build|make|start) (?:a|an|your|the) (?:roadmap|quiz|plan|schedule)\b/i,
+  /\bwant (?:a|an|the|your) (?:roadmap|quiz|plan|schedule)\b/i,
+  /\bconfirm(?: if)? i should\b/i,
+];
+
+const AWAITING_AFFIRMATION_EXACT = new Set([
+  'ok',
+  'okay',
+  'k',
+  'kk',
+  'yes',
+  'yeah',
+  'yep',
+  'yup',
+  'sure',
+  'y',
+  'yea',
+  'please',
+  'yes please',
+  'go ahead',
+  'do it',
+  'sounds good',
+  'sound good',
+  'that works',
+  "let's do it",
+  'lets do it',
+  'go for it',
+  'why not',
+  'absolutely',
+  'definitely',
+  'of course',
+  'for sure',
+  'okie',
+  'aight',
+  'alright',
+  'all right',
+  'correct',
+  'right',
+  'perfect',
+  'great',
+  'awesome',
+  'cool',
+  'nice',
+  'sweet',
+  'got it',
+  'understood',
+  'i see',
+  'isee',
+  'makes sense',
+  'that makes sense',
+  'will do',
+  'copy that',
+  'roger',
+]);
+
+const AWAITING_REJECTION_EXACT = new Set([
+  'no',
+  'nope',
+  'nah',
+  'not now',
+  'not yet',
+  'wait',
+  'stop',
+  'cancel',
+  'never mind',
+  'nevermind',
+  'dont',
+  "don't",
+  'do not',
+  'hold on',
+  'not really',
+]);
+
+const LOOSE_PHRASE_MAX_EXTRA = 8;
+
+const ACK_STEMS = [
+  'that makes sense',
+  'makes sense',
+  'fair enough',
+  'fair point',
+  'all right',
+  'okie dokie',
+  'copy that',
+  'got it',
+  'i got it',
+  'right on',
+  'will do',
+  'gotcha',
+  'understood',
+  'awesome',
+  'perfect',
+  'alright',
+  'okay',
+  'okie',
+  'cool',
+  'nice',
+  'sweet',
+  'great',
+  'noted',
+  'roger',
+  'aight',
+  'fire',
+  'sick',
+  'rad',
+  'isee',
+  'i see',
+] as const;
+
+const AWAITING_AFFIRMATION_STEMS = [
+  'that makes sense',
+  'makes sense',
+  'sounds good',
+  'sound good',
+  "let's do it",
+  'lets do it',
+  'go ahead',
+  'that works',
+  'go for it',
+  'of course',
+  'for sure',
+  'why not',
+  'do it',
+  'copy that',
+  'got it',
+  'will do',
+  'understood',
+  'absolutely',
+  'definitely',
+  'awesome',
+  'perfect',
+  'alright',
+  'please',
+  'okay',
+  'okie',
+  'yeah',
+  'sure',
+  'cool',
+  'nice',
+  'sweet',
+  'great',
+  'right',
+  'yes',
+  'yep',
+  'yup',
+  'yea',
+  'roger',
+  'aight',
+  'isee',
+  'i see',
+] as const;
+
+const AWAITING_REJECTION_STEMS = [
+  'not really',
+  'never mind',
+  'nevermind',
+  'not now',
+  'not yet',
+  'hold on',
+  'do not',
+  "don't",
+  'dont',
+  'cancel',
+  'stop',
+  'wait',
+  'nope',
+  'nah',
+] as const;
+
 const VAGUE_PATTERNS: Array<RegExp> = [
   /^help$/,
   /^explain$/,
@@ -261,6 +453,133 @@ export function messageContentToPlainText(content: unknown): string {
   return '';
 }
 
+function lastSignificantLine(text: string): string {
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines[lines.length - 1] ?? text.trim();
+}
+
+function lastSentence(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return '';
+  const parts = trimmed.split(/(?<=[.!?])\s+/).filter(Boolean);
+  return parts[parts.length - 1]?.trim() ?? trimmed;
+}
+
+/** True when the last assistant turn expects yes/no or a short confirmation before proceeding. */
+export function detectAssistantAwaitingUserReply(
+  assistantText: string,
+): boolean {
+  const trimmed = assistantText.trim();
+  if (!trimmed) return false;
+
+  const tail = lastSentence(trimmed);
+  const lastLine = lastSignificantLine(trimmed);
+  const focus = tail.length <= 180 ? tail : lastLine;
+  const endSlice = trimmed.slice(Math.max(0, trimmed.length - 240));
+
+  if (AWAITING_PROMPT_PATTERNS.some((re) => re.test(focus))) return true;
+  if (AWAITING_PROMPT_PATTERNS.some((re) => re.test(endSlice))) return true;
+
+  if (
+    /\?\s*$/.test(focus) &&
+    /\b(you|your|me|i|we|us|shall|should|want|like|ready|may|can)\b/i.test(
+      focus,
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function matchesShortOk(normalized: string): boolean {
+  return /^ok+$/.test(normalized);
+}
+
+function matchesShortK(normalized: string): boolean {
+  return /^k+$/.test(normalized) && normalized.length <= 4;
+}
+
+function matchesShortNo(normalized: string): boolean {
+  return /^no+$/.test(normalized);
+}
+
+function looseTokenMatch(token: string, stem: string): boolean {
+  if (token === stem) return true;
+  if (!token.startsWith(stem)) return false;
+  if (token.length > stem.length + LOOSE_PHRASE_MAX_EXTRA) return false;
+
+  const extra = token.slice(stem.length);
+  if (extra.length === 0) return true;
+
+  const last = stem.at(-1);
+  if (!last) return false;
+  return [...extra].every((ch) => ch === last);
+}
+
+function matchesLooseStem(normalized: string, stem: string): boolean {
+  const stemParts = stem.split(' ').filter(Boolean);
+  const msgParts = normalized.split(' ').filter(Boolean);
+  const maxLen = stem.length + LOOSE_PHRASE_MAX_EXTRA * stemParts.length;
+  if (normalized.length > maxLen) return false;
+
+  if (stemParts.length === 1) {
+    if (msgParts.length !== 1) return false;
+    return looseTokenMatch(msgParts[0], stemParts[0]);
+  }
+
+  if (msgParts.length !== stemParts.length) return false;
+  return stemParts.every((part, idx) => looseTokenMatch(msgParts[idx], part));
+}
+
+function matchesLoosePhrase(
+  normalized: string,
+  exact: ReadonlySet<string>,
+  stems: readonly string[],
+  maxLen: number,
+  tinyChecks: Array<(value: string) => boolean> = [],
+): boolean {
+  if (!normalized || normalized.length > maxLen) return false;
+  if (exact.has(normalized)) return true;
+  if (tinyChecks.some((check) => check(normalized))) return true;
+
+  for (const stem of stems) {
+    if (matchesLooseStem(normalized, stem)) return true;
+  }
+  return false;
+}
+
+function isAwaitingAffirmation(normalized: string): boolean {
+  return matchesLoosePhrase(
+    normalized,
+    AWAITING_AFFIRMATION_EXACT,
+    AWAITING_AFFIRMATION_STEMS,
+    72,
+    [matchesShortOk, matchesShortK],
+  );
+}
+
+function isAwaitingRejection(normalized: string): boolean {
+  return matchesLoosePhrase(
+    normalized,
+    AWAITING_REJECTION_EXACT,
+    AWAITING_REJECTION_STEMS,
+    72,
+    [matchesShortNo],
+  );
+}
+
+function shouldCallModelForAwaitingReply(
+  normalized: string,
+  ctx: AiCostConversationContext,
+): boolean {
+  if (!ctx.assistantAwaitingUserReply) return false;
+  return isAwaitingAffirmation(normalized) || isAwaitingRejection(normalized);
+}
+
 /** Context from persisted chat messages *before* the current user utterance is saved. */
 export function deriveConversationContext(
   messages: Array<{ role: string; content: unknown }>,
@@ -277,9 +596,15 @@ export function deriveConversationContext(
       words.length >= SUBST_ASSIST_WORDS_MIN ||
       trimmed.length >= SUBST_ASSIST_CHARS_MIN ||
       multilineLift;
-    return { hasRecentSubstantiveAssistant: substantive };
+    return {
+      hasRecentSubstantiveAssistant: substantive,
+      assistantAwaitingUserReply: detectAssistantAwaitingUserReply(trimmed),
+    };
   }
-  return { hasRecentSubstantiveAssistant: false };
+  return {
+    hasRecentSubstantiveAssistant: false,
+    assistantAwaitingUserReply: false,
+  };
 }
 
 export function normalizeUserText(input: unknown): string {
@@ -321,8 +646,13 @@ function isChitchat(normalized: string): boolean {
 }
 
 function isStandaloneAcknowledgement(normalized: string): boolean {
-  if (!normalized || normalized.length > ACK_MAX_LEN) return false;
-  return ACK_EXACT.has(normalized);
+  return matchesLoosePhrase(
+    normalized,
+    ACK_EXACT,
+    ACK_STEMS,
+    ACK_MAX_LEN,
+    [matchesShortOk, matchesShortK],
+  );
 }
 
 function isTooVague(normalized: string): boolean {
@@ -355,6 +685,7 @@ export function aiCostRouteForUserMessage(params: {
     params.conversationContext ??
     ({
       hasRecentSubstantiveAssistant: false,
+      assistantAwaitingUserReply: false,
     } satisfies AiCostConversationContext);
 
   if (!cfg.enabled) return { route: 'call_model' };
@@ -372,6 +703,10 @@ export function aiCostRouteForUserMessage(params: {
   }
 
   if (needsContinuationModel(normalized, ctx)) {
+    return { route: 'call_model' };
+  }
+
+  if (shouldCallModelForAwaitingReply(normalized, ctx)) {
     return { route: 'call_model' };
   }
 
@@ -433,94 +768,146 @@ export function getAiCostRouterCounters() {
   return { ...counters };
 }
 
+export async function routeAiCostForUserMessage(
+  params: AiCostRouteParams,
+): Promise<AiCostRouteDecision> {
+  const serviceEnabledRaw = String(
+    process.env.AI_COST_ROUTER_SERVICE_ENABLED ?? 'true',
+  );
+  const serviceEnabled =
+    serviceEnabledRaw.toLowerCase() !== 'false' && serviceEnabledRaw !== '0';
+  const serviceToken = String(
+    process.env.AI_COST_ROUTER_SERVICE_TOKEN ??
+      process.env.INTERNAL_SERVICE_TOKEN ??
+      '',
+  ).trim();
+  const serviceUrl = String(
+    process.env.AI_COST_ROUTER_SERVICE_URL ?? DEFAULT_REMOTE_ROUTER_URL,
+  ).trim();
+
+  if (!serviceEnabled || !serviceToken || !serviceUrl) {
+    return aiCostRouteForUserMessage(params);
+  }
+
+  const timeoutMsRaw = Number(process.env.AI_COST_ROUTER_SERVICE_TIMEOUT_MS);
+  const timeoutMs =
+    Number.isFinite(timeoutMsRaw) && timeoutMsRaw > 0
+      ? timeoutMsRaw
+      : DEFAULT_REMOTE_ROUTER_TIMEOUT_MS;
+
+  try {
+    const response = await fetch(`${serviceUrl.replace(/\/+$/, '')}/v1/route`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${serviceToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userText: messageContentToPlainText(params.userText),
+        conversationContext:
+          params.conversationContext ??
+          ({
+            hasRecentSubstantiveAssistant: false,
+            assistantAwaitingUserReply: false,
+          } satisfies AiCostConversationContext),
+        config: params.config ?? getAiCostRouterConfig(),
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+
+    if (!response.ok) {
+      throw new Error(`remote router returned HTTP ${response.status}`);
+    }
+
+    const decision = (await response.json()) as unknown;
+    if (isAiCostRouteDecision(decision)) {
+      return decision;
+    }
+
+    throw new Error('remote router returned invalid route decision');
+  } catch (error) {
+    console.warn('AI cost router service fallback:', error);
+    return aiCostRouteForUserMessage(params);
+  }
+}
+
+function isAiCostRouteDecision(value: unknown): value is AiCostRouteDecision {
+  if (!value || typeof value !== 'object') return false;
+  const route = (value as { route?: unknown }).route;
+  if (route === 'call_model') return true;
+  if (route !== 'bypass_model') return false;
+
+  const bypass = value as {
+    reason?: unknown;
+    normalizedText?: unknown;
+    replyText?: unknown;
+  };
+  return (
+    typeof bypass.reason === 'string' &&
+    typeof bypass.normalizedText === 'string' &&
+    typeof bypass.replyText === 'string'
+  );
+}
+
 type CannedKey = AiCostRouteReason | 'acknowledgement_followup';
 
 function cannedReply(reason: CannedKey): string {
   if (reason === 'greeting') {
     return (
-      'Hey! What are you studying right now?\n\n' +
-      'Try one of these:\n' +
-      "1) Explain Solana PDAs like I'm new to Anchor.\n" +
-      '2) Quiz me on SPL tokens (10 questions, medium).\n' +
-      '3) Build me a 7-day roadmap for DeFi basics with daily tasks.'
+      "Hey 👋 What skill are you building today? Tell me what you're working on and whether you want " +
+      'an explanation, a quiz, or a practice plan — e.g. "quiz me on TypeScript basics" or "7-day plan to get better at public speaking."'
     );
   }
 
   if (reason === 'thanks') {
-    return (
-      "You're welcome. Want to keep going?\n\n" +
-      'Pick a format:\n' +
-      '- Explain: "Explain <topic> at <level>."\n' +
-      '- Quiz: "Quiz me on <topic> (N questions, difficulty)."\n' +
-      '- Roadmap: "Make a <days>-day plan for <topic>."'
-    );
+    return "You're welcome 😊 Happy to keep going — what skill should we work on next?";
   }
 
   if (reason === 'chitchat') {
     return (
-      'We can keep chatting, but to save turn time hit me with a learning goal.\n\n' +
-      'Examples:\n' +
-      "1) Explain Solana PDAs like I'm new to Anchor.\n" +
-      '2) Quiz me on SPL tokens (10 questions, medium).\n' +
-      '3) Summarize EIP-4844 tradeoffs.'
+      "Haha fair 😄 Whenever you're ready, drop a skill you're building and what you need — " +
+      'explain it, quiz me, or map out a practice plan.'
     );
   }
 
   if (reason === 'meta') {
     return (
-      "I'm your EduLearn tutor: explain tricky topics, quiz you, roadmap study plans, flashcards/schedules.\n\n" +
-      'Pick one lane and stack context:\n' +
-      '- Topic (what)\n' +
-      '- Goal (exam? job? curiosity?)\n' +
-      '- Level (new/intermediate/advanced)\n' +
-      '- Format (explain / quiz / roadmap)\n'
+      "I'm your EduLearn tutor 📚 I help you build real-world skills — explanations, quizzes, practice plans, " +
+      "flashcards, and study schedules. Tell me which skill you're working on and how you want to practice, and we'll go from there."
     );
   }
 
   if (reason === 'acknowledgement_followup') {
     return (
-      'Want to drill deeper? Reply with:\n' +
-      '- One concrete question, or\n' +
-      '- "Quiz me ..." / "Roadmap ..." with topic + timeframe.\n\n' +
-      'Example: Compare PDAs vs program-derived addresses with a beginner-friendly analogy.'
+      'Nice — want to go deeper on that skill? Ask something specific, or try ' +
+      '"quiz me on React hooks" or "make me a week-long plan for SQL interviews."'
     );
   }
 
   if (reason === 'acknowledgement') {
-    return (
-      'Glad that landed. What topic should we nail next?\n\n' +
-      "Example: Explain Solana PDAs like I'm new to Anchor."
-    );
+    return 'Glad that helped 🙂 What skill should we level up next?';
   }
 
   if (reason === 'empty') {
     return (
-      "I didn't catch any text there.\n\n" +
-      'Send a topic + what you want:\n' +
-      '- Explain / Quiz / Roadmap\n\n' +
-      'Example: "Quiz me on SPL tokens (10 questions, medium)."'
+      "Hmm, I didn't catch any text — mind sending it again? " +
+      'Name the skill and whether you want an explanation, quiz, or practice plan.'
     );
   }
 
   if (reason === 'too_short') {
-    return (
-      "Hi! What are you learning today?"
-    );
+    return 'Hey 👋 What skill are you building today?';
   }
 
   if (reason === 'too_vague') {
     return (
-      'Help with what, specifically?\n\n' +
-      'Reply with:\n' +
-      '- Topic (e.g., "Solana PDAs")\n' +
-      '- What you want (explain / quiz / roadmap)\n' +
-      '- Your level\n\n' +
-      'Example: "Explain Solana PDAs at a beginner level, step-by-step."'
+      "I'd love to help — which skill are we working on, and do you want an explanation, quiz, or a practice plan? " +
+      'Something like "explain async/await for beginners" or "quiz me on UX research basics" is perfect.'
     );
   }
 
   return (
-    'Can you add a bit more detail so I can help?\n\n' +
-    'Example: "Explain Solana PDAs like I\'m new to Anchor."'
+    'Could you add a bit more detail? Something like "quiz me on Python data structures, medium difficulty" ' +
+    'helps me give you a way better answer.'
   );
 }
