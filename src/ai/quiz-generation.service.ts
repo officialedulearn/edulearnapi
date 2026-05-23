@@ -13,6 +13,7 @@ import {
   buildScheduledQuizSystemInstruction,
 } from './prompts/quiz-system-prompt';
 import { GeminiClientService } from './gemini-client.service';
+import { startSentrySpan } from 'src/observability/sentry';
 
 type QuizQuestion = {
   question?: string;
@@ -280,49 +281,60 @@ export class QuizGenerationService {
       while (attempts < maxAttempts) {
         try {
           result = await Promise.race([
-            this.geminiClient.genAI.models.generateContent({
-              model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
-              contents: conversationContext,
-              config: {
-                temperature: 0.1,
-                maxOutputTokens: 5000,
-                systemInstruction: QUIZ_SYSTEM_INSTRUCTION,
-                responseMimeType: 'application/json',
-                responseSchema: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      question: {
-                        type: Type.STRING,
-                        description: 'The quiz question text',
-                      },
-                      options: {
-                        type: Type.ARRAY,
-                        items: { type: Type.STRING },
-                        description: 'Array of exactly 4 answer options',
-                      },
-                      correctAnswer: {
-                        type: Type.STRING,
-                        description:
-                          'The correct answer, must match one of the options',
-                      },
-                      explanation: {
-                        type: Type.STRING,
-                        description:
-                          'Explanation of why this is the correct answer',
-                      },
-                    },
-                    required: [
-                      'question',
-                      'options',
-                      'correctAnswer',
-                      'explanation',
-                    ],
-                  },
+            startSentrySpan(
+              {
+                name: 'Generate quiz with Gemini',
+                op: 'ai.gemini.generate_quiz',
+                attributes: {
+                  model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+                  attempt: attempts + 1,
                 },
               },
-            }),
+              () =>
+                this.geminiClient.genAI.models.generateContent({
+                  model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+                  contents: conversationContext,
+                  config: {
+                    temperature: 0.1,
+                    maxOutputTokens: 5000,
+                    systemInstruction: QUIZ_SYSTEM_INSTRUCTION,
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          question: {
+                            type: Type.STRING,
+                            description: 'The quiz question text',
+                          },
+                          options: {
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING },
+                            description: 'Array of exactly 4 answer options',
+                          },
+                          correctAnswer: {
+                            type: Type.STRING,
+                            description:
+                              'The correct answer, must match one of the options',
+                          },
+                          explanation: {
+                            type: Type.STRING,
+                            description:
+                              'Explanation of why this is the correct answer',
+                          },
+                        },
+                        required: [
+                          'question',
+                          'options',
+                          'correctAnswer',
+                          'explanation',
+                        ],
+                      },
+                    },
+                  },
+                }),
+            ),
             new Promise((_, reject) =>
               setTimeout(
                 () =>
@@ -536,49 +548,61 @@ export class QuizGenerationService {
       while (attempts < maxAttempts) {
         try {
           const result = (await Promise.race([
-            this.geminiClient.genAI.models.generateContent({
-              model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
-              contents,
-              config: {
-                temperature: 0.1,
-                maxOutputTokens: 5000,
-                systemInstruction,
-                responseMimeType: 'application/json',
-                responseSchema: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      question: {
-                        type: Type.STRING,
-                        description: 'The quiz question text',
-                      },
-                      options: {
-                        type: Type.ARRAY,
-                        items: { type: Type.STRING },
-                        description: 'Array of exactly 4 answer options',
-                      },
-                      correctAnswer: {
-                        type: Type.STRING,
-                        description:
-                          'The correct answer, must match one of the options',
-                      },
-                      explanation: {
-                        type: Type.STRING,
-                        description:
-                          'Explanation of why this is the correct answer',
-                      },
-                    },
-                    required: [
-                      'question',
-                      'options',
-                      'correctAnswer',
-                      'explanation',
-                    ],
-                  },
+            startSentrySpan(
+              {
+                name: 'Generate scheduled quiz with Gemini',
+                op: 'ai.gemini.generate_scheduled_quiz',
+                attributes: {
+                  model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+                  attempt: attempts + 1,
+                  difficulty,
                 },
               },
-            }),
+              () =>
+                this.geminiClient.genAI.models.generateContent({
+                  model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+                  contents,
+                  config: {
+                    temperature: 0.1,
+                    maxOutputTokens: 5000,
+                    systemInstruction,
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          question: {
+                            type: Type.STRING,
+                            description: 'The quiz question text',
+                          },
+                          options: {
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING },
+                            description: 'Array of exactly 4 answer options',
+                          },
+                          correctAnswer: {
+                            type: Type.STRING,
+                            description:
+                              'The correct answer, must match one of the options',
+                          },
+                          explanation: {
+                            type: Type.STRING,
+                            description:
+                              'Explanation of why this is the correct answer',
+                          },
+                        },
+                        required: [
+                          'question',
+                          'options',
+                          'correctAnswer',
+                          'explanation',
+                        ],
+                      },
+                    },
+                  },
+                }),
+            ),
             new Promise((_, reject) =>
               setTimeout(
                 () =>

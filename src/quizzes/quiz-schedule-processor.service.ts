@@ -11,11 +11,17 @@ import { NotificationsService } from 'src/common/services/notifications.service'
 import { ChatService } from 'src/chat/chat.service';
 import db from '../../drizzle';
 import { publicQuiz, quizGenerationSchedule, user } from '../../lib/db/schema';
-import { and, eq, desc } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { QuizScheduleBullmqService } from './quiz-schedule-bullmq.service';
 import { QUIZ_SCHEDULE_QUEUE_NAME } from './quiz-schedule.constants';
 import type { QuizScheduleJobData } from './quiz-schedule.types';
 import { QuizzesService } from './quizzes.service';
+import { QueueHealthService } from 'src/observability/queue-health.service';
+import {
+  captureJobFailure,
+  captureWorkerError,
+  startSentrySpan,
+} from 'src/observability/sentry';
 
 @Injectable()
 export class QuizScheduleProcessorService
@@ -31,16 +37,31 @@ export class QuizScheduleProcessorService
     private readonly quizzesService: QuizzesService,
     private readonly notificationsService: NotificationsService,
     private readonly chatService: ChatService,
+    private readonly queueHealth: QueueHealthService,
   ) {}
 
   onModuleInit() {
+    this.queueHealth.register(QUIZ_SCHEDULE_QUEUE_NAME);
     this.workerConnection = this.bullmq.duplicateConnection();
     this.worker = new Worker<QuizScheduleJobData>(
       QUIZ_SCHEDULE_QUEUE_NAME,
       async (job: Job<QuizScheduleJobData>) => this.processJob(job),
       { connection: this.workerConnection, concurrency: 2 },
     );
+    this.worker.on('ready', () => {
+      this.queueHealth.markReady(QUIZ_SCHEDULE_QUEUE_NAME);
+      this.logger.log(
+        `Scheduled quiz worker ready queue=${QUIZ_SCHEDULE_QUEUE_NAME}`,
+      );
+    });
+    this.worker.on('error', (err: Error) => {
+      this.queueHealth.markError(QUIZ_SCHEDULE_QUEUE_NAME, err);
+      captureWorkerError(QUIZ_SCHEDULE_QUEUE_NAME, err);
+      this.logger.error(`Scheduled quiz worker error: ${err.message}`, err.stack);
+    });
     this.worker.on('failed', (job, err) => {
+      this.queueHealth.markFailure(QUIZ_SCHEDULE_QUEUE_NAME, job?.id, err);
+      captureJobFailure(QUIZ_SCHEDULE_QUEUE_NAME, job, err);
       this.logger.error(
         `Scheduled quiz job ${job?.id} failed: ${err?.message}`,
         err?.stack,
@@ -60,121 +81,131 @@ export class QuizScheduleProcessorService
   }
 
   private async processJob(job: Job<QuizScheduleJobData>) {
-    const userId = job.data?.userId;
-    if (!userId) {
-      this.logger.warn('Scheduled quiz job missing userId');
-      return;
-    }
-    const [schedule] = await db
-      .select()
-      .from(quizGenerationSchedule)
-      .where(
-        and(
-          eq(quizGenerationSchedule.userId, userId),
-          eq(quizGenerationSchedule.enabled, true),
-        ),
-      )
-      .limit(1);
-    if (!schedule) {
-      this.logger.log(`No enabled schedule for user ${userId}, skipping`);
-      return;
-    }
-    const [u] = await db
-      .select()
-      .from(user)
-      .where(eq(user.id, userId))
-      .limit(1);
-    if (!u) {
-      this.logger.warn(`User ${userId} not found for scheduled quiz`);
-      return;
-    }
-    const credits = Number(u.credits ?? 0);
-    if (credits < 0.5) {
-      this.logger.log(`User ${userId} low credits, skipping scheduled quiz`);
-      await this.notificationsService.createNotification(
-        {
-          userId,
-          title: 'Scheduled quiz skipped',
-          content:
-            'Your scheduled quiz did not run because you need at least 0.5 credits.',
-          type: 'system_announcement',
+    await startSentrySpan(
+      {
+        name: 'Process scheduled quiz job',
+        op: 'bullmq.quiz_schedule.process',
+        attributes: {
+          queue: QUIZ_SCHEDULE_QUEUE_NAME,
+          jobId: job.id,
+          jobName: job.name,
+          attemptsMade: job.attemptsMade,
         },
-        true,
-      );
-      return;
-    }
-    const memoryContext =
-      await this.chatService.getLearningContextSnippetForUser(userId);
-    let questions: Array<{
-      question: string;
-      options: string[];
-      correctAnswer: string;
-      explanation: string;
-    }>;
-    try {
-      const mostRecentQuiz = await db
-        .select()
-        .from(publicQuiz)
-        .where(eq(publicQuiz.creatorId, userId))
-        .orderBy(desc(publicQuiz.createdAt))
-        .limit(1)
-        .then((r) => r[0]);
+      },
+      async () => {
+        const userId = job.data?.userId;
+        if (!userId) {
+          this.logger.warn('Scheduled quiz job missing userId');
+          return;
+        }
+        const [schedule] = await db
+          .select()
+          .from(quizGenerationSchedule)
+          .where(
+            and(
+              eq(quizGenerationSchedule.userId, userId),
+              eq(quizGenerationSchedule.enabled, true),
+            ),
+          )
+          .limit(1);
+        if (!schedule) {
+          this.logger.log(`No enabled schedule for user ${userId}, skipping`);
+          return;
+        }
+        const [u] = await db.select().from(user).where(eq(user.id, userId)).limit(1);
+        if (!u) {
+          this.logger.warn(`User ${userId} not found for scheduled quiz`);
+          return;
+        }
+        const credits = Number(u.credits ?? 0);
+        if (credits < 0.5) {
+          this.logger.log(`User ${userId} low credits, skipping scheduled quiz`);
+          await this.notificationsService.createNotification(
+            {
+              userId,
+              title: 'Scheduled quiz skipped',
+              content:
+                'Your scheduled quiz did not run because you need at least 0.5 credits.',
+              type: 'system_announcement',
+            },
+            true,
+          );
+          return;
+        }
+        const memoryContext =
+          await this.chatService.getLearningContextSnippetForUser(userId);
+        let questions: Array<{
+          question: string;
+          options: string[];
+          correctAnswer: string;
+          explanation: string;
+        }>;
+        try {
+          const mostRecentQuiz = await db
+            .select()
+            .from(publicQuiz)
+            .where(eq(publicQuiz.creatorId, userId))
+            .orderBy(desc(publicQuiz.createdAt))
+            .limit(1)
+            .then((r) => r[0]);
 
-      if (mostRecentQuiz != null && mostRecentQuiz.attemptCount < 1) {
-        this.logger.log(
-          `Most recent quiz has no attempts, skipping generation for user ${userId}`,
-        );
+          if (mostRecentQuiz != null && mostRecentQuiz.attemptCount < 1) {
+            this.logger.log(
+              `Most recent quiz has no attempts, skipping generation for user ${userId}`,
+            );
+            await this.notificationsService.createNotification(
+              {
+                userId,
+                title: 'Scheduled quiz skipped',
+                content:
+                  'Your scheduled quiz did not run because the most recent quiz has no attempts.',
+                type: 'system_announcement',
+              },
+              true,
+            );
+            return;
+          }
+
+          const generatedQuestions: unknown =
+            await this.quizGenerationService.generateScheduledQuiz({
+              userId,
+              topic: schedule.topic,
+              difficulty: schedule.difficulty,
+              memoryContext,
+            });
+          questions = generatedQuestions as typeof questions;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          this.logger.error(`generateScheduledQuiz failed for ${userId}: ${msg}`);
+          throw err;
+        }
+        const dateLabel = new Date().toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+        });
+        const published = await this.quizzesService.publish(userId, {
+          title: `${schedule.topic} - ${dateLabel}`,
+          description: `Scheduled ${schedule.difficulty} quiz`,
+          questions,
+          sourceChatId: undefined,
+        });
         await this.notificationsService.createNotification(
           {
             userId,
-            title: 'Scheduled quiz skipped',
-            content:
-              'Your scheduled quiz did not run because the most recent quiz has no attempts.',
-            type: 'system_announcement',
+            title: 'Your quiz is ready',
+            content: `A new quiz "${published.title}" was generated from your schedule.`,
+            type: 'quiz_ready',
+            metadata: { quizId: published.id },
+            data: {
+              screen: 'publicQuiz',
+              id: published.id,
+              quizId: published.id,
+              url: `edulearnv2://quizzes/${published.id}`,
+            },
           },
           true,
         );
-        return;
-      }
-
-      const generatedQuestions: unknown =
-        await this.quizGenerationService.generateScheduledQuiz({
-          userId,
-          topic: schedule.topic,
-          difficulty: schedule.difficulty,
-          memoryContext,
-        });
-      questions = generatedQuestions as typeof questions;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`generateScheduledQuiz failed for ${userId}: ${msg}`);
-      throw err;
-    }
-    const dateLabel = new Date().toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-    });
-    const published = await this.quizzesService.publish(userId, {
-      title: `${schedule.topic} — ${dateLabel}`,
-      description: `Scheduled ${schedule.difficulty} quiz`,
-      questions,
-      sourceChatId: undefined,
-    });
-    await this.notificationsService.createNotification(
-      {
-        userId,
-        title: 'Your quiz is ready',
-        content: `A new quiz "${published.title}" was generated from your schedule.`,
-        type: 'quiz_ready',
-        metadata: { quizId: published.id },
-        data: {
-          screen: 'publicQuiz',
-          id: published.id,
-          quizId: published.id,
-          url: `edulearnv2://quizzes/${published.id}`,
-        },
       },
-      true,
     );
   }
 }

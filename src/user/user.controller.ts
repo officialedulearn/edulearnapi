@@ -7,12 +7,13 @@ import {
   Param,
   Put,
   Request,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { UserSettingsPreferences } from 'lib/db/schema';
+import { FlexibleAuthGuard } from '../auth/guards/flexible-auth.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { getDatabaseUserId } from '../common/helpers/authorization.helper';
 import { UserService } from './user.service';
 
 @Throttle({ default: { limit: 40, ttl: 60_000 } })
@@ -20,10 +21,38 @@ import { UserService } from './user.service';
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
+  private getOptionalAuthenticatedUserId(
+    authenticatedUser: any,
+  ): string | undefined {
+    if (
+      !authenticatedUser ||
+      authenticatedUser.role === 'reviewer' ||
+      authenticatedUser.role === 'marketplace'
+    ) {
+      return undefined;
+    }
+
+    return (
+      authenticatedUser.sub ||
+      authenticatedUser.id ||
+      authenticatedUser.user?.id ||
+      authenticatedUser.user_metadata?.sub
+    );
+  }
+
+  private requireAuthenticatedUserId(authenticatedUser: any): string {
+    const userId = this.getOptionalAuthenticatedUserId(authenticatedUser);
+    if (!userId) {
+      throw new UnauthorizedException('Invalid authentication token');
+    }
+
+    return userId;
+  }
+
   @Get('settings')
   @UseGuards(JwtAuthGuard)
   async getSettings(@Request() req) {
-    const userId = await getDatabaseUserId(req.user);
+    const userId = this.requireAuthenticatedUserId(req.user);
     return this.userService.getUserSettings(userId);
   }
 
@@ -33,7 +62,7 @@ export class UserController {
     @Request() req,
     @Body() body: Partial<UserSettingsPreferences>,
   ) {
-    const userId = await getDatabaseUserId(req.user);
+    const userId = this.requireAuthenticatedUserId(req.user);
     if (!body || typeof body !== 'object') {
       throw new BadRequestException('Settings payload is required');
     }
@@ -47,9 +76,16 @@ export class UserController {
   }
 
   @Get(':userId')
-  async getUserById(@Param('userId') userId: string) {
+  @UseGuards(FlexibleAuthGuard)
+  async getUserById(@Request() req, @Param('userId') userId: string) {
     try {
-      return await this.userService.getUserById(userId);
+      const viewerId = this.getOptionalAuthenticatedUserId(req.user);
+
+      const user = await this.userService.getUserById(userId, viewerId);
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+      return user;
     } catch (e) {
       if (e instanceof Error && e.message === 'User not found') {
         throw new NotFoundException('User not found');

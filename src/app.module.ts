@@ -35,6 +35,8 @@ import { RemindersModule } from './reminders/reminders.module';
 import { ReferralModule } from './referral/referral.module';
 import { DeepLinksModule } from './deep-links/deep-links.module';
 import { AgentWakeupModule } from './agent-wakeup/agent-wakeup.module';
+import { ObservabilityModule } from './observability/observability.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -44,6 +46,8 @@ import { AgentWakeupModule } from './agent-wakeup/agent-wakeup.module';
         limit: 120,
       },
     ]),
+    ObservabilityModule,
+    HealthModule,
     CommonModule,
     AuthModule,
     AiModule,

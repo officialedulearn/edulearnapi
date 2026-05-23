@@ -21,6 +21,7 @@ import {
   type NftListingBroadcastData,
 } from '../emails/nft-listing-announcement.config';
 import { NftListingAnnouncementEmail } from '../emails/templates/NftListingAnnouncementEmail';
+import { startSentrySpan } from 'src/observability/sentry';
 
 @Injectable()
 export class ResendService {
@@ -140,12 +141,22 @@ export class ResendService {
 
   async sendEmail(to: string, subject: string, html: string, fromName?: string) {
     const safeFromName = (fromName || 'Eddy 💚').trim() || 'Eddy 💚';
-    const { data, error } = await this.resend.emails.send({
-      from: `${safeFromName} <eddy@edulearn.fun>`,
-      to: to,
-      subject: subject,
-      html: html,
-    });
+    const { data, error } = await startSentrySpan(
+      {
+        name: 'Send email with Resend',
+        op: 'external.resend.email',
+        attributes: {
+          subject,
+        },
+      },
+      () =>
+        this.resend.emails.send({
+          from: `${safeFromName} <eddy@edulearn.fun>`,
+          to: to,
+          subject: subject,
+          html: html,
+        }),
+    );
 
     if (error) {
       throw new Error(error.message);

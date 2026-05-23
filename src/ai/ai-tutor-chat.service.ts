@@ -32,9 +32,10 @@ import {
 import { UserService } from 'src/user/user.service';
 import { AgentService } from 'src/agent/agent.service';
 import {
-  aiCostRouteForUserMessage,
   deriveConversationContext,
+  routeAiCostForUserMessage,
 } from './ai-cost-router';
+import { startSentrySpan } from 'src/observability/sentry';
 
 @Injectable()
 export class AiTutorChatService {
@@ -200,20 +201,30 @@ export class AiTutorChatService {
       };
 
       const result = await Promise.race([
-        this.geminiClient.genAI.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [formattedMessage],
-          config: {
-            maxOutputTokens: 500,
-            temperature: 0.1,
-            systemInstruction: `
+        startSentrySpan(
+          {
+            name: 'Generate chat title with Gemini',
+            op: 'ai.gemini.generate_title',
+            attributes: {
+              model: 'gemini-2.5-flash',
+            },
+          },
+          () =>
+            this.geminiClient.genAI.models.generateContent({
+              model: 'gemini-2.5-flash',
+              contents: [formattedMessage],
+              config: {
+                maxOutputTokens: 500,
+                temperature: 0.1,
+                systemInstruction: `
               Generate a short title based on the first user message.
               Ensure it is not more than 80 characters.
               The title should be a summary of the user's message.
               Do not use quotes or colons.
             `,
-          },
-        }),
+              },
+            }),
+        ),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Request timeout')), 10000),
         ),
@@ -343,7 +354,7 @@ export class AiTutorChatService {
       ],
     });
 
-    const routing = aiCostRouteForUserMessage({
+    const routing = await routeAiCostForUserMessage({
       userText:
         typeof recentUserMessage.content === 'string'
           ? recentUserMessage.content
@@ -420,11 +431,22 @@ export class AiTutorChatService {
       };
 
       const result = await Promise.race([
-        this.geminiClient.genAI.models.generateContent({
-          model,
-          contents: formattedMessages,
-          config: genConfig,
-        }),
+        startSentrySpan(
+          {
+            name: 'Generate tutor response with Gemini',
+            op: 'ai.gemini.tutor_response',
+            attributes: {
+              model,
+              roadmapStepStart: Boolean(roadmapStepStart),
+            },
+          },
+          () =>
+            this.geminiClient.genAI.models.generateContent({
+              model,
+              contents: formattedMessages,
+              config: genConfig,
+            }),
+        ),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Request timeout')), 30000),
         ),
@@ -1035,7 +1057,7 @@ export class AiTutorChatService {
             ],
           });
 
-          const routing = aiCostRouteForUserMessage({
+          const routing = await routeAiCostForUserMessage({
             userText:
               typeof recentUserMessage.content === 'string'
                 ? recentUserMessage.content
@@ -1169,16 +1191,27 @@ export class AiTutorChatService {
             maxOutputTokens: 5000,
           });
 
-          const stream = await this.geminiClient.genAI.models.generateContentStream({
-            model,
-            contents: formattedMessages,
-            config: {
-              tools,
-              maxOutputTokens: 5000,
-              temperature: 1,
-              systemInstruction: systemInstruction,
+          const stream = await startSentrySpan(
+            {
+              name: 'Start tutor response stream with Gemini',
+              op: 'ai.gemini.tutor_stream',
+              attributes: {
+                model,
+                toolsEnabled: true,
+              },
             },
-          });
+            () =>
+              this.geminiClient.genAI.models.generateContentStream({
+                model,
+                contents: formattedMessages,
+                config: {
+                  tools,
+                  maxOutputTokens: 5000,
+                  temperature: 1,
+                  systemInstruction: systemInstruction,
+                },
+              }),
+          );
 
           await this.authService.deductUserCredits(userId);
 

@@ -9,10 +9,11 @@ import {
   User,
   type UserSettingsPreferences,
   user,
+  userFollows,
   userReward,
 } from 'lib/db/schema';
 import db from '../../drizzle';
-import { count, eq } from 'drizzle-orm';
+import { and, count, eq } from 'drizzle-orm';
 
 const USER_SETTINGS_KEYS: Array<keyof UserSettingsPreferences> = [
   'pushNotifications',
@@ -22,9 +23,46 @@ const USER_SETTINGS_KEYS: Array<keyof UserSettingsPreferences> = [
   'memoryEnabled',
 ];
 
+export type UserFollowContext = {
+  isFollowing: boolean;
+  notificationPreferences: {
+    emailNotifications: boolean;
+    pushNotifications: boolean;
+    inAppNotifications: boolean;
+  } | null;
+};
+
+type UserProfileBase = Pick<
+  User,
+  | 'id'
+  | 'address'
+  | 'xp'
+  | 'credits'
+  | 'name'
+  | 'email'
+  | 'lastLoggedIn'
+  | 'streak'
+  | 'referralCode'
+  | 'quizLimits'
+  | 'quizCompleted'
+  | 'isPremium'
+  | 'premiumUntil'
+  | 'verified'
+  | 'profilePictureURL'
+>;
+
+export type UserProfileResponse = UserProfileBase & {
+  quizLimit: number | null;
+  nfts: number;
+  followContext?: UserFollowContext;
+};
+
 @Injectable()
 export class UserService {
-  async getUserById(id: string): Promise<User | null> {
+  async getUserById(
+    id: string,
+    viewerId?: string,
+  ): Promise<UserProfileResponse | null> {
     try {
       const result = await db
         .select({
@@ -56,11 +94,43 @@ export class UserService {
         .from(userReward)
         .where(eq(userReward.userId, id));
 
+      let followContext: UserFollowContext | undefined;
+
+      if (viewerId && viewerId !== id) {
+        const followRows = await db
+          .select({
+            emailNotifications: userFollows.emailNotifications,
+            pushNotifications: userFollows.pushNotifications,
+            inAppNotifications: userFollows.inAppNotifications,
+          })
+          .from(userFollows)
+          .where(
+            and(
+              eq(userFollows.followerId, viewerId),
+              eq(userFollows.followingId, id),
+            ),
+          )
+          .limit(1);
+
+        const follow = followRows[0];
+        followContext = {
+          isFollowing: Boolean(follow),
+          notificationPreferences: follow
+            ? {
+                emailNotifications: follow.emailNotifications ?? true,
+                pushNotifications: follow.pushNotifications ?? true,
+                inAppNotifications: follow.inAppNotifications ?? true,
+              }
+            : null,
+        };
+      }
+
       return {
         ...result[0],
         quizLimit: result[0].quizLimits,
         nfts: nftCount,
-      } as any;
+        ...(followContext ? { followContext } : {}),
+      };
     } catch (error) {
       console.error('Failed to get user by ID');
       throw error;

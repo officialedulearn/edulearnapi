@@ -63,6 +63,36 @@ export class AdminController {
     return await this.adminService.getRevenueMetrics();
   }
 
+  @Get('growth/overview')
+  async getGrowthOverview() {
+    return await this.adminService.getGrowthOverview();
+  }
+
+  @Get('growth/segments')
+  async getGrowthSegments() {
+    return await this.adminService.getGrowthSegments();
+  }
+
+  @Get('growth/leads')
+  async getGrowthLeads() {
+    return await this.adminService.getGrowthLeads();
+  }
+
+  @Get('growth/retention')
+  async getGrowthRetention() {
+    return await this.adminService.getGrowthRetention();
+  }
+
+  @Get('growth/content-intelligence')
+  async getGrowthContentIntelligence() {
+    return await this.adminService.getGrowthContentIntelligence();
+  }
+
+  @Get('growth/action-center')
+  async getGrowthActionCenter() {
+    return await this.adminService.getGrowthActionCenter();
+  }
+
   @Get('health')
   async getHealth() {
     return await this.adminService.getHealthStatus();
