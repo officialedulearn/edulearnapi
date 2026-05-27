@@ -43,7 +43,10 @@ describe('RealtimeGateway', () => {
   });
 
   it('accepts a valid Supabase JWT and emits realtime.connected', async () => {
-    const token = jwt.sign({ sub: 'user-1', email: 'ada@example.com' }, jwtSecret);
+    const token = jwt.sign(
+      { sub: 'user-1', email: 'ada@example.com' },
+      jwtSecret,
+    );
     const client = {
       id: 'socket-1',
       handshake: { auth: { token }, headers: {} },

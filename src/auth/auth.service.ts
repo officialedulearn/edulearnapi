@@ -73,7 +73,6 @@ export class AuthService {
     private leaderboardService: LeaderboardService,
     private cloudinaryService: CloudinaryService,
     private readonly remindersService: RemindersService,
-
   ) {}
 
   private async countUserRewards(userId: string): Promise<number> {
@@ -512,20 +511,19 @@ export class AuthService {
 
   async checkUserAvailability(email?: string, username?: string) {
     const messages: string[] = [];
-  
+
     if (!email && !username) {
       return {
         emailAvailable: true,
         usernameAvailable: true,
       };
     }
-  
+
     const conditions: SQL[] = [];
-    
-  
+
     if (email) conditions.push(eq(user.email, email));
     if (username) conditions.push(eq(user.username, username));
-  
+
     const existingUsers = await db
       .select({
         email: user.email,
@@ -534,18 +532,18 @@ export class AuthService {
       .from(user)
       .where(or(...conditions))
       .limit(2);
-  
+
     const emailTaken = email
       ? existingUsers.some((u) => u.email === email)
       : false;
-  
+
     const usernameTaken = username
       ? existingUsers.some((u) => u.username === username)
       : false;
-  
+
     if (emailTaken) messages.push('Email is already registered');
     if (usernameTaken) messages.push('Username is already taken');
-  
+
     return {
       emailAvailable: !emailTaken,
       usernameAvailable: !usernameTaken,

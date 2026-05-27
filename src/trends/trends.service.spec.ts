@@ -112,7 +112,7 @@ describe('TrendsService', () => {
     await service.getHubTrends(Number.NaN);
     await service.getHubTrends(50);
 
-    expect(fetchSpy).toHaveBeenNthCalledWith(1, 10);
+    expect(fetchSpy).toHaveBeenNthCalledWith(1, 5);
     expect(fetchSpy).toHaveBeenNthCalledWith(2, 25);
   });
 });

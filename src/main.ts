@@ -1,3 +1,4 @@
+import { initializeSentry } from './observability/sentry';
 import { NestFactory } from '@nestjs/core';
 import {
   FastifyAdapter,
@@ -9,7 +10,10 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import multipart from '@fastify/multipart';
 import fastifyHelmet from '@fastify/helmet';
 import fastifyCompress from '@fastify/compress';
-import { LoggingInterceptor } from 'interceptors/logger.interceptor';
+import { ObservabilityInterceptor } from './observability/observability.interceptor';
+import { SentryExceptionFilter } from './observability/sentry-exception.filter';
+
+initializeSentry();
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -62,10 +66,8 @@ async function bootstrap() {
     }),
   );
 
-  app.useGlobalInterceptors(
-    new LoggingInterceptor(),
-  );
-
+  app.useGlobalInterceptors(new ObservabilityInterceptor());
+  app.useGlobalFilters(new SentryExceptionFilter());
 
   await app.listen(process.env.PORT ?? 3001, '0.0.0.0');
 }

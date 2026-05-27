@@ -139,6 +139,39 @@ export class GenerateMessagesDto {
   userId: string;
 }
 
+export class GenerateSpeechDto {
+  @ApiProperty({
+    description: 'Text to convert to speech',
+    example: 'Here is a simple explanation of blockchain.',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(4000)
+  text: string;
+
+  @ApiProperty({
+    description: 'Configured EduLearn voice id',
+    example: 'warm-tutor',
+  })
+  @IsString()
+  @IsNotEmpty()
+  voiceId: string;
+
+  @ApiPropertyOptional({
+    description: 'Optional chat message id used by clients for caching',
+  })
+  @IsOptional()
+  @IsString()
+  messageId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Optional streaming chunk id used by clients for caching',
+  })
+  @IsOptional()
+  @IsString()
+  chunkKey?: string;
+}
+
 export class GenerateTitleDto {
   @ApiProperty({
     description: 'Unique identifier for the message',

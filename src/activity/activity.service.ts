@@ -34,8 +34,7 @@ export class ActivityService {
       : page + (hasNextPage ? 1 : 0);
     const visibleTotal =
       total ?? (page - 1) * limit + dataCount + (hasNextPage ? 1 : 0);
-    const resolvedHasNextPage =
-      hasExactTotal ? page < totalPages : hasNextPage;
+    const resolvedHasNextPage = hasExactTotal ? page < totalPages : hasNextPage;
 
     return {
       page,

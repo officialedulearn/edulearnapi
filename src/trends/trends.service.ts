@@ -31,7 +31,7 @@ export type HubTrendsResponse = {
 };
 
 const HUB_TRENDS_CACHE_TTL_SECONDS = 60;
-const HUB_TRENDS_DEFAULT_LIMIT = 10;
+const HUB_TRENDS_DEFAULT_LIMIT = 5;
 const HUB_TRENDS_MAX_LIMIT = 25;
 
 @Injectable()

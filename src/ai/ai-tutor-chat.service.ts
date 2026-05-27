@@ -32,9 +32,10 @@ import {
 import { UserService } from 'src/user/user.service';
 import { AgentService } from 'src/agent/agent.service';
 import {
-  aiCostRouteForUserMessage,
   deriveConversationContext,
+  routeAiCostForUserMessage,
 } from './ai-cost-router';
+import { startSentrySpan } from 'src/observability/sentry';
 
 @Injectable()
 export class AiTutorChatService {
@@ -71,7 +72,8 @@ export class AiTutorChatService {
     } catch {
       return {
         name: 'EduLearn',
-        purpose: 'Help users build proof of knowledge and proof of work in Web3.',
+        purpose:
+          'Help users build proof of knowledge and proof of work in Web3.',
       };
     }
   }
@@ -191,7 +193,6 @@ export class AiTutorChatService {
     }
   }
 
-
   async generateTitleFromMessage(message: Message): Promise<string> {
     try {
       const formattedMessage = {
@@ -200,20 +201,30 @@ export class AiTutorChatService {
       };
 
       const result = await Promise.race([
-        this.geminiClient.genAI.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [formattedMessage],
-          config: {
-            maxOutputTokens: 500,
-            temperature: 0.1,
-            systemInstruction: `
+        startSentrySpan(
+          {
+            name: 'Generate chat title with Gemini',
+            op: 'ai.gemini.generate_title',
+            attributes: {
+              model: 'gemini-2.5-flash',
+            },
+          },
+          () =>
+            this.geminiClient.genAI.models.generateContent({
+              model: 'gemini-2.5-flash',
+              contents: [formattedMessage],
+              config: {
+                maxOutputTokens: 500,
+                temperature: 0.1,
+                systemInstruction: `
               Generate a short title based on the first user message.
               Ensure it is not more than 80 characters.
               The title should be a summary of the user's message.
               Do not use quotes or colons.
             `,
-          },
-        }),
+              },
+            }),
+        ),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Request timeout')), 10000),
         ),
@@ -343,11 +354,11 @@ export class AiTutorChatService {
       ],
     });
 
-    const routing = aiCostRouteForUserMessage({
+    const routing = await routeAiCostForUserMessage({
       userText:
         typeof recentUserMessage.content === 'string'
           ? recentUserMessage.content
-          : (recentUserMessage.content as any)?.text ?? '',
+          : ((recentUserMessage.content as any)?.text ?? ''),
       conversationContext,
     });
 
@@ -360,8 +371,7 @@ export class AiTutorChatService {
           userId,
           chatId,
           normalizedLen: routing.normalizedText.length,
-          substantiveContext:
-            conversationContext.hasRecentSubstantiveAssistant,
+          substantiveContext: conversationContext.hasRecentSubstantiveAssistant,
         }),
       );
 
@@ -420,11 +430,22 @@ export class AiTutorChatService {
       };
 
       const result = await Promise.race([
-        this.geminiClient.genAI.models.generateContent({
-          model,
-          contents: formattedMessages,
-          config: genConfig,
-        }),
+        startSentrySpan(
+          {
+            name: 'Generate tutor response with Gemini',
+            op: 'ai.gemini.tutor_response',
+            attributes: {
+              model,
+              roadmapStepStart: Boolean(roadmapStepStart),
+            },
+          },
+          () =>
+            this.geminiClient.genAI.models.generateContent({
+              model,
+              contents: formattedMessages,
+              config: genConfig,
+            }),
+        ),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Request timeout')), 30000),
         ),
@@ -774,6 +795,9 @@ export class AiTutorChatService {
             const saved = await this.quizzesService.publish(userId, {
               title,
               description: parsed.description,
+              summary: parsed.summary,
+              coveredConcepts: parsed.coveredConcepts,
+              challengeProfile: parsed.challengeProfile,
               questions: parsed.questions,
               sourceChatId: chatId,
             });
@@ -874,9 +898,19 @@ export class AiTutorChatService {
     };
   }): any {
     return new Observable((subscriber) => {
+      const abortController = new AbortController();
+      let streamFinished = false;
+
+      subscriber.add(() => {
+        if (!streamFinished && !abortController.signal.aborted) {
+          abortController.abort();
+        }
+      });
+
       (async () => {
         const streamStartedHr = process.hrtime.bigint();
-        const requestReceivedAtMs = latencyTrace?.requestReceivedAtMs ?? Date.now();
+        const requestReceivedAtMs =
+          latencyTrace?.requestReceivedAtMs ?? Date.now();
         const traceStreamId =
           latencyTrace?.streamId ??
           `stream-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -898,8 +932,10 @@ export class AiTutorChatService {
             }),
           );
         };
-        const completeStream = (reason: string, extra: Record<string, unknown> = {}) =>
-          logStreamLatency('stream_completed', { reason, ...extra });
+        const completeStream = (
+          reason: string,
+          extra: Record<string, unknown> = {},
+        ) => logStreamLatency('stream_completed', { reason, ...extra });
         let firstGeminiChunkSeen = false;
         let firstChunkFlushed = false;
         let emittedTokenCount = 0;
@@ -940,8 +976,7 @@ export class AiTutorChatService {
             return;
           }
 
-          const userRewardsPromise =
-            this.rewardsService.getUserRewards(userId);
+          const userRewardsPromise = this.rewardsService.getUserRewards(userId);
           const [user, userMemory, existingMessages, agentContext] =
             await Promise.all([
               this.authService.getUserByIdLite(userId),
@@ -951,7 +986,9 @@ export class AiTutorChatService {
             ]);
 
           if (!user) {
-            subscriber.error(new NotFoundException(`User with id ${userId} not found`));
+            subscriber.error(
+              new NotFoundException(`User with id ${userId} not found`),
+            );
             return;
           }
 
@@ -1035,11 +1072,11 @@ export class AiTutorChatService {
             ],
           });
 
-          const routing = aiCostRouteForUserMessage({
+          const routing = await routeAiCostForUserMessage({
             userText:
               typeof recentUserMessage.content === 'string'
                 ? recentUserMessage.content
-                : (recentUserMessage.content as any)?.text ?? '',
+                : ((recentUserMessage.content as any)?.text ?? ''),
             conversationContext,
           });
 
@@ -1126,14 +1163,11 @@ export class AiTutorChatService {
               (p: any) => p && typeof p.text === 'string',
             );
             const originalText = String(firstTextPart?.text ?? '');
-            const urlContext =
-              await buildPrefetchedUrlContext(originalText);
+            const urlContext = await buildPrefetchedUrlContext(originalText);
             if (urlContext) {
               formattedMessages[lastIdx] = {
                 role: 'user',
-                parts: [
-                  { text: `${urlContext}\n\n---\n\n${originalText}` },
-                ],
+                parts: [{ text: `${urlContext}\n\n---\n\n${originalText}` }],
               };
             }
           }
@@ -1149,7 +1183,9 @@ export class AiTutorChatService {
             }, 0);
 
           logStreamLatency('auth_context_fetch_completed', {
-            modelCandidate: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+            modelCandidate: user?.isPremium
+              ? 'gemini-2.5-pro'
+              : 'gemini-2.5-flash',
             messageCount: messages.length,
             historyCount: existingMessages.length,
             memoryChars: userMemory.length,
@@ -1169,16 +1205,34 @@ export class AiTutorChatService {
             maxOutputTokens: 5000,
           });
 
-          const stream = await this.geminiClient.genAI.models.generateContentStream({
-            model,
-            contents: formattedMessages,
-            config: {
-              tools,
-              maxOutputTokens: 5000,
-              temperature: 1,
-              systemInstruction: systemInstruction,
+          const stream = await startSentrySpan(
+            {
+              name: 'Start tutor response stream with Gemini',
+              op: 'ai.gemini.tutor_stream',
+              attributes: {
+                model,
+                toolsEnabled: true,
+              },
             },
-          });
+            () =>
+              this.geminiClient.genAI.models.generateContentStream({
+                model,
+                contents: formattedMessages,
+                config: {
+                  tools,
+                  maxOutputTokens: 5000,
+                  temperature: 1,
+                  systemInstruction: systemInstruction,
+                  abortSignal: abortController.signal,
+                },
+              }),
+          );
+
+          if (abortController.signal.aborted || subscriber.closed) {
+            streamFinished = true;
+            completeStream('client_disconnected');
+            return;
+          }
 
           await this.authService.deductUserCredits(userId);
 
@@ -1186,6 +1240,11 @@ export class AiTutorChatService {
           const functionCallsByName = new Map<string, any>();
 
           for await (const chunk of stream) {
+            if (abortController.signal.aborted || subscriber.closed) {
+              streamFinished = true;
+              completeStream('client_disconnected');
+              return;
+            }
             chunkCount += 1;
             if (!firstGeminiChunkSeen) {
               firstGeminiChunkSeen = true;
@@ -1207,6 +1266,11 @@ export class AiTutorChatService {
 
               const words = text.split(/(\s+)/);
               for (const word of words) {
+                if (abortController.signal.aborted || subscriber.closed) {
+                  streamFinished = true;
+                  completeStream('client_disconnected');
+                  return;
+                }
                 if (word) {
                   subscriber.next({
                     data: { token: word, type: 'content' },
@@ -1233,6 +1297,12 @@ export class AiTutorChatService {
           }
 
           const functionCalls = Array.from(functionCallsByName.values());
+
+          if (abortController.signal.aborted || subscriber.closed) {
+            streamFinished = true;
+            completeStream('client_disconnected');
+            return;
+          }
 
           const pendingFlashcards = functionCalls.some(
             (fc) => fc.functionCall?.name === 'createFlashcardDeck',
@@ -1291,6 +1361,11 @@ export class AiTutorChatService {
           let scheduleQuizAcknowledgement = '';
 
           for (const funcCall of functionCalls) {
+            if (abortController.signal.aborted || subscriber.closed) {
+              streamFinished = true;
+              completeStream('client_disconnected');
+              return;
+            }
             if (funcCall.functionCall?.name === 'scoreUser') {
               const score = Number(funcCall.functionCall?.args?.score || 0);
               if (!isNaN(score) && score > 0 && score <= 10) {
@@ -1508,19 +1583,19 @@ export class AiTutorChatService {
                 topic.trim().length > 0
               ) {
                 try {
-                  const parsed = await this.structured.generateFlashcardDeckContent(
-                    userId,
-                    topic.trim(),
-                    cardCount,
-                  );
-                  const { deck } = await this.flashcardService.saveFlashcardDeck(
-                    {
+                  const parsed =
+                    await this.structured.generateFlashcardDeckContent(
+                      userId,
+                      topic.trim(),
+                      cardCount,
+                    );
+                  const { deck } =
+                    await this.flashcardService.saveFlashcardDeck({
                       userId,
                       topic: topic.trim(),
                       title: parsed.title,
                       cards: parsed.cards,
-                    },
-                  );
+                    });
 
                   const n = parsed.cards.length;
                   flashcardAcknowledgement =
@@ -1580,11 +1655,12 @@ export class AiTutorChatService {
                 topic.trim().length > 0
               ) {
                 try {
-                  const parsed = await this.structured.generatePublicQuizDeckContent(
-                    userId,
-                    topic.trim(),
-                    questionCount,
-                  );
+                  const parsed =
+                    await this.structured.generatePublicQuizDeckContent(
+                      userId,
+                      topic.trim(),
+                      questionCount,
+                    );
                   const title =
                     typeof quizTitleArg === 'string' &&
                     quizTitleArg.trim().length > 0
@@ -1593,6 +1669,9 @@ export class AiTutorChatService {
                   const saved = await this.quizzesService.publish(userId, {
                     title,
                     description: parsed.description,
+                    summary: parsed.summary,
+                    coveredConcepts: parsed.coveredConcepts,
+                    challengeProfile: parsed.challengeProfile,
                     questions: parsed.questions,
                     sourceChatId: chatId,
                   });
@@ -1644,6 +1723,12 @@ export class AiTutorChatService {
 
           const sanitizedResponse =
             sanitizeLeakedAssistantToolTranscript(fullResponse);
+
+          if (abortController.signal.aborted || subscriber.closed) {
+            streamFinished = true;
+            completeStream('client_disconnected');
+            return;
+          }
           if (sanitizedResponse.leakedMemoryFacts.length > 0) {
             await this.applyUpdateUserMemoryFromTool(userId, {
               facts: sanitizedResponse.leakedMemoryFacts,
@@ -1680,6 +1765,12 @@ export class AiTutorChatService {
             chatId,
           };
 
+          if (abortController.signal.aborted || subscriber.closed) {
+            streamFinished = true;
+            completeStream('client_disconnected');
+            return;
+          }
+
           await this.chatService.saveMessages({ messages: [assistantMessage] });
 
           subscriber.next({
@@ -1696,12 +1787,23 @@ export class AiTutorChatService {
             emittedTokenCount,
             functionCallCount: functionCalls.length,
           });
+          streamFinished = true;
           subscriber.complete();
         } catch (error) {
+          if (
+            abortController.signal.aborted ||
+            subscriber.closed ||
+            (error instanceof Error && error.name === 'AbortError')
+          ) {
+            streamFinished = true;
+            completeStream('client_disconnected');
+            return;
+          }
           logStreamLatency('stream_error', {
             message: error instanceof Error ? error.message : String(error),
           });
           console.error('Error in stream:', error);
+          streamFinished = true;
           subscriber.error(error);
         }
       })();

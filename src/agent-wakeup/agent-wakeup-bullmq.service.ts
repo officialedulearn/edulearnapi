@@ -23,7 +23,9 @@ export class AgentWakeupBullmqService implements OnModuleDestroy {
   getQueue(): Queue<AgentWakeupEvaluateJobData> {
     if (!this.queue) {
       const url = process.env.REDIS_URL || 'redis://localhost:6379';
-      this.logger.log(`Agent wake-up queue connecting ${this.maskRedisUrl(url)}`);
+      this.logger.log(
+        `Agent wake-up queue connecting ${this.maskRedisUrl(url)}`,
+      );
       this.connection = new Redis(url, { maxRetriesPerRequest: null });
       this.connection.on('error', (err) =>
         this.logger.error(`Agent wake-up Redis: ${err.message}`),

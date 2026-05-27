@@ -65,6 +65,7 @@
     "@nestjs/throttler": "^6.4.0",
     "@nestjs/websockets": "^11.0.1",
     "@perplexity-ai/perplexity_ai": "^0.26.4",
+    "@sentry/nestjs": "^10.49.0",
     "@project-serum/anchor": "^0.26.0",
     "@react-email/components": "^0.0.34",
     "@react-email/render": "^1.0.3",

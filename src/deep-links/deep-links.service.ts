@@ -2,6 +2,10 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
+import { Resvg } from '@resvg/resvg-js';
+import { eq } from 'drizzle-orm';
+import db from '../../drizzle';
+import { publicQuiz } from '../../lib/db/schema';
 type LinkType = 'referral' | 'publicQuiz' | 'communityInvite';
 
 type LandingPageInput = {
@@ -10,6 +14,8 @@ type LandingPageInput = {
   title: string;
   description: string;
   canonicalPath: string;
+  previewImageUrl?: string;
+  previewImageAlt?: string;
 };
 
 @Injectable()
@@ -120,16 +126,50 @@ export class DeepLinksService {
       return cached;
     }
     const sanitizedQuizId = this.normalizeToken(quizId);
+    const quiz = await this.getPublicQuizPreview(sanitizedQuizId);
+    const title = quiz?.title ? `Try ${quiz.title}` : 'Open this EduLearn quiz';
+    const description =
+      quiz?.summary ||
+      quiz?.description ||
+      'Launch the EduLearn app to participate in this public quiz.';
+    const previewImageUrl = `https://${this.deepLinkHost}/quizzes/${encodeURIComponent(
+      sanitizedQuizId,
+    )}/og-image`;
     const html = this.buildLandingPage({
       linkType: 'publicQuiz',
       value: sanitizedQuizId,
-      title: 'Open this EduLearn quiz',
-      description:
-        'Launch the EduLearn app to participate in this public quiz.',
+      title,
+      description,
       canonicalPath: `/quizzes/${encodeURIComponent(sanitizedQuizId)}`,
+      previewImageUrl,
+      previewImageAlt: quiz?.title ? `${quiz.title} quiz preview` : undefined,
     });
     await this.cacheManager.set<string>(cacheKey, html, 60 * 60 * 24);
     return html;
+  }
+
+  async buildQuizOpenGraphImage(quizId: string): Promise<Buffer> {
+    const cacheKey = `deep-links:quiz-og:${quizId}`;
+    const cached = await this.cacheManager.get<Buffer | null>(cacheKey);
+    if (cached) return cached;
+
+    const quiz = await this.getPublicQuizPreview(this.normalizeToken(quizId));
+    const title = quiz?.title || 'EduLearn Quiz';
+    const summary =
+      quiz?.summary ||
+      quiz?.description ||
+      'Challenge yourself with a public EduLearn quiz.';
+    const concepts = quiz?.coveredConcepts?.slice(0, 4).join(' - ') || 'Quiz';
+    const svg = this.buildQuizOpenGraphSvg({ title, summary, concepts });
+    const png = new Resvg(svg, {
+      fitTo: { mode: 'width', value: 1200 },
+      font: { loadSystemFonts: true },
+    })
+      .render()
+      .asPng();
+    const buffer = Buffer.from(png);
+    await this.cacheManager.set<Buffer>(cacheKey, buffer, 60 * 60 * 24);
+    return buffer;
   }
 
   async buildCommunityLandingPage(inviteCode: string) {
@@ -312,7 +352,12 @@ export class DeepLinksService {
     const escapedBrandLogoUrl = this.escapeHtml(this.brandLogoUrl);
     const escapedBrandMarkUrl = this.escapeHtml(this.brandMarkUrl);
     const escapedBrandFontUrl = this.escapeHtml(this.brandFontUrl);
-    const escapedPreviewImageUrl = this.escapeHtml(this.brandPreviewImageUrl);
+    const escapedPreviewImageUrl = this.escapeHtml(
+      input.previewImageUrl || this.brandPreviewImageUrl,
+    );
+    const escapedPreviewImageAlt = this.escapeHtml(
+      input.previewImageAlt || `${this.brandName} preview`,
+    );
     const escapedBrandSiteUrl = this.escapeHtml(this.brandSiteUrl);
 
     return `<!doctype html>
@@ -329,7 +374,7 @@ export class DeepLinksService {
     <meta property="og:url" content="${escapedCanonical}" />
     <meta property="og:image" content="${escapedPreviewImageUrl}" />
     <meta property="og:site_name" content="${escapedBrandName}" />
-    <meta property="og:image:alt" content="${escapedBrandName} preview" />
+    <meta property="og:image:alt" content="${escapedPreviewImageAlt}" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapedTitle}" />
     <meta name="twitter:description" content="${escapedDescription}" />
@@ -440,7 +485,7 @@ export class DeepLinksService {
   </head>
   <body>
     <main>
-      <img class="brand-preview" src="${escapedPreviewImageUrl}" alt="${escapedBrandName} preview" loading="eager" />
+      <img class="brand-preview" src="${escapedPreviewImageUrl}" alt="${escapedPreviewImageAlt}" loading="eager" />
       <img class="brand-logo" src="${escapedBrandLogoUrl}" alt="${escapedBrandName} logo" loading="eager" />
       <img class="brand-mark" src="${escapedBrandMarkUrl}" alt="" aria-hidden="true" />
       <h1>${escapedTitle}</h1>
@@ -490,6 +535,60 @@ export class DeepLinksService {
     return `${this.appScheme}://quizzes/${encodeURIComponent(value)}`;
   }
 
+  private async getPublicQuizPreview(quizId: string): Promise<{
+    title: string;
+    description: string | null;
+    summary: string | null;
+    coveredConcepts: string[];
+    challengeProfile: string | null;
+  } | null> {
+    const [quiz] = await db
+      .select({
+        title: publicQuiz.title,
+        description: publicQuiz.description,
+        summary: publicQuiz.summary,
+        coveredConcepts: publicQuiz.coveredConcepts,
+        challengeProfile: publicQuiz.challengeProfile,
+      })
+      .from(publicQuiz)
+      .where(eq(publicQuiz.id, quizId))
+      .limit(1);
+    if (!quiz) return null;
+    return {
+      title: quiz.title,
+      description: quiz.description,
+      summary: quiz.summary,
+      coveredConcepts: Array.isArray(quiz.coveredConcepts)
+        ? quiz.coveredConcepts.filter(
+            (item): item is string => typeof item === 'string',
+          )
+        : [],
+      challengeProfile: quiz.challengeProfile,
+    };
+  }
+
+  private buildQuizOpenGraphSvg(input: {
+    title: string;
+    summary: string;
+    concepts: string;
+  }): string {
+    const title = this.escapeXml(this.truncate(input.title, 72));
+    const summary = this.escapeXml(this.truncate(input.summary, 160));
+    const concepts = this.escapeXml(this.truncate(input.concepts, 96));
+    return `<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#0A0A0A"/>
+  <rect x="54" y="54" width="1092" height="522" rx="36" fill="#131313" stroke="#2E3033" stroke-width="2"/>
+  <circle cx="1016" cy="126" r="70" fill="#00FF80" opacity="0.18"/>
+  <circle cx="1046" cy="98" r="28" fill="#00FF80" opacity="0.7"/>
+  <text x="92" y="132" fill="#00FF80" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="700">EduLearn Quiz</text>
+  <text x="92" y="250" fill="#F2F5F7" font-family="Inter, Arial, sans-serif" font-size="64" font-weight="800">${title}</text>
+  <text x="92" y="340" fill="#B3B3B3" font-family="Inter, Arial, sans-serif" font-size="32">${summary}</text>
+  <rect x="92" y="426" width="760" height="70" rx="24" fill="#0D0D0D" stroke="#2E3033" stroke-width="2"/>
+  <text x="124" y="470" fill="#E0E0E0" font-family="Inter, Arial, sans-serif" font-size="28">${concepts}</text>
+  <text x="92" y="548" fill="#00FF80" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="700">Try this quiz in the EduLearn app</text>
+</svg>`;
+  }
+
   private normalizeToken(value: string) {
     return value.trim();
   }
@@ -525,5 +624,15 @@ export class DeepLinksService {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  private escapeXml(input: string) {
+    return this.escapeHtml(input);
+  }
+
+  private truncate(input: string, maxLength: number) {
+    const normalized = input.replace(/\s+/g, ' ').trim();
+    if (normalized.length <= maxLength) return normalized;
+    return `${normalized.slice(0, maxLength - 3).trim()}...`;
   }
 }

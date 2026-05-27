@@ -175,13 +175,13 @@ export class SubscriptionService {
 
     const row = rows[0];
     const tier = row.tier as SubscriptionTier;
-    const expired = row.expiresAt ? row.expiresAt.getTime() < Date.now() : false;
+    const expired = row.expiresAt
+      ? row.expiresAt.getTime() < Date.now()
+      : false;
 
     return {
       tier: expired ? 'basic' : tier,
-      benefits: expired
-        ? SUBSCRIPTION_TIERS.basic
-        : SUBSCRIPTION_TIERS[tier],
+      benefits: expired ? SUBSCRIPTION_TIERS.basic : SUBSCRIPTION_TIERS[tier],
       isActive: row.isActive && !expired,
       billingPeriod: row.billingPeriod as BillingPeriod,
       startedAt: row.startedAt,

@@ -1,4 +1,9 @@
-import { Injectable, Inject, forwardRef, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  forwardRef,
+  BadRequestException,
+} from '@nestjs/common';
 import { eq, and, desc, asc, sql, ilike, or, inArray } from 'drizzle-orm';
 import db from '../../drizzle';
 import {
@@ -53,7 +58,10 @@ export class CommunityService {
     this.userCommunitiesCache.clear();
   }
 
-  private async buildReactionEnrichment(messageIds: string[], viewerUserId?: string | null): Promise<
+  private async buildReactionEnrichment(
+    messageIds: string[],
+    viewerUserId?: string | null,
+  ): Promise<
     Record<
       string,
       {
@@ -112,9 +120,7 @@ export class CommunityService {
               eq(messageReaction.userId, viewerUserId),
             ),
           )
-      : Promise.resolve(
-          [] as { messageId: string; reaction: string }[],
-        );
+      : Promise.resolve([] as { messageId: string; reaction: string }[]);
 
     const [aggregates, mineRows] = await Promise.all([
       aggregatesPromise,
@@ -218,10 +224,7 @@ export class CommunityService {
     return member;
   }
 
-  async getCommunityMembers(
-    communityId: string,
-    options?: { limit?: number },
-  ) {
+  async getCommunityMembers(communityId: string, options?: { limit?: number }) {
     const q = db
       .select({
         id: community_members.id,
@@ -351,10 +354,14 @@ export class CommunityService {
     userId: string;
     communityId: string;
   }): Promise<CommunityJoinRequest> {
-
-    const existingRequest = await this.getUserJoinRequest(data.userId, data.communityId);
+    const existingRequest = await this.getUserJoinRequest(
+      data.userId,
+      data.communityId,
+    );
     if (existingRequest) {
-      throw new BadRequestException('You have already requested to join this community');
+      throw new BadRequestException(
+        'You have already requested to join this community',
+      );
     }
 
     const [request] = await db
@@ -480,9 +487,9 @@ export class CommunityService {
   ) {
     const moderatorUserId =
       opts && 'moderatorUserIdKnown' in opts
-        ? opts.moderatorUserIdKnown ?? null
-        : (await this.getCommunityMod(roomId).catch(() => null))?.user.id ??
-          null;
+        ? (opts.moderatorUserIdKnown ?? null)
+        : ((await this.getCommunityMod(roomId).catch(() => null))?.user.id ??
+          null);
 
     const rows = await db
       .select({

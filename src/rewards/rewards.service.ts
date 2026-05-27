@@ -539,7 +539,7 @@ export class RewardsService {
 
       let userPublicKey: PublicKey;
       try {
-        userPublicKey = new PublicKey(userExists[0].address as string);
+        userPublicKey = new PublicKey(userExists[0].address);
       } catch (pubKeyError) {
         throw new Error(
           `Invalid wallet address format: ${userExists[0].address}. Please contact support`,
@@ -620,7 +620,7 @@ export class RewardsService {
           asset: mint,
           name: rewardExists[0].title,
           uri: `${rewardExists[0].ipfs}`,
-          owner: publicKey(userExists[0].address as string),
+          owner: publicKey(userExists[0].address),
         });
 
         result = await tx.send(umi);
@@ -849,7 +849,7 @@ export class RewardsService {
 
       let userPublicKey: PublicKey;
       try {
-        userPublicKey = new PublicKey(userExists[0].address as string);
+        userPublicKey = new PublicKey(userExists[0].address);
       } catch (pubKeyError) {
         throw new Error(
           `Invalid wallet address format: ${userExists[0].address}. Please contact support`,
@@ -903,7 +903,7 @@ export class RewardsService {
           asset: mint,
           name: rewardExists[0].title,
           uri: `${rewardExists[0].ipfs}`,
-          owner: publicKey(userExists[0].address as string),
+          owner: publicKey(userExists[0].address),
         });
 
         result = await tx.send(umi);

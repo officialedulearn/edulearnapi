@@ -45,8 +45,6 @@ export class RoadmapController {
     return await this.roadmapService.getRoadmapsByUserId(userId);
   }
 
-
-
   @Get(':roadmapId')
   async getRoadmapById(@Param('roadmapId') roadmapId: string) {
     const response = await this.roadmapService.getRoadmapWithSteps(roadmapId);
@@ -82,6 +80,53 @@ export class RoadmapController {
       stepId,
       userId,
       this.aiService,
+    );
+  }
+
+  @Post('sub-step/:subStepId/verification/start')
+  async startSubStepVerification(
+    @Request() req,
+    @Param('subStepId') subStepId: string,
+    @Body() body: { userId: string },
+  ) {
+    const { userId } = body;
+    if (!userId) {
+      throw new NotFoundException('User ID is required');
+    }
+    await verifyUserAuthorization(
+      req.user,
+      userId,
+      'starting roadmap verification',
+    );
+    return await this.roadmapService.startSubStepVerification(
+      subStepId,
+      userId,
+    );
+  }
+
+  @Post('verification/:quizId/attempt')
+  async submitSubStepVerificationAttempt(
+    @Request() req,
+    @Param('quizId') quizId: string,
+    @Body()
+    body: {
+      userId: string;
+      answers: Array<{ questionIndex: number; selectedAnswer: string }>;
+    },
+  ) {
+    const { userId, answers } = body;
+    if (!userId || !answers?.length) {
+      throw new NotFoundException('User ID and answers are required');
+    }
+    await verifyUserAuthorization(
+      req.user,
+      userId,
+      'submitting roadmap verification',
+    );
+    return await this.roadmapService.submitSubStepVerificationAttempt(
+      quizId,
+      userId,
+      answers,
     );
   }
 

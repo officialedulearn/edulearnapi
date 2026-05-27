@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import db from '../../drizzle';
 import { render } from '@react-email/render';
 import * as React from 'react';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { V25AnnouncementEmail } from '../emails/templates/V25AnnouncementEmail';
 import { ComeBackSoonEmail } from '../emails/templates/ComeBackSoonEmail';
 import { ReferFriendsEmail } from '../emails/templates/ReferFriendsEmail';
@@ -21,6 +22,32 @@ import {
   type NftListingBroadcastData,
 } from '../emails/nft-listing-announcement.config';
 import { NftListingAnnouncementEmail } from '../emails/templates/NftListingAnnouncementEmail';
+import { startSentrySpan } from 'src/observability/sentry';
+
+type UnsubscribeTokenPayload = {
+  email: string;
+  exp: number;
+};
+
+export type EmailSendResult =
+  | { id?: string }
+  | {
+      id?: never;
+      skipped: true;
+      reason: 'email_unsubscribed';
+      email: string;
+    };
+
+export type UnsubscribeStatus =
+  | 'active'
+  | 'already_unsubscribed'
+  | 'unsubscribed'
+  | 'invalid'
+  | 'expired';
+
+export type UnsubscribeResponse = {
+  status: UnsubscribeStatus;
+};
 
 @Injectable()
 export class ResendService {
@@ -46,11 +73,176 @@ export class ResendService {
       'https://lmektyexzejjvisjpzxu.supabase.co/storage/v1/object/public/media/congrats.png',
   };
 
-  constructor(private readonly resend: Resend) {
-    this.resend = new Resend(process.env.RESEND_API_KEY);
-  }
+  constructor(private readonly resend: Resend) {}
 
   private readonly audienceId = 'b9e37a5c-482b-4c5b-b1d5-990fea1f7ac5';
+  private readonly unsubscribeTokenTtlMs = 1000 * 60 * 60 * 24 * 365;
+
+  private normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
+  }
+
+  private getUnsubscribeSecret(): string {
+    const secret = process.env.UNSUBSCRIBE_SECRET;
+    if (secret) return secret;
+    if (process.env.NODE_ENV === 'test') return 'test-unsubscribe-secret';
+    throw new Error('UNSUBSCRIBE_SECRET is not set');
+  }
+
+  private signTokenPayload(encodedPayload: string): string {
+    return createHmac('sha256', this.getUnsubscribeSecret())
+      .update(encodedPayload)
+      .digest('base64url');
+  }
+
+  createUnsubscribeToken(email: string): string {
+    const payload: UnsubscribeTokenPayload = {
+      email: this.normalizeEmail(email),
+      exp: Date.now() + this.unsubscribeTokenTtlMs,
+    };
+    const encodedPayload = Buffer.from(JSON.stringify(payload), 'utf8').toString(
+      'base64url',
+    );
+    return `${encodedPayload}.${this.signTokenPayload(encodedPayload)}`;
+  }
+
+  private parseUnsubscribeToken(
+    token: string | undefined,
+  ):
+    | { ok: true; email: string }
+    | { ok: false; status: 'invalid' | 'expired' } {
+    if (!token || typeof token !== 'string') {
+      return { ok: false, status: 'invalid' };
+    }
+
+    const [encodedPayload, signature, ...extra] = token.split('.');
+    if (!encodedPayload || !signature || extra.length) {
+      return { ok: false, status: 'invalid' };
+    }
+
+    const expectedSignature = this.signTokenPayload(encodedPayload);
+    const signatureBuffer = Buffer.from(signature);
+    const expectedBuffer = Buffer.from(expectedSignature);
+    if (
+      signatureBuffer.length !== expectedBuffer.length ||
+      !timingSafeEqual(signatureBuffer, expectedBuffer)
+    ) {
+      return { ok: false, status: 'invalid' };
+    }
+
+    try {
+      const payload = JSON.parse(
+        Buffer.from(encodedPayload, 'base64url').toString('utf8'),
+      ) as Partial<UnsubscribeTokenPayload>;
+      if (!payload.email || typeof payload.exp !== 'number') {
+        return { ok: false, status: 'invalid' };
+      }
+      if (payload.exp < Date.now()) {
+        return { ok: false, status: 'expired' };
+      }
+      return { ok: true, email: this.normalizeEmail(payload.email) };
+    } catch {
+      return { ok: false, status: 'invalid' };
+    }
+  }
+
+  private getWebBaseUrl(): string {
+    return (
+      process.env.WEB_BASE_URL ||
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      'https://edulearn.fun'
+    ).replace(/\/$/, '');
+  }
+
+  private createUnsubscribeUrl(email: string): string {
+    const token = this.createUnsubscribeToken(email);
+    return `${this.getWebBaseUrl()}/unsubscribe?token=${encodeURIComponent(
+      token,
+    )}`;
+  }
+
+  private withProgrammaticUnsubscribeLink(html: string, email: string): string {
+    const unsubscribeUrl = this.createUnsubscribeUrl(email);
+    const htmlWithSignedFallback = html.replaceAll(
+      'https://edulearn.fun/unsubscribe',
+      unsubscribeUrl,
+    );
+
+    if (
+      htmlWithSignedFallback.includes(unsubscribeUrl) ||
+      htmlWithSignedFallback.includes('{{{RESEND_UNSUBSCRIBE_URL}}}')
+    ) {
+      return htmlWithSignedFallback;
+    }
+
+    const footer = `<p style="margin:16px 0 0 0;color:#9E9E9E;font-size:12px;text-align:center;"><a href="${unsubscribeUrl}" style="color:#61728C;text-decoration:underline;">Unsubscribe</a></p>`;
+    return htmlWithSignedFallback.includes('</body>')
+      ? htmlWithSignedFallback.replace('</body>', `${footer}</body>`)
+      : `${htmlWithSignedFallback}${footer}`;
+  }
+
+  private async getEmailSubscription(email: string): Promise<boolean> {
+    const normalizedEmail = this.normalizeEmail(email);
+    const [result] = await db
+      .select({ emailSubscribed: user.emailSubscribed })
+      .from(user)
+      .where(eq(user.email, normalizedEmail))
+      .limit(1);
+
+    return result?.emailSubscribed !== false;
+  }
+
+  async getUnsubscribeStatus(
+    token: string | undefined,
+  ): Promise<UnsubscribeResponse> {
+    const parsed = this.parseUnsubscribeToken(token);
+    if (!parsed.ok) {
+      return { status: parsed.status };
+    }
+
+    const [result] = await db
+      .select({ emailSubscribed: user.emailSubscribed })
+      .from(user)
+      .where(eq(user.email, parsed.email))
+      .limit(1);
+
+    if (!result) {
+      return { status: 'invalid' };
+    }
+
+    return {
+      status:
+        result.emailSubscribed === false ? 'already_unsubscribed' : 'active',
+    };
+  }
+
+  async unsubscribe(token: string | undefined): Promise<UnsubscribeResponse> {
+    const parsed = this.parseUnsubscribeToken(token);
+    if (!parsed.ok) {
+      return { status: parsed.status };
+    }
+
+    const [current] = await db
+      .select({ emailSubscribed: user.emailSubscribed })
+      .from(user)
+      .where(eq(user.email, parsed.email))
+      .limit(1);
+
+    if (!current) {
+      return { status: 'invalid' };
+    }
+
+    if (current.emailSubscribed === false) {
+      return { status: 'already_unsubscribed' };
+    }
+
+    await db
+      .update(user)
+      .set({ emailSubscribed: false })
+      .where(eq(user.email, parsed.email));
+
+    return { status: 'unsubscribed' };
+  }
 
   async getResendContacts() {
     try {
@@ -76,6 +268,7 @@ export class ResendService {
       .select({
         email: user.email,
         name: user.name,
+        emailSubscribed: user.emailSubscribed,
       })
       .from(user);
 
@@ -95,7 +288,11 @@ export class ResendService {
       }
 
       try {
-        await this.addResendContact(user.email, user.name);
+        await this.addResendContact(
+          user.email,
+          user.name,
+          user.emailSubscribed !== false,
+        );
         added++;
       } catch (error) {
         console.error(`Failed to add ${user.email}:`, error);
@@ -118,6 +315,7 @@ export class ResendService {
       .select({
         email: user.email,
         name: user.name,
+        emailSubscribed: user.emailSubscribed,
       })
       .from(user);
 
@@ -138,14 +336,43 @@ export class ResendService {
     };
   }
 
-  async sendEmail(to: string, subject: string, html: string, fromName?: string) {
+  async sendEmail(
+    to: string,
+    subject: string,
+    html: string,
+    fromName?: string,
+  ): Promise<EmailSendResult> {
+    const normalizedTo = this.normalizeEmail(to);
+    const emailSubscribed = await this.getEmailSubscription(normalizedTo);
+    if (!emailSubscribed) {
+      return {
+        skipped: true,
+        reason: 'email_unsubscribed',
+        email: normalizedTo,
+      };
+    }
+
     const safeFromName = (fromName || 'Eddy 💚').trim() || 'Eddy 💚';
-    const { data, error } = await this.resend.emails.send({
-      from: `${safeFromName} <eddy@edulearn.fun>`,
-      to: to,
-      subject: subject,
-      html: html,
-    });
+    const htmlWithUnsubscribe = this.withProgrammaticUnsubscribeLink(
+      html,
+      normalizedTo,
+    );
+    const { data, error } = await startSentrySpan(
+      {
+        name: 'Send email with Resend',
+        op: 'external.resend.email',
+        attributes: {
+          subject,
+        },
+      },
+      () =>
+        this.resend.emails.send({
+          from: `${safeFromName} <eddy@edulearn.fun>`,
+          to: normalizedTo,
+          subject: subject,
+          html: htmlWithUnsubscribe,
+        }),
+    );
 
     if (error) {
       throw new Error(error.message);
@@ -406,9 +633,12 @@ export class ResendService {
         name: user.name,
         referralCode: user.referralCode,
         referralCount: user.referralCount,
+        emailSubscribed: user.emailSubscribed,
       })
       .from(user);
-    const validUsers = users.filter((u) => u.email?.trim());
+    const validUsers = users.filter(
+      (u) => u.email?.trim() && u.emailSubscribed !== false,
+    );
     let sent = 0;
     let failed = 0;
     for (const u of validUsers) {
@@ -432,10 +662,13 @@ export class ResendService {
       .select({
         email: user.email,
         name: user.name,
+        emailSubscribed: user.emailSubscribed,
       })
       .from(user);
 
-    const validUsers = users.filter((u) => u.email?.trim());
+    const validUsers = users.filter(
+      (u) => u.email?.trim() && u.emailSubscribed !== false,
+    );
     const results: PromiseSettledResult<unknown>[] = [];
 
     for (let i = 0; i < validUsers.length; i += this.resendRateLimit) {
@@ -456,12 +689,12 @@ export class ResendService {
     };
   }
 
-  async addResendContact(email: string, name: string) {
+  async addResendContact(email: string, name: string, emailSubscribed = true) {
     const contact = await this.resend.contacts.create({
       email: email,
       firstName: name,
       lastName: '',
-      unsubscribed: false,
+      unsubscribed: !emailSubscribed,
       audienceId: this.audienceId,
     });
     return contact;

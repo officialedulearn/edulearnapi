@@ -44,7 +44,9 @@ function clampDays(n: number): number {
 }
 
 function startOfUtcDay(d: Date): Date {
-  const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const x = new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()),
+  );
   return x;
 }
 
@@ -81,8 +83,7 @@ export class RemindersService {
         const jobState = await existing.getState();
         const ageMs = Date.now() - (existing.timestamp ?? 0);
         const stuckEvalJob =
-          jobState === 'waiting' &&
-          ageMs > REMINDER_EVAL_JOB_STUCK_MS;
+          jobState === 'waiting' && ageMs > REMINDER_EVAL_JOB_STUCK_MS;
         if (stuckEvalJob) {
           this.logger.warn(
             `Removing stuck reminder-eval job userId=${userId} ageMs=${ageMs} state=${jobState}`,
@@ -158,7 +159,11 @@ export class RemindersService {
     }
   }
 
-  async setReminderDisabled(userId: string, disabled: boolean, reason?: string) {
+  async setReminderDisabled(
+    userId: string,
+    disabled: boolean,
+    reason?: string,
+  ) {
     const existing = await this.getReminderState(userId);
     if (existing) {
       await db
@@ -200,12 +205,18 @@ export class RemindersService {
       `evaluateUser start userId=${userId} reason=${reason} dryRun=${Boolean(dryRun)}`,
     );
 
-    const [u] = await db.select().from(user).where(eq(user.id, userId)).limit(1);
+    const [u] = await db
+      .select()
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
     if (!u) {
       throw new Error(`RemindersService: user ${userId} not found`);
     }
 
-    const userSettings = normalizeUserSettingsPreferences(u.settingsPreferences);
+    const userSettings = normalizeUserSettingsPreferences(
+      u.settingsPreferences,
+    );
     const emailOk = isValidEmail(u.email);
     const state = await this.getReminderState(userId);
 
@@ -354,7 +365,9 @@ export class RemindersService {
     const goalText =
       (a?.purpose || '').trim() ||
       (u.learning || '').trim() ||
-      [latestRoadmap?.topic, latestRoadmap?.title].filter(Boolean).join(' — ') ||
+      [latestRoadmap?.topic, latestRoadmap?.title]
+        .filter(Boolean)
+        .join(' — ') ||
       'general learning';
 
     // Load quiz performance.
@@ -479,7 +492,9 @@ export class RemindersService {
         nextCheckAt,
         subject: sendRequested ? aiDecision.subject : undefined,
         tip: sendRequested ? aiDecision.tip : undefined,
-        personalizedRecap: sendRequested ? aiDecision.personalizedRecap : undefined,
+        personalizedRecap: sendRequested
+          ? aiDecision.personalizedRecap
+          : undefined,
         why: blockedBy || aiDecision.why || 'skipped',
         modelMeta,
         featuresUsed,

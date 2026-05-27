@@ -53,7 +53,10 @@ describe('AgentWakeupService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AgentWakeupService,
-        { provide: AgentWakeupBullmqService, useValue: { getQueue: jest.fn() } },
+        {
+          provide: AgentWakeupBullmqService,
+          useValue: { getQueue: jest.fn() },
+        },
         { provide: AgentWakeupDecisionService, useValue: decision },
         { provide: ChatService, useValue: chatService },
         { provide: NotificationsService, useValue: notificationsService },
@@ -202,7 +205,9 @@ describe('AgentWakeupService', () => {
     });
     expect(chatService.saveMessages).toHaveBeenCalledTimes(1);
     expect(notificationsService.createNotification).toHaveBeenCalledTimes(1);
-    expect(notificationsService.createNotification.mock.calls[0][0]).toMatchObject({
+    expect(
+      notificationsService.createNotification.mock.calls[0][0],
+    ).toMatchObject({
       userId: 'user-1',
       type: 'agent_message',
       metadata: {

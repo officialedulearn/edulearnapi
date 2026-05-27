@@ -1,5 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { RedisClientType } from 'redis';
+import { startSentrySpan } from 'src/observability/sentry';
 
 @Injectable()
 export class RedisService {
@@ -228,7 +229,13 @@ export class RedisService {
    * Ping to keep connection alive
    */
   async ping(): Promise<string> {
-    return await this.redis.ping();
+    return startSentrySpan(
+      {
+        name: 'Redis ping',
+        op: 'cache.redis.ping',
+      },
+      () => this.redis.ping(),
+    );
   }
 
   // ==================== ROADMAP CACHE ====================

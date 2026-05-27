@@ -17,4 +17,3 @@ import { ResendModule } from 'src/resend/resend.module';
   exports: [RemindersService],
 })
 export class RemindersModule {}
-
