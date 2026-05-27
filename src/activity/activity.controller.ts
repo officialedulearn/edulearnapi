@@ -117,12 +117,20 @@ export class ActivityController {
         limit === undefined ? 10 : Number.parseInt(String(limit), 10);
       parsedPage = page === undefined ? 1 : Number.parseInt(String(page), 10);
 
-      if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
-        throw new BadRequestException('limit must be an integer between 1 and 100');
+      if (
+        !Number.isInteger(parsedLimit) ||
+        parsedLimit < 1 ||
+        parsedLimit > 100
+      ) {
+        throw new BadRequestException(
+          'limit must be an integer between 1 and 100',
+        );
       }
 
       if (!Number.isInteger(parsedPage) || parsedPage < 1) {
-        throw new BadRequestException('page must be an integer greater than or equal to 1');
+        throw new BadRequestException(
+          'page must be an integer greater than or equal to 1',
+        );
       }
     }
 

@@ -1,8 +1,7 @@
-export type RealtimeSubscription =
-  | {
-      channel: 'community.room';
-      id: string;
-    };
+export type RealtimeSubscription = {
+  channel: 'community.room';
+  id: string;
+};
 
 export type RealtimeEventName =
   | 'realtime.connected'

@@ -24,12 +24,19 @@ import { PublicQuiz } from '../../lib/db/schema';
 
 type SortOption = 'recent' | 'popular';
 
-
 interface QuizQuestion {
   question: string;
   options: string[];
   correctAnswer: string;
   explanation: string;
+}
+
+function cleanStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 @Injectable()
@@ -38,8 +45,8 @@ export class QuizzesService {
     @Inject(forwardRef(() => ActivityService))
     private readonly activityService: ActivityService,
     private readonly remindersService: RemindersService,
-    @Inject(CACHE_MANAGER) private cacheManager: Cache
-  ) { }
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+  ) {}
 
   private async getQuizByIdOrThrow(id: string) {
     const [quiz] = await db
@@ -51,6 +58,15 @@ export class QuizzesService {
       throw new NotFoundException(`Quiz ${id} not found`);
     }
     return quiz;
+  }
+
+  private normalizeQuizDetail<T extends PublicQuiz>(quiz: T): T & {
+    coveredConcepts: string[];
+  } {
+    return {
+      ...quiz,
+      coveredConcepts: cleanStringArray(quiz.coveredConcepts),
+    };
   }
 
   private async incrementQuizViewCount(id: string): Promise<void> {
@@ -82,8 +98,12 @@ export class QuizzesService {
       .values({
         title: dto.title,
         description: dto.description ?? null,
+        summary: dto.summary?.trim() || null,
+        coveredConcepts: cleanStringArray(dto.coveredConcepts),
+        challengeProfile: dto.challengeProfile?.trim() || null,
         questions: questions as unknown as Record<string, unknown>,
         createdBy: userId,
+        creatorId: userId,
         sourceChatId: dto.sourceChatId ?? null,
       })
       .returning();
@@ -91,6 +111,9 @@ export class QuizzesService {
       id: created.id,
       title: created.title,
       description: created.description,
+      summary: created.summary,
+      coveredConcepts: created.coveredConcepts ?? [],
+      challengeProfile: created.challengeProfile,
       createdBy: created.createdBy,
       createdAt: created.createdAt,
       viewCount: created.viewCount,
@@ -123,6 +146,9 @@ export class QuizzesService {
         id: publicQuiz.id,
         title: publicQuiz.title,
         description: publicQuiz.description,
+        summary: publicQuiz.summary,
+        coveredConcepts: publicQuiz.coveredConcepts,
+        challengeProfile: publicQuiz.challengeProfile,
         createdBy: publicQuiz.createdBy,
         viewCount: publicQuiz.viewCount,
         attemptCount: publicQuiz.attemptCount,
@@ -139,6 +165,9 @@ export class QuizzesService {
       id: r.id,
       title: r.title,
       description: r.description,
+      summary: r.summary,
+      coveredConcepts: r.coveredConcepts ?? [],
+      challengeProfile: r.challengeProfile,
       createdBy: r.createdBy,
       viewCount: r.viewCount,
       attemptCount: r.attemptCount,
@@ -157,6 +186,9 @@ export class QuizzesService {
         id: publicQuiz.id,
         title: publicQuiz.title,
         description: publicQuiz.description,
+        summary: publicQuiz.summary,
+        coveredConcepts: publicQuiz.coveredConcepts,
+        challengeProfile: publicQuiz.challengeProfile,
         createdBy: publicQuiz.createdBy,
         viewCount: publicQuiz.viewCount,
         attemptCount: publicQuiz.attemptCount,
@@ -173,6 +205,9 @@ export class QuizzesService {
       id: r.id,
       title: r.title,
       description: r.description,
+      summary: r.summary,
+      coveredConcepts: r.coveredConcepts ?? [],
+      challengeProfile: r.challengeProfile,
       createdBy: r.createdBy,
       viewCount: r.viewCount,
       attemptCount: r.attemptCount,
@@ -187,7 +222,7 @@ export class QuizzesService {
     const cached = await this.cacheManager.get<PublicQuiz | null>(cacheKey);
     if (cached) {
       await this.incrementQuizViewCount(id); // fire-and-forget or awaited
-      return cached;
+      return this.normalizeQuizDetail(cached);
     }
 
     const quiz = await this.getQuizByIdOrThrow(id);
@@ -196,7 +231,7 @@ export class QuizzesService {
 
     await this.incrementQuizViewCount(id);
 
-    return quiz;
+    return this.normalizeQuizDetail(quiz);
   }
 
   async startParticipation(quizId: string, userId: string) {
@@ -213,9 +248,7 @@ export class QuizzesService {
       );
     const participationCount = Number(countRow?.count ?? 0);
     if (participationCount >= 4) {
-      throw new BadRequestException(
-        'You can join this quiz at most 4 times.',
-      );
+      throw new BadRequestException('You can join this quiz at most 4 times.');
     }
 
     const [row] = await db
@@ -242,16 +275,15 @@ export class QuizzesService {
         ),
       );
 
-
     const participationCount = Number(countRow?.count ?? 0);
 
     if (participationCount >= 4) {
       throw new BadRequestException('You can join this quiz at most 4 times.');
     }
 
-
     const success = await db.transaction(async (tx) => {
-      const [row] = await tx.insert(publicQuizParticipation)
+      const [row] = await tx
+        .insert(publicQuizParticipation)
         .values({ quizId, userId })
         .returning({
           id: publicQuizParticipation.id,
@@ -259,7 +291,8 @@ export class QuizzesService {
           joinedAt: publicQuizParticipation.joinedAt,
         });
 
-      await tx.update(publicQuiz)
+      await tx
+        .update(publicQuiz)
         .set({
           attemptCount: sql`${publicQuiz.attemptCount} + 1`,
         })
@@ -291,13 +324,13 @@ export class QuizzesService {
     const bestScores = db
       .select({
         userId: publicQuizParticipation.userId,
-        maxScore: max(publicQuizParticipation.score).as("maxScore"),
-        firstJoined: min(publicQuizParticipation.joinedAt).as("firstJoined"),
+        maxScore: max(publicQuizParticipation.score).as('maxScore'),
+        firstJoined: min(publicQuizParticipation.joinedAt).as('firstJoined'),
       })
       .from(publicQuizParticipation)
       .where(eq(publicQuizParticipation.quizId, quizId))
       .groupBy(publicQuizParticipation.userId)
-      .as("bestScores");
+      .as('bestScores');
 
     const leaderboard = await db
       .select({
@@ -432,7 +465,7 @@ export class QuizzesService {
         return {
           userId,
           quizId,
-          participationId: participationId!,
+          participationId: participationId,
           questionIndex: result.questionIndex,
           question: sourceQuestion.question,
           selectedAnswer: result.selectedAnswer,

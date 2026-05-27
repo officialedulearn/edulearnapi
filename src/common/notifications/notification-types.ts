@@ -16,7 +16,11 @@ export type NotificationMetadataMap = {
   quiz_ready: { quizId: string };
   roadmap_ready: { roadmapId: string };
   roadmap_step_ready: { roadmapId: string; stepId: string; chatId: string };
-  mention: { communityId: string; messageId?: string; mentionedByUserId?: string };
+  mention: {
+    communityId: string;
+    messageId?: string;
+    mentionedByUserId?: string;
+  };
   leaderboard_update: { period?: 'daily' | 'weekly' | 'monthly' };
   streak_warning: { streakDays?: number };
   nft_claimed: { nftId: string };

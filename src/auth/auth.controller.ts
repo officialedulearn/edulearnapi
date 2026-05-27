@@ -57,7 +57,7 @@ export class AuthController {
     if (result instanceof Error) {
       throw new BadRequestException(result.message);
     }
-    return result as UserResponse;
+    return result;
   }
   @Get('email/:email')
   @UseGuards(FlexibleAuthGuard)
@@ -66,7 +66,7 @@ export class AuthController {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    return user as UserResponse;
+    return user;
   }
 
   @SkipThrottle()
@@ -83,7 +83,9 @@ export class AuthController {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new BadRequestException(error.message || 'Failed to initialize user');
+      throw new BadRequestException(
+        error.message || 'Failed to initialize user',
+      );
     }
   }
 

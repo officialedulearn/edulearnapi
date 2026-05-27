@@ -23,7 +23,12 @@ export interface ReminderEvaluationResult {
   userId: string;
   reason: ReminderReason;
   send: boolean;
-  blockedBy?: 'cadence_cap' | 'disabled' | 'missing_email' | 'cooldown' | 'daily_cap';
+  blockedBy?:
+    | 'cadence_cap'
+    | 'disabled'
+    | 'missing_email'
+    | 'cooldown'
+    | 'daily_cap';
   subject?: string;
   tip?: string;
   personalizedRecap?: string;

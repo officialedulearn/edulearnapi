@@ -21,9 +21,10 @@ import {
   DefaultValuePipe,
   ParseIntPipe,
   Header,
+  StreamableFile,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { Observable } from 'rxjs';
+import { Observable, fromEvent, takeUntil } from 'rxjs';
 import type { FastifyRequest } from 'fastify';
 import { RouteConfig } from '@nestjs/platform-fastify';
 import { mkdirSync, createWriteStream } from 'fs';
@@ -39,11 +40,13 @@ import {
   GenerateSuggestionsDto,
   GenerateFlashcardsDto,
   UpdateStudySuggestionFeedbackDto,
+  GenerateSpeechDto,
 } from './dto/ai.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { AuthService } from 'src/auth/auth.service';
 import { getMostRecentUserMessage } from 'lib/utils';
 import { getAttachmentsFromMessageContent } from './ai.helpers';
+import { AiSpeechService } from './ai-speech.service';
 
 @Throttle({ default: { limit: 40, ttl: 60_000 } })
 @Controller('ai')
@@ -52,6 +55,7 @@ export class AiController {
   constructor(
     private readonly aiService: AiService,
     private readonly authService: AuthService,
+    private readonly aiSpeechService: AiSpeechService,
   ) {}
 
   private async enforceAttachmentLimitForRequest(dto: GenerateMessagesDto) {
@@ -61,7 +65,9 @@ export class AiController {
 
     const recent = getMostRecentUserMessage(dto.messages as any);
     if (!recent) return;
-    const attachments = getAttachmentsFromMessageContent((recent as any).content);
+    const attachments = getAttachmentsFromMessageContent(
+      (recent as any).content,
+    );
     if (attachments.length > limit) {
       throw new BadRequestException(
         `Too many attachments. Your plan allows up to ${limit} attachment${limit === 1 ? '' : 's'} per message.`,
@@ -256,6 +262,33 @@ export class AiController {
     }
   }
 
+  @Get('speech/voices')
+  getSpeechVoices() {
+    return { voices: this.aiSpeechService.getVoices() };
+  }
+
+  @Post('speech')
+  @Header('Content-Type', 'audio/mpeg')
+  @Header('Cache-Control', 'private, max-age=86400')
+  async generateSpeech(
+    @Body() speechDto: GenerateSpeechDto,
+  ): Promise<StreamableFile> {
+    const audio = await this.aiSpeechService.generateSpeech(speechDto);
+    return new StreamableFile(audio, { type: 'audio/mpeg' });
+  }
+
+  @Post('speech/chunk')
+  @Header('Content-Type', 'audio/mpeg')
+  @Header('Cache-Control', 'private, max-age=300')
+  async generateSpeechChunk(
+    @Body() speechDto: GenerateSpeechDto,
+  ): Promise<StreamableFile> {
+    const audio = await this.aiSpeechService.generateSpeech(speechDto, {
+      chunk: true,
+    });
+    return new StreamableFile(audio, { type: 'audio/mpeg' });
+  }
+
   @Patch('suggestions/feedback')
   async updateStudySuggestionFeedback(
     @Request() req,
@@ -393,7 +426,7 @@ export class AiController {
   @Header('Cache-Control', 'no-cache, no-transform')
   @Header('X-Accel-Buffering', 'no')
   messageStream(
-    @Request() req,
+    @Request() req: FastifyRequest,
     @Param('streamId') streamId: string,
   ): Observable<MessageEvent> {
     const sseConnectedAtMs = Date.now();
@@ -413,15 +446,19 @@ export class AiController {
       delete global['streamRequests'][streamId];
     }
 
-    return this.aiService.generateResponseStream({
-      messages: streamRequest.messages,
-      chatId: streamRequest.chatId,
-      userId: streamRequest.userId,
-      latencyTrace: {
-        streamId,
-        requestReceivedAtMs: Number(streamRequest.createdAt) || Date.now(),
-        sseConnectedAtMs,
-      },
-    });
+    const disconnect$ = fromEvent(req.raw, 'close');
+
+    return this.aiService
+      .generateResponseStream({
+        messages: streamRequest.messages,
+        chatId: streamRequest.chatId,
+        userId: streamRequest.userId,
+        latencyTrace: {
+          streamId,
+          requestReceivedAtMs: Number(streamRequest.createdAt) || Date.now(),
+          sseConnectedAtMs,
+        },
+      })
+      .pipe(takeUntil(disconnect$));
   }
 }

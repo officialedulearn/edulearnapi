@@ -8,10 +8,10 @@ describe('ai.helpers assistant transcript sanitizer', () => {
     const raw = JSON.stringify({
       text:
         "tool_code\nprint(default_api.updateUserMemory(facts=['Obi Chukwuemerie Samuel is currently learning CSS.']))\nthought\n" +
-        "The user, Obi Chukwuemerie Samuel, is a frontend developer who is currently learning CSS. " +
+        'The user, Obi Chukwuemerie Samuel, is a frontend developer who is currently learning CSS. ' +
         'This is new information that is not already in the `LONG-TERM LEARNER MEMORY`. ' +
         'Therefore, I should use the `updateUserMemory` tool to persist this new fact. ' +
-        'That\'s awesome, Obi! Getting a strong grasp on CSS is super important.',
+        "That's awesome, Obi! Getting a strong grasp on CSS is super important.",
     });
 
     const sanitized = sanitizeLeakedAssistantToolTranscript(raw);

@@ -9,9 +9,17 @@ import {
   premiumTransactions,
   totalVolumes,
   chat,
+  roadmap,
+  publicQuiz,
+  publicQuizParticipation,
+  publicQuizAttemptAnswer,
   community,
   community_members,
   feedback,
+  notifications,
+  userSubscription,
+  reminderEmailLog,
+  agentWakeupLog,
 } from '../../lib/db/schema';
 import { NotificationsService } from '../common/services/notifications.service';
 import { ResendService } from '../resend/resend.service';
@@ -51,6 +59,139 @@ export interface ActivityTrend {
   quiz: number;
   chat: number;
   streak: number;
+}
+
+export interface GrowthScoreBreakdown {
+  recency: number;
+  engagement: number;
+  learningDepth: number;
+  referral: number;
+  streak: number;
+  premiumSignal: number;
+}
+
+export interface GrowthLead {
+  id: string;
+  name: string;
+  email: string;
+  username: string | null;
+  level: string;
+  xp: number;
+  streak: number;
+  quizCompleted: number;
+  isPremium: boolean | null;
+  referralCount: number;
+  lastLoggedIn: string;
+  daysSinceLogin: number;
+  leadScore: number;
+  churnRisk: number;
+  segment: string;
+  componentScores: GrowthScoreBreakdown;
+  signals: string[];
+  recommendedAction: string;
+  recommendedHref: string;
+}
+
+export interface GrowthSegment {
+  id: string;
+  label: string;
+  description: string;
+  count: number;
+  percentage: number;
+  severity: 'success' | 'info' | 'warning' | 'danger';
+  actionHref: string;
+}
+
+export interface GrowthActionItem {
+  id: string;
+  title: string;
+  description: string;
+  count: number;
+  priority: 'high' | 'medium' | 'low';
+  href: string;
+  actionLabel: string;
+}
+
+export interface GrowthTopic {
+  topic: string;
+  count: number;
+  source: 'chat' | 'roadmap' | 'quiz' | 'mixed';
+  trend: 'up' | 'flat' | 'down';
+}
+
+export interface GrowthRetention {
+  summary: {
+    activeToday: number;
+    active7Days: number;
+    active30Days: number;
+    inactive7Days: number;
+    inactive30Days: number;
+    d1Rate: number;
+    d7Rate: number;
+    d30Rate: number;
+  };
+  riskBuckets: {
+    label: string;
+    count: number;
+    description: string;
+    severity: 'success' | 'info' | 'warning' | 'danger';
+  }[];
+  cohorts: {
+    cohort: string;
+    users: number;
+    activeToday: number;
+    active7Days: number;
+    active30Days: number;
+  }[];
+}
+
+export interface GrowthContentIntelligence {
+  topTopics: GrowthTopic[];
+  sourceBreakdown: {
+    chats: number;
+    roadmaps: number;
+    publicQuizzes: number;
+    quizAttempts: number;
+    incorrectAnswers: number;
+  };
+  weakQuizAreas: {
+    topic: string;
+    incorrectAnswers: number;
+    totalAnswers: number;
+    missRate: number;
+  }[];
+}
+
+export interface GrowthOverview {
+  generatedAt: string;
+  kpis: {
+    label: string;
+    value: number | string;
+    detail: string;
+    tone: 'success' | 'info' | 'warning' | 'danger';
+  }[];
+  segments: GrowthSegment[];
+  topLeads: GrowthLead[];
+  actionItems: GrowthActionItem[];
+  topTopics: GrowthTopic[];
+  retention: GrowthRetention['summary'];
+}
+
+interface GrowthDataSet {
+  users: (typeof user.$inferSelect)[];
+  activities: (typeof xpActivity.$inferSelect)[];
+  chats: (typeof chat.$inferSelect)[];
+  roadmaps: (typeof roadmap.$inferSelect)[];
+  quizParticipations: (typeof publicQuizParticipation.$inferSelect)[];
+  quizAnswers: (typeof publicQuizAttemptAnswer.$inferSelect)[];
+  publicQuizzes: (typeof publicQuiz.$inferSelect)[];
+  communityMembers: (typeof community_members.$inferSelect)[];
+  notificationRows: (typeof notifications.$inferSelect)[];
+  transactions: (typeof premiumTransactions.$inferSelect)[];
+  subscriptions: (typeof userSubscription.$inferSelect)[];
+  feedbackRows: (typeof feedback.$inferSelect)[];
+  reminderLogs: (typeof reminderEmailLog.$inferSelect)[];
+  wakeupLogs: (typeof agentWakeupLog.$inferSelect)[];
 }
 
 @Injectable()
@@ -93,35 +234,805 @@ export class AdminService {
     throw new Error('Query failed after retries');
   }
 
+  private clampScore(value: number, max = 100): number {
+    return Math.max(0, Math.min(max, Math.round(value)));
+  }
+
+  private percentage(part: number, total: number): number {
+    return total > 0 ? Number(((part / total) * 100).toFixed(1)) : 0;
+  }
+
+  private daysSince(date: Date | string | null | undefined, now = new Date()) {
+    if (!date) return 999;
+    const value = new Date(date).getTime();
+    if (Number.isNaN(value)) return 999;
+    return Math.max(0, Math.floor((now.getTime() - value) / 86_400_000));
+  }
+
+  private incrementMap(map: Map<string, number>, key: string, amount = 1) {
+    map.set(key, (map.get(key) || 0) + amount);
+  }
+
+  private updateEarliestAnchor(
+    anchors: Map<string, Date>,
+    userId: string,
+    timestamp: Date | string | null | undefined,
+  ) {
+    if (!timestamp) {
+      return;
+    }
+
+    const nextValue = new Date(timestamp);
+    if (Number.isNaN(nextValue.getTime())) {
+      return;
+    }
+
+    const currentValue = anchors.get(userId);
+    if (!currentValue || nextValue < currentValue) {
+      anchors.set(userId, nextValue);
+    }
+  }
+
+  private async getCohortAnchors(): Promise<Map<string, Date>> {
+    const datasets = await this.retryQuery(() =>
+      Promise.all([
+        db
+          .select({
+            userId: xpActivity.userId,
+            timestamp: xpActivity.createdAt,
+          })
+          .from(xpActivity),
+        db
+          .select({
+            userId: chat.userId,
+            timestamp: chat.createdAt,
+          })
+          .from(chat),
+        db
+          .select({
+            userId: roadmap.userId,
+            timestamp: roadmap.createdAt,
+          })
+          .from(roadmap),
+        db
+          .select({
+            userId: publicQuizParticipation.userId,
+            timestamp: publicQuizParticipation.joinedAt,
+          })
+          .from(publicQuizParticipation),
+        db
+          .select({
+            userId: userReward.userId,
+            timestamp: userReward.earnedAt,
+          })
+          .from(userReward),
+        db
+          .select({
+            userId: notifications.userId,
+            timestamp: notifications.createdAt,
+          })
+          .from(notifications),
+        db
+          .select({
+            userId: feedback.userId,
+            timestamp: feedback.createdAt,
+          })
+          .from(feedback),
+        db
+          .select({
+            userId: reminderEmailLog.userId,
+            timestamp: reminderEmailLog.createdAt,
+          })
+          .from(reminderEmailLog),
+        db
+          .select({
+            userId: agentWakeupLog.userId,
+            timestamp: agentWakeupLog.createdAt,
+          })
+          .from(agentWakeupLog),
+      ]),
+    );
+
+    const anchors = new Map<string, Date>();
+    for (const dataset of datasets) {
+      for (const row of dataset) {
+        this.updateEarliestAnchor(anchors, row.userId, row.timestamp);
+      }
+    }
+
+    return anchors;
+  }
+
+  private normalizeTopic(value: string | null | undefined): string {
+    const fallback = 'other';
+    if (!value?.trim()) return fallback;
+    const keywords = [
+      'javascript',
+      'python',
+      'react',
+      'solana',
+      'web3',
+      'typescript',
+      'blockchain',
+      'crypto',
+      'defi',
+      'nft',
+      'rust',
+      'nextjs',
+      'nodejs',
+      'ai',
+      'wallet',
+      'trading',
+      'community',
+    ];
+    const lower = value.toLowerCase();
+    const keyword = keywords.find((item) => lower.includes(item));
+    if (keyword) return keyword;
+    return (
+      lower
+        .replace(/[^a-z0-9\s-]/g, '')
+        .split(/\s+/)
+        .find((word) => word.length > 3) || fallback
+    );
+  }
+
+  private async getGrowthDataSet(): Promise<GrowthDataSet> {
+    const [
+      users,
+      activities,
+      chats,
+      roadmaps,
+      quizParticipations,
+      quizAnswers,
+      publicQuizzes,
+      communityMembers,
+      notificationRows,
+      transactions,
+      subscriptions,
+      feedbackRows,
+      reminderLogs,
+      wakeupLogs,
+    ] = await this.retryQuery(() =>
+      Promise.all([
+        db.select().from(user),
+        db.select().from(xpActivity),
+        db.select().from(chat),
+        db.select().from(roadmap),
+        db.select().from(publicQuizParticipation),
+        db.select().from(publicQuizAttemptAnswer),
+        db.select().from(publicQuiz),
+        db.select().from(community_members),
+        db.select().from(notifications),
+        db.select().from(premiumTransactions),
+        db.select().from(userSubscription),
+        db.select().from(feedback),
+        db.select().from(reminderEmailLog),
+        db.select().from(agentWakeupLog),
+      ]),
+    );
+
+    return {
+      users,
+      activities,
+      chats,
+      roadmaps,
+      quizParticipations,
+      quizAnswers,
+      publicQuizzes,
+      communityMembers,
+      notificationRows,
+      transactions,
+      subscriptions,
+      feedbackRows,
+      reminderLogs,
+      wakeupLogs,
+    };
+  }
+
+  private buildGrowthLeads(
+    data: GrowthDataSet,
+    now = new Date(),
+  ): GrowthLead[] {
+    const activitiesByUser = new Map<string, number>();
+    const recentActivitiesByUser = new Map<string, number>();
+    const chatsByUser = new Map<string, number>();
+    const roadmapsByUser = new Map<string, number>();
+    const communitiesByUser = new Map<string, number>();
+    const notificationsByUser = new Map<string, number>();
+    const transactionsByUser = new Map<string, number>();
+    const subscriptionsByUser = new Map<string, number>();
+    const skippedRemindersByUser = new Map<string, number>();
+    const skippedWakeupsByUser = new Map<string, number>();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
+
+    data.activities.forEach((activity) => {
+      this.incrementMap(activitiesByUser, activity.userId);
+      if (new Date(activity.createdAt) >= sevenDaysAgo) {
+        this.incrementMap(recentActivitiesByUser, activity.userId);
+      }
+    });
+    data.chats.forEach((item) => this.incrementMap(chatsByUser, item.userId));
+    data.roadmaps.forEach((item) =>
+      this.incrementMap(roadmapsByUser, item.userId),
+    );
+    data.communityMembers.forEach((item) =>
+      this.incrementMap(communitiesByUser, item.userId),
+    );
+    data.notificationRows.forEach((item) =>
+      this.incrementMap(notificationsByUser, item.userId),
+    );
+    data.transactions.forEach((item) =>
+      this.incrementMap(transactionsByUser, item.userId),
+    );
+    data.subscriptions.forEach((item) =>
+      this.incrementMap(subscriptionsByUser, item.userId),
+    );
+    data.reminderLogs
+      .filter((item) => item.decision === 'skipped')
+      .forEach((item) =>
+        this.incrementMap(skippedRemindersByUser, item.userId),
+      );
+    data.wakeupLogs
+      .filter((item) => item.decision === 'skipped')
+      .forEach((item) => this.incrementMap(skippedWakeupsByUser, item.userId));
+
+    return data.users
+      .map((u) => {
+        const daysSinceLogin = this.daysSince(u.lastLoggedIn, now);
+        const activityCount = activitiesByUser.get(u.id) || 0;
+        const recentActivityCount = recentActivitiesByUser.get(u.id) || 0;
+        const chatCount = chatsByUser.get(u.id) || 0;
+        const roadmapCount = roadmapsByUser.get(u.id) || 0;
+        const communityCount = communitiesByUser.get(u.id) || 0;
+        const notificationCount = notificationsByUser.get(u.id) || 0;
+        const transactionCount = transactionsByUser.get(u.id) || 0;
+        const subscriptionCount = subscriptionsByUser.get(u.id) || 0;
+        const skippedReminders = skippedRemindersByUser.get(u.id) || 0;
+        const skippedWakeups = skippedWakeupsByUser.get(u.id) || 0;
+        const referralCount = u.referralCount || 0;
+        const quizCompleted = u.quizCompleted || 0;
+        const streak = u.streak || 0;
+
+        const componentScores: GrowthScoreBreakdown = {
+          recency:
+            daysSinceLogin <= 1
+              ? 30
+              : daysSinceLogin <= 7
+                ? 24
+                : daysSinceLogin <= 14
+                  ? 16
+                  : daysSinceLogin <= 30
+                    ? 8
+                    : 0,
+          engagement: this.clampScore(
+            activityCount * 2 + chatCount * 2 + roadmapCount * 4,
+            30,
+          ),
+          learningDepth: this.clampScore(
+            quizCompleted * 2 + roadmapCount * 4 + communityCount,
+            15,
+          ),
+          referral: this.clampScore(referralCount * 5, 10),
+          streak: this.clampScore(streak, 10),
+          premiumSignal: this.clampScore(
+            transactionCount * 3 + subscriptionCount * 2,
+            5,
+          ),
+        };
+
+        const leadScore = this.clampScore(
+          Object.values(componentScores).reduce(
+            (sum, score) => sum + score,
+            0,
+          ) - (u.isPremium ? 20 : 0),
+        );
+        const churnRisk = this.clampScore(
+          (daysSinceLogin > 30
+            ? 40
+            : daysSinceLogin > 14
+              ? 30
+              : daysSinceLogin > 7
+                ? 18
+                : 4) +
+            (recentActivityCount === 0 ? 20 : 0) +
+            (roadmapCount === 0 ? 12 : 0) +
+            (chatCount === 0 && quizCompleted === 0 ? 14 : 0) +
+            this.clampScore(skippedReminders + skippedWakeups, 10),
+        );
+
+        const signals = [
+          activityCount > 0 ? `${activityCount} learning activities` : '',
+          chatCount > 0 ? `${chatCount} chats` : '',
+          roadmapCount > 0 ? `${roadmapCount} roadmaps` : '',
+          referralCount > 0 ? `${referralCount} referrals` : '',
+          notificationCount > 0
+            ? `${notificationCount} notifications sent`
+            : '',
+          daysSinceLogin > 7 ? `${daysSinceLogin} days inactive` : '',
+        ].filter(Boolean);
+
+        const segment =
+          churnRisk >= 70
+            ? 'Churn risk'
+            : !u.isPremium && leadScore >= 65
+              ? 'Premium candidate'
+              : referralCount > 0
+                ? 'Referral lead'
+                : leadScore >= 70
+                  ? 'Power user'
+                  : daysSinceLogin <= 7
+                    ? 'Recently active'
+                    : 'Needs nurture';
+
+        const recommendedAction =
+          churnRisk >= 70
+            ? 'Send win-back message'
+            : !u.isPremium && leadScore >= 65
+              ? 'Send premium offer'
+              : referralCount > 0
+                ? 'Invite to referral push'
+                : daysSinceLogin > 7
+                  ? 'Send learning reminder'
+                  : 'Keep monitoring';
+
+        return {
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          username: u.username,
+          level: u.level,
+          xp: u.xp,
+          streak,
+          quizCompleted,
+          isPremium: u.isPremium,
+          referralCount,
+          lastLoggedIn: new Date(u.lastLoggedIn).toISOString(),
+          daysSinceLogin,
+          leadScore,
+          churnRisk,
+          segment,
+          componentScores,
+          signals: signals.slice(0, 4),
+          recommendedAction,
+          recommendedHref:
+            churnRisk >= 70 || daysSinceLogin > 7
+              ? '/emails'
+              : '/notifications',
+        };
+      })
+      .sort((a, b) => b.leadScore + b.churnRisk - (a.leadScore + a.churnRisk));
+  }
+
+  private buildGrowthSegments(leads: GrowthLead[]): GrowthSegment[] {
+    const total = leads.length;
+    const count = (predicate: (lead: GrowthLead) => boolean) =>
+      leads.filter(predicate).length;
+
+    const segmentInputs = [
+      {
+        id: 'new',
+        label: 'New users',
+        description: 'Logged in within the last 7 days.',
+        count: count((lead) => lead.daysSinceLogin <= 7),
+        severity: 'info' as const,
+        actionHref: '/users',
+      },
+      {
+        id: 'activated',
+        label: 'Activated users',
+        description: 'Have quizzes, chats, roadmaps, or XP activity.',
+        count: count(
+          (lead) =>
+            lead.quizCompleted > 0 ||
+            lead.componentScores.engagement > 0 ||
+            lead.signals.some((signal) => signal.includes('roadmaps')),
+        ),
+        severity: 'success' as const,
+        actionHref: '/analytics',
+      },
+      {
+        id: 'power',
+        label: 'Power users',
+        description: 'High engagement, XP, streak, or referral activity.',
+        count: count((lead) => lead.leadScore >= 70 && lead.churnRisk < 50),
+        severity: 'success' as const,
+        actionHref: '/leads',
+      },
+      {
+        id: 'premium-candidates',
+        label: 'Premium candidates',
+        description: 'Engaged free users likely to convert.',
+        count: count((lead) => !lead.isPremium && lead.leadScore >= 65),
+        severity: 'info' as const,
+        actionHref: '/leads?segment=premium',
+      },
+      {
+        id: 'at-risk',
+        label: 'At risk',
+        description: 'Inactive 7-30 days or showing engagement drop.',
+        count: count(
+          (lead) =>
+            (lead.daysSinceLogin > 7 && lead.daysSinceLogin <= 30) ||
+            (lead.churnRisk >= 50 && lead.churnRisk < 75),
+        ),
+        severity: 'warning' as const,
+        actionHref: '/retention',
+      },
+      {
+        id: 'churned',
+        label: 'Churned',
+        description: 'Inactive for more than 30 days.',
+        count: count((lead) => lead.daysSinceLogin > 30),
+        severity: 'danger' as const,
+        actionHref: '/retention?bucket=churned',
+      },
+      {
+        id: 'referral',
+        label: 'Referral leads',
+        description: 'Users with referrals or strong sharing potential.',
+        count: count(
+          (lead) =>
+            lead.referralCount > 0 || (!lead.isPremium && lead.leadScore >= 75),
+        ),
+        severity: 'info' as const,
+        actionHref: '/leads?segment=referral',
+      },
+    ];
+
+    return segmentInputs.map((segment) => ({
+      ...segment,
+      percentage: this.percentage(segment.count, total),
+    }));
+  }
+
+  private buildGrowthRetention(
+    data: GrowthDataSet,
+    leads: GrowthLead[],
+    now = new Date(),
+  ): GrowthRetention {
+    const total = data.users.length;
+    const activeToday = leads.filter((lead) => lead.daysSinceLogin <= 1).length;
+    const active7Days = leads.filter((lead) => lead.daysSinceLogin <= 7).length;
+    const active30Days = leads.filter(
+      (lead) => lead.daysSinceLogin <= 30,
+    ).length;
+
+    const riskBuckets = [
+      {
+        label: 'Healthy',
+        count: leads.filter((lead) => lead.churnRisk < 35).length,
+        description: 'Low churn risk and recent activity.',
+        severity: 'success' as const,
+      },
+      {
+        label: 'Needs nurture',
+        count: leads.filter(
+          (lead) => lead.churnRisk >= 35 && lead.churnRisk < 60,
+        ).length,
+        description: 'Some risk signals; good fit for reminders.',
+        severity: 'info' as const,
+      },
+      {
+        label: 'At risk',
+        count: leads.filter(
+          (lead) => lead.churnRisk >= 60 && lead.churnRisk < 80,
+        ).length,
+        description: 'High inactivity or weak learning depth.',
+        severity: 'warning' as const,
+      },
+      {
+        label: 'Win-back',
+        count: leads.filter((lead) => lead.churnRisk >= 80).length,
+        description: 'Prioritize reactivation campaigns.',
+        severity: 'danger' as const,
+      },
+    ];
+
+    const cohortMap = new Map<
+      string,
+      {
+        users: number;
+        activeToday: number;
+        active7Days: number;
+        active30Days: number;
+      }
+    >();
+    leads.forEach((lead) => {
+      const date = new Date(lead.lastLoggedIn);
+      const cohort = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const item = cohortMap.get(cohort) || {
+        users: 0,
+        activeToday: 0,
+        active7Days: 0,
+        active30Days: 0,
+      };
+      item.users++;
+      if (lead.daysSinceLogin <= 1) item.activeToday++;
+      if (lead.daysSinceLogin <= 7) item.active7Days++;
+      if (lead.daysSinceLogin <= 30) item.active30Days++;
+      cohortMap.set(cohort, item);
+    });
+
+    return {
+      summary: {
+        activeToday,
+        active7Days,
+        active30Days,
+        inactive7Days: total - active7Days,
+        inactive30Days: total - active30Days,
+        d1Rate: this.percentage(activeToday, total),
+        d7Rate: this.percentage(active7Days, total),
+        d30Rate: this.percentage(active30Days, total),
+      },
+      riskBuckets,
+      cohorts: Array.from(cohortMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .slice(-8)
+        .map(([cohort, values]) => ({ cohort, ...values })),
+    };
+  }
+
+  private buildContentIntelligence(
+    data: GrowthDataSet,
+  ): GrowthContentIntelligence {
+    const topicMap = new Map<
+      string,
+      { count: number; chat: number; roadmap: number; quiz: number }
+    >();
+
+    const addTopic = (topic: string, source: 'chat' | 'roadmap' | 'quiz') => {
+      const key = this.normalizeTopic(topic);
+      const item = topicMap.get(key) || {
+        count: 0,
+        chat: 0,
+        roadmap: 0,
+        quiz: 0,
+      };
+      item.count++;
+      item[source]++;
+      topicMap.set(key, item);
+    };
+
+    data.chats.forEach((item) => addTopic(item.title, 'chat'));
+    data.roadmaps.forEach((item) =>
+      addTopic(item.topic || item.title, 'roadmap'),
+    );
+    data.publicQuizzes.forEach((item) => addTopic(item.title, 'quiz'));
+
+    const topTopics = Array.from(topicMap.entries())
+      .map(([topic, values]) => {
+        const sources = [
+          values.chat > 0 ? 'chat' : '',
+          values.roadmap > 0 ? 'roadmap' : '',
+          values.quiz > 0 ? 'quiz' : '',
+        ].filter(Boolean);
+        return {
+          topic,
+          count: values.count,
+          source:
+            sources.length > 1
+              ? ('mixed' as const)
+              : (sources[0] as GrowthTopic['source']) || 'chat',
+          trend: values.count >= 5 ? ('up' as const) : ('flat' as const),
+        };
+      })
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 12);
+
+    const weakQuizMap = new Map<string, { total: number; incorrect: number }>();
+    data.quizAnswers.forEach((answer) => {
+      const topic = this.normalizeTopic(answer.question);
+      const item = weakQuizMap.get(topic) || { total: 0, incorrect: 0 };
+      item.total++;
+      if (!answer.isCorrect) item.incorrect++;
+      weakQuizMap.set(topic, item);
+    });
+
+    const weakQuizAreas = Array.from(weakQuizMap.entries())
+      .map(([topic, item]) => ({
+        topic,
+        incorrectAnswers: item.incorrect,
+        totalAnswers: item.total,
+        missRate: this.percentage(item.incorrect, item.total),
+      }))
+      .filter((item) => item.totalAnswers >= 3)
+      .sort((a, b) => b.missRate - a.missRate)
+      .slice(0, 8);
+
+    return {
+      topTopics,
+      sourceBreakdown: {
+        chats: data.chats.length,
+        roadmaps: data.roadmaps.length,
+        publicQuizzes: data.publicQuizzes.length,
+        quizAttempts: data.quizParticipations.length,
+        incorrectAnswers: data.quizAnswers.filter((answer) => !answer.isCorrect)
+          .length,
+      },
+      weakQuizAreas,
+    };
+  }
+
+  private buildActionItems(
+    leads: GrowthLead[],
+    segments: GrowthSegment[],
+    content: GrowthContentIntelligence,
+  ): GrowthActionItem[] {
+    const countSegment = (id: string) =>
+      segments.find((segment) => segment.id === id)?.count || 0;
+    const topTopic = content.topTopics[0];
+    const weakArea = content.weakQuizAreas[0];
+
+    return [
+      {
+        id: 'win-back',
+        title: 'Users need win-back',
+        description:
+          'Inactive or high churn-risk users should get a focused reminder.',
+        count: countSegment('churned') + countSegment('at-risk'),
+        priority: 'high',
+        href: '/retention',
+        actionLabel: 'Review retention',
+      },
+      {
+        id: 'premium-ready',
+        title: 'Premium-ready users',
+        description:
+          'Engaged free users are ready for a premium education offer.',
+        count: countSegment('premium-candidates'),
+        priority: 'high',
+        href: '/leads?segment=premium',
+        actionLabel: 'Open leads',
+      },
+      {
+        id: 'high-value-inactive',
+        title: 'High-value users inactive 7+ days',
+        description: 'Users with strong lead scores but recent inactivity.',
+        count: leads.filter(
+          (lead) => lead.leadScore >= 65 && lead.daysSinceLogin > 7,
+        ).length,
+        priority: 'medium',
+        href: '/emails',
+        actionLabel: 'Draft campaign',
+      },
+      {
+        id: 'topic-growth',
+        title: topTopic
+          ? `${topTopic.topic} demand is leading`
+          : 'No leading topic yet',
+        description: topTopic
+          ? 'Create content, roadmaps, or campaigns around the current top learning topic.'
+          : 'More user activity is needed before topic recommendations become useful.',
+        count: topTopic?.count || 0,
+        priority: 'medium',
+        href: '/content-intelligence',
+        actionLabel: 'View topics',
+      },
+      {
+        id: 'quiz-friction',
+        title: weakArea
+          ? `${weakArea.topic} quiz friction`
+          : 'No quiz friction yet',
+        description: weakArea
+          ? 'High miss rates suggest learners need better explanations or onboarding.'
+          : 'Quiz attempts are not deep enough yet for weak-area detection.',
+        count: weakArea?.incorrectAnswers || 0,
+        priority: weakArea ? 'medium' : 'low',
+        href: '/content-intelligence',
+        actionLabel: 'Inspect content',
+      },
+    ];
+  }
+
+  async getGrowthOverview(): Promise<GrowthOverview> {
+    const data = await this.getGrowthDataSet();
+    const leads = this.buildGrowthLeads(data);
+    const segments = this.buildGrowthSegments(leads);
+    const retention = this.buildGrowthRetention(data, leads);
+    const content = this.buildContentIntelligence(data);
+    const actionItems = this.buildActionItems(leads, segments, content);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      kpis: [
+        {
+          label: 'Active today',
+          value: retention.summary.activeToday,
+          detail: `${retention.summary.d1Rate}% of users`,
+          tone: 'success',
+        },
+        {
+          label: 'At-risk users',
+          value:
+            segments.find((segment) => segment.id === 'at-risk')?.count || 0,
+          detail: 'Need nurture before churn',
+          tone: 'warning',
+        },
+        {
+          label: 'Win-back pool',
+          value:
+            segments.find((segment) => segment.id === 'churned')?.count || 0,
+          detail: 'Inactive 30+ days',
+          tone: 'danger',
+        },
+        {
+          label: 'Premium leads',
+          value:
+            segments.find((segment) => segment.id === 'premium-candidates')
+              ?.count || 0,
+          detail: 'High engagement, not premium',
+          tone: 'info',
+        },
+      ],
+      segments,
+      topLeads: leads.slice(0, 10),
+      actionItems,
+      topTopics: content.topTopics.slice(0, 6),
+      retention: retention.summary,
+    };
+  }
+
+  async getGrowthSegments(): Promise<GrowthSegment[]> {
+    const data = await this.getGrowthDataSet();
+    return this.buildGrowthSegments(this.buildGrowthLeads(data));
+  }
+
+  async getGrowthLeads(): Promise<GrowthLead[]> {
+    const data = await this.getGrowthDataSet();
+    return this.buildGrowthLeads(data).slice(0, 100);
+  }
+
+  async getGrowthRetention(): Promise<GrowthRetention> {
+    const data = await this.getGrowthDataSet();
+    const leads = this.buildGrowthLeads(data);
+    return this.buildGrowthRetention(data, leads);
+  }
+
+  async getGrowthContentIntelligence(): Promise<GrowthContentIntelligence> {
+    const data = await this.getGrowthDataSet();
+    return this.buildContentIntelligence(data);
+  }
+
+  async getGrowthActionCenter(): Promise<GrowthActionItem[]> {
+    const data = await this.getGrowthDataSet();
+    const leads = this.buildGrowthLeads(data);
+    const segments = this.buildGrowthSegments(leads);
+    const content = this.buildContentIntelligence(data);
+    return this.buildActionItems(leads, segments, content);
+  }
+
   async getSignupStats(startDate?: Date, endDate?: Date): Promise<SignupStats> {
     const start = startDate || new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
     const end = endDate || new Date();
 
-    const users = await this.retryQuery(() =>
-      db
-        .select({
-          id: user.id,
-          lastLoggedIn: user.lastLoggedIn,
-        })
-        .from(user),
-    );
+    const [users, cohortAnchors] = await Promise.all([
+      this.retryQuery(() =>
+        db
+          .select({
+            id: user.id,
+            lastLoggedIn: user.lastLoggedIn,
+          })
+          .from(user),
+      ),
+      this.getCohortAnchors(),
+    ]);
 
     const dailyMap = new Map<string, number>();
     const weeklyMap = new Map<string, number>();
     const monthlyMap = new Map<string, number>();
 
     users.forEach((u) => {
-      const date = new Date(u.lastLoggedIn);
-      if (date >= start && date <= end) {
-        const dayKey = date.toISOString().split('T')[0];
+      const cohortDate = cohortAnchors.get(u.id) ?? new Date(u.lastLoggedIn);
+      if (cohortDate >= start && cohortDate <= end) {
+        const dayKey = cohortDate.toISOString().split('T')[0];
         dailyMap.set(dayKey, (dailyMap.get(dayKey) || 0) + 1);
 
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - date.getDay());
+        const weekStart = new Date(cohortDate);
+        weekStart.setDate(cohortDate.getDate() - cohortDate.getDay());
         const weekKey = weekStart.toISOString().split('T')[0];
         weeklyMap.set(weekKey, (weeklyMap.get(weekKey) || 0) + 1);
 
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const monthKey = `${cohortDate.getFullYear()}-${String(cohortDate.getMonth() + 1).padStart(2, '0')}`;
         monthlyMap.set(monthKey, (monthlyMap.get(monthKey) || 0) + 1);
       }
     });
@@ -324,7 +1235,10 @@ export class AdminService {
   }
 
   async evaluateReminderNow(userId: string) {
-    const result = await this.remindersService.enqueueEvaluation(userId, 'manual');
+    const result = await this.remindersService.enqueueEvaluation(
+      userId,
+      'manual',
+    );
     const ok =
       result.enqueued ||
       (!result.enqueued && result.reason === 'already_queued');
@@ -339,7 +1253,11 @@ export class AdminService {
     });
   }
 
-  async setReminderDisabled(userId: string, disabled: boolean, reason?: string) {
+  async setReminderDisabled(
+    userId: string,
+    disabled: boolean,
+    reason?: string,
+  ) {
     const state = await this.remindersService.setReminderDisabled(
       userId,
       disabled,
@@ -538,16 +1456,17 @@ export class AdminService {
   }
 
   async getRetentionMetrics() {
-    const users = await this.retryQuery(() => db.select().from(user));
-    const activities = await this.retryQuery(() =>
-      db.select().from(xpActivity),
-    );
+    const [users, activities, cohortAnchors] = await Promise.all([
+      this.retryQuery(() => db.select().from(user)),
+      this.retryQuery(() => db.select().from(xpActivity)),
+      this.getCohortAnchors(),
+    ]);
 
     const weeklySignups = new Map<string, string[]>();
 
     users.forEach((u) => {
-      const signupDate = new Date(u.lastLoggedIn);
-      const weekKey = this.getWeekKey(signupDate);
+      const cohortDate = cohortAnchors.get(u.id) ?? new Date(u.lastLoggedIn);
+      const weekKey = this.getWeekKey(cohortDate);
       if (!weeklySignups.has(weekKey)) {
         weeklySignups.set(weekKey, []);
       }

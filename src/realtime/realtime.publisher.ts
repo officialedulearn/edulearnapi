@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import type { Server } from 'socket.io';
-import type { RealtimeEventName, RealtimeEventPayloadMap } from './realtime.types';
+import type {
+  RealtimeEventName,
+  RealtimeEventPayloadMap,
+} from './realtime.types';
 
 @Injectable()
 export class RealtimePublisherService {
@@ -15,7 +18,9 @@ export class RealtimePublisherService {
     eventName: EventName,
     payload: RealtimeEventPayloadMap[EventName],
   ): void {
-    this.server?.to(this.getCommunityRoomName(communityId)).emit(eventName, payload);
+    this.server
+      ?.to(this.getCommunityRoomName(communityId))
+      .emit(eventName, payload);
   }
 
   getCommunityRoomName(communityId: string): string {

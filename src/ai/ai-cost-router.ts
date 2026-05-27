@@ -646,13 +646,10 @@ function isChitchat(normalized: string): boolean {
 }
 
 function isStandaloneAcknowledgement(normalized: string): boolean {
-  return matchesLoosePhrase(
-    normalized,
-    ACK_EXACT,
-    ACK_STEMS,
-    ACK_MAX_LEN,
-    [matchesShortOk, matchesShortK],
-  );
+  return matchesLoosePhrase(normalized, ACK_EXACT, ACK_STEMS, ACK_MAX_LEN, [
+    matchesShortOk,
+    matchesShortK,
+  ]);
 }
 
 function isTooVague(normalized: string): boolean {

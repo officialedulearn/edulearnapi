@@ -40,11 +40,9 @@ describe('RoadmapController', () => {
   it('keeps sync mode as the default for old clients', async () => {
     roadmapService.startRoadmapStep.mockResolvedValue({ aiResponse: {} });
 
-    await controller.startRoadmapStep(
-      { user: { id: 'user-1' } },
-      'step-1',
-      { userId: 'user-1' },
-    );
+    await controller.startRoadmapStep({ user: { id: 'user-1' } }, 'step-1', {
+      userId: 'user-1',
+    });
 
     expect(roadmapService.startRoadmapStep).toHaveBeenCalledWith(
       'step-1',
@@ -59,11 +57,10 @@ describe('RoadmapController', () => {
       status: 'queued',
     });
 
-    await controller.startRoadmapStep(
-      { user: { id: 'user-1' } },
-      'step-1',
-      { userId: 'user-1', mode: 'background' },
-    );
+    await controller.startRoadmapStep({ user: { id: 'user-1' } }, 'step-1', {
+      userId: 'user-1',
+      mode: 'background',
+    });
 
     expect(roadmapService.startRoadmapStepInBackground).toHaveBeenCalledWith(
       'step-1',

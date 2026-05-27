@@ -57,7 +57,9 @@ export class AiService {
     return this.tutor.generateResponseStream(p);
   }
 
-  async generateSuggestions(dto: GenerateSuggestionsDto): Promise<StudySuggestionsResponse> {
+  async generateSuggestions(
+    dto: GenerateSuggestionsDto,
+  ): Promise<StudySuggestionsResponse> {
     const { userId, forceRefresh } = dto;
     const user = await this.authService.getUserById(userId);
     if (!user) throw new NotFoundException(`User with id ${userId} not found`);
@@ -131,11 +133,17 @@ Return ONLY valid JSON with no additional text.
       }
       const suggestions = JSON.parse(responseText);
       if (!Array.isArray(suggestions) || suggestions.length < 3) {
-        throw new Error('Invalid suggestions format - expected array with 3 suggestions');
+        throw new Error(
+          'Invalid suggestions format - expected array with 3 suggestions',
+        );
       }
       const three = suggestions.slice(0, 3) as string[];
       const generatedAt = new Date().toISOString();
-      const payload = { suggestions: three, generatedAt, feedback: {} as const };
+      const payload = {
+        suggestions: three,
+        generatedAt,
+        feedback: {} as const,
+      };
       try {
         await this.redisService.setStudySuggestionsPayload(
           key,
@@ -145,15 +153,40 @@ Return ONLY valid JSON with no additional text.
       } catch (e) {
         console.error('Study suggestions cache write failed:', e);
       }
-      return { suggestions: three, generatedAt, feedback: {}, fromCache: false };
+      return {
+        suggestions: three,
+        generatedAt,
+        feedback: {},
+        fromCache: false,
+      };
     } catch (error) {
       console.error('Error generating suggestions:', error);
       const fallbackSuggestions = {
-        novice: ['solana consensus basics', 'wallet security fundamentals', 'ICM market concepts'],
-        beginner: ['anchor framework study', 'ICM trading principles', 'SPL token mechanics'],
-        intermediate: ['solana PDA concepts', 'ICM protocol analysis', 'compute units explained'],
-        advanced: ['ICM yield strategies', 'anchor optimization patterns', 'cross-program invocations'],
-        expert: ['ICM protocol design', 'solana performance tuning', 'advanced ICM applications'],
+        novice: [
+          'solana consensus basics',
+          'wallet security fundamentals',
+          'ICM market concepts',
+        ],
+        beginner: [
+          'anchor framework study',
+          'ICM trading principles',
+          'SPL token mechanics',
+        ],
+        intermediate: [
+          'solana PDA concepts',
+          'ICM protocol analysis',
+          'compute units explained',
+        ],
+        advanced: [
+          'ICM yield strategies',
+          'anchor optimization patterns',
+          'cross-program invocations',
+        ],
+        expert: [
+          'ICM protocol design',
+          'solana performance tuning',
+          'advanced ICM applications',
+        ],
       };
       const list = fallbackSuggestions[userLevel] || fallbackSuggestions.novice;
       return {
@@ -169,7 +202,8 @@ Return ONLY valid JSON with no additional text.
     dto: UpdateStudySuggestionFeedbackDto,
   ): Promise<StudySuggestionsResponse> {
     const user = await this.authService.getUserById(dto.userId);
-    if (!user) throw new NotFoundException(`User with id ${dto.userId} not found`);
+    if (!user)
+      throw new NotFoundException(`User with id ${dto.userId} not found`);
     const xpTier = getXpTierFromXp(user.xp);
     const userLevel = user.level || xpTier;
     const userLearning = user.learning || 'blockchain fundamentals';
@@ -182,7 +216,8 @@ Return ONLY valid JSON with no additional text.
       );
     }
     const parsed = parseStudySuggestionsCache(raw);
-    if (!parsed) throw new BadRequestException('Cached study suggestions are invalid.');
+    if (!parsed)
+      throw new BadRequestException('Cached study suggestions are invalid.');
     const idx = String(dto.index) as '0' | '1' | '2';
     const next = {
       suggestions: parsed.suggestions,
@@ -193,7 +228,11 @@ Return ONLY valid JSON with no additional text.
     else next.feedback[idx] = dto.action;
     const ttlRaw = await this.redisService.getStudySuggestionsTtlSeconds(key);
     const ttlSec = ttlRaw > 0 ? ttlRaw : STUDY_SUGGESTIONS_TTL_SEC;
-    await this.redisService.setStudySuggestionsPayload(key, ttlSec, JSON.stringify(next));
+    await this.redisService.setStudySuggestionsPayload(
+      key,
+      ttlSec,
+      JSON.stringify(next),
+    );
     return {
       suggestions: next.suggestions,
       generatedAt: next.generatedAt,
@@ -214,7 +253,11 @@ Return ONLY valid JSON with no additional text.
     return this.speechTranscriptionService.transcribeAudioOnly(params);
   }
 
-  async generateFlashcards(dto: { userId: string; topic: string; cardCount?: number }) {
+  async generateFlashcards(dto: {
+    userId: string;
+    topic: string;
+    cardCount?: number;
+  }) {
     const cardCount = dto.cardCount ?? 15;
     const parsed = await this.structured.generateFlashcardDeckContent(
       dto.userId,

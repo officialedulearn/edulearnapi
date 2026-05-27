@@ -77,11 +77,9 @@ describe('CommunityController', () => {
     communityService.isUserMember.mockResolvedValue(true);
     communityService.getDisplayNameForSocket.mockResolvedValue('ada');
 
-    await controller.sendTyping(
-      { user: { sub: 'user-1' } },
-      'community-1',
-      { isTyping: true },
-    );
+    await controller.sendTyping({ user: { sub: 'user-1' } }, 'community-1', {
+      isTyping: true,
+    });
 
     expect(redisService.setTyping).toHaveBeenCalledWith(
       'community-1',

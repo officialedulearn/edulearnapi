@@ -330,12 +330,12 @@ export class CommunityController {
 
     if (body.status === 'approved') {
       const joinRequest = await this.communityService.getUserJoinRequest(
-        request.userId as string,
+        request.userId,
         body.communityId,
       );
       if (joinRequest) {
         await this.communityService.addMemberToCommunity({
-          userId: request.userId as string,
+          userId: request.userId,
           communityId: body.communityId,
         });
       }
@@ -436,10 +436,7 @@ export class CommunityController {
 
     let canType = await this.redisService.isUserInRoom(communityId, dbUserId);
     if (!canType) {
-      canType = await this.communityService.isUserMember(
-        dbUserId,
-        communityId,
-      );
+      canType = await this.communityService.isUserMember(dbUserId, communityId);
     }
     if (!canType) {
       throw new ForbiddenException('You must be a member to send typing state');

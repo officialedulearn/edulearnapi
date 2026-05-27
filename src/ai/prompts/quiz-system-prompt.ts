@@ -53,7 +53,9 @@ CRITICAL REQUIREMENTS:
 - The correctAnswer MUST be one of the 4 options (exact match)
 - All fields required: question, options, correctAnswer, explanation
 - Questions must cover the topic and, when present, relate to learner context without copying it verbatim
-- If the topic is missing or unusable, return an empty JSON array []
+- Questions must not repeat recent quiz history provided in the user message
+- Include a compact summary, concept list, and challenge profile for future quiz generation
+- If the topic is unusable, still return the required object shape with an empty questions array
 
 JSON FORMATTING RULES:
 - Return ONLY a valid JSON array — no markdown or code fences
@@ -61,8 +63,11 @@ JSON FORMATTING RULES:
 - No trailing commas
 
 VALIDATION:
-- Exactly 10 objects OR empty array (if topic unusable)
+- Exactly 10 question objects
 - Each question: 4 distinct options, correctAnswer matches one option
+- summary is one sentence
+- coveredConcepts contains 5-12 short labels
+- challengeProfile explains whether the quiz tests recall, application, edge cases, comparison, or synthesis
 
 Return ONLY valid JSON matching the schema.`;
 }

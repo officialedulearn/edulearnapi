@@ -23,8 +23,10 @@ export class AgentService {
     purpose: string;
     profile_picture_url: string;
   }): Promise<Agent> {
-
-    const userHasAgent = await db.select().from(agent).where(eq(agent.userId, userId));
+    const userHasAgent = await db
+      .select()
+      .from(agent)
+      .where(eq(agent.userId, userId));
     if (userHasAgent.length > 0) {
       throw new Error('User already has an agent');
     }
@@ -55,7 +57,10 @@ export class AgentService {
   }
 
   async getAgentsByUserId(userId: string): Promise<Agent> {
-    const [result] = await db.select().from(agent).where(eq(agent.userId, userId));
+    const [result] = await db
+      .select()
+      .from(agent)
+      .where(eq(agent.userId, userId));
     if (!result) {
       throw new Error('Agent not found');
     }

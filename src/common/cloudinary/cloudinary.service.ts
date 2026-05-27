@@ -1,6 +1,7 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import axios from 'axios';
 import * as crypto from 'crypto';
+import { startSentrySpan } from 'src/observability/sentry';
 
 function cloudinaryUploadSignature(
   params: Record<string, string | number>,
@@ -48,9 +49,15 @@ export class CloudinaryService {
 
     const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
     try {
-      const { data } = await axios.post<CloudinaryUploadResponse>(
-        url,
-        formData,
+      const { data } = await startSentrySpan(
+        {
+          name: 'Upload image to Cloudinary',
+          op: 'external.cloudinary.upload',
+          attributes: {
+            folder,
+          },
+        },
+        () => axios.post<CloudinaryUploadResponse>(url, formData),
       );
       if (data.error?.message) {
         throw new InternalServerErrorException(data.error.message);

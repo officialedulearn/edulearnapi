@@ -75,7 +75,10 @@ describe('QuizzesService', () => {
         QuizzesService,
         { provide: ActivityService, useValue: activityService },
         { provide: RemindersService, useValue: remindersService },
-        { provide: CACHE_MANAGER, useValue: { get: jest.fn(), set: jest.fn() } },
+        {
+          provide: CACHE_MANAGER,
+          useValue: { get: jest.fn(), set: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -133,6 +136,56 @@ describe('QuizzesService', () => {
       correctAnswer: 'A',
       explanation: 'Solana is a high-throughput blockchain.',
       isCorrect: true,
+    });
+  });
+
+  it('persists quiz generation metadata on publish', async () => {
+    const returning = jest.fn().mockResolvedValue([
+      {
+        id: 'quiz-1',
+        title: 'Solana Accounts',
+        description: 'Account practice',
+        summary: 'Tests account ownership and data layout.',
+        coveredConcepts: ['accounts', 'ownership'],
+        challengeProfile: 'Application',
+        createdBy: 'user-1',
+        createdAt: new Date('2026-05-25T00:00:00.000Z'),
+        viewCount: 0,
+        attemptCount: 0,
+      },
+    ]);
+    const values = jest.fn(() => ({ returning }));
+    insertMock.mockReturnValueOnce({ values });
+
+    const result = await service.publish('user-1', {
+      title: 'Solana Accounts',
+      description: 'Account practice',
+      summary: 'Tests account ownership and data layout.',
+      coveredConcepts: ['accounts', 'ownership'],
+      challengeProfile: 'Application',
+      questions: [
+        {
+          question: 'Which owner can mutate a Solana account?',
+          options: ['A', 'B', 'C', 'D'],
+          correctAnswer: 'A',
+          explanation: 'Only the owner program can mutate data.',
+        },
+      ],
+    });
+
+    expect(values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: 'Tests account ownership and data layout.',
+        coveredConcepts: ['accounts', 'ownership'],
+        challengeProfile: 'Application',
+        createdBy: 'user-1',
+        creatorId: 'user-1',
+      }),
+    );
+    expect(result).toMatchObject({
+      summary: 'Tests account ownership and data layout.',
+      coveredConcepts: ['accounts', 'ownership'],
+      challengeProfile: 'Application',
     });
   });
 });

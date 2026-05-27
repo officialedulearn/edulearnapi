@@ -9,6 +9,7 @@ import { RemindersModule } from 'src/reminders/reminders.module';
 import { RedisModule } from 'src/redis/redis.module';
 import { RoadmapStepStartBullmqService } from './roadmap-step-start-bullmq.service';
 import { RoadmapStepStartProcessorService } from './roadmap-step-start-processor.service';
+import { RoadmapSubStepBackfillService } from './roadmap-sub-step-backfill.service';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { RoadmapStepStartProcessorService } from './roadmap-step-start-processor
     RoadmapService,
     RoadmapStepStartBullmqService,
     RoadmapStepStartProcessorService,
+    RoadmapSubStepBackfillService,
   ],
   exports: [RoadmapService],
 })
