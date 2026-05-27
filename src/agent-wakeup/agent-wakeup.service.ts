@@ -31,7 +31,9 @@ import type {
 } from './agent-wakeup.types';
 
 function startOfUtcDay(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  return new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()),
+  );
 }
 
 @Injectable()
@@ -302,13 +304,11 @@ export class AgentWakeupService {
       ? `${latestQuizAttempt.score ?? 0}/${latestQuizAttempt.totalQuestions ?? 0} on ${latestQuizAttempt.submittedAt?.toISOString() ?? 'unknown time'}`
       : undefined;
 
-    let messageDecision:
-      | {
-          chatTitle: string;
-          messageText: string;
-          why?: string;
-        }
-      | null = null;
+    let messageDecision: {
+      chatTitle: string;
+      messageText: string;
+      why?: string;
+    } | null = null;
     let modelMeta: any = null;
 
     try {
@@ -335,8 +335,14 @@ export class AgentWakeupService {
       modelMeta = out.modelMeta;
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Agent wake-up decision failed userId=${userId}: ${errMsg}`);
-      const fallbackTip = (u.memory || a.purpose || 'Keep learning consistently.')
+      this.logger.error(
+        `Agent wake-up decision failed userId=${userId}: ${errMsg}`,
+      );
+      const fallbackTip = (
+        u.memory ||
+        a.purpose ||
+        'Keep learning consistently.'
+      )
         .split('\n')
         .find((line) => line.trim().length > 0)
         ?.trim();
@@ -450,7 +456,9 @@ export class AgentWakeupService {
 
   private isActiveUser(lastLoggedIn: Date | null, now: Date): boolean {
     if (!lastLoggedIn) return false;
-    return new Date(lastLoggedIn).getTime() >= this.getActiveSinceDate(now).getTime();
+    return (
+      new Date(lastLoggedIn).getTime() >= this.getActiveSinceDate(now).getTime()
+    );
   }
 
   private async countSentInRollingWindow(userId: string, now: Date) {

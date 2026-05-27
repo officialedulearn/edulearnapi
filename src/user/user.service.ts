@@ -21,7 +21,11 @@ const USER_SETTINGS_KEYS: Array<keyof UserSettingsPreferences> = [
   'emailNotifications',
   'agentWake',
   'memoryEnabled',
+  'voiceResponsesEnabled',
+  'voiceId',
 ];
+
+const USER_VOICE_IDS = ['warm-tutor', 'bright-coach', 'deep-guide'];
 
 export type UserFollowContext = {
   isFollowing: boolean;
@@ -150,6 +154,20 @@ export class UserService {
       const value = patch[key];
       if (value === undefined) continue;
 
+      if (key === 'voiceId') {
+        if (typeof value !== 'string' || value.trim().length === 0) {
+          throw new BadRequestException(`${key} must be a non-empty string`);
+        }
+
+        const voiceId = value.trim();
+        if (!USER_VOICE_IDS.includes(voiceId)) {
+          throw new BadRequestException('Invalid voiceId');
+        }
+
+        sanitized[key] = voiceId;
+        continue;
+      }
+
       if (typeof value !== 'boolean') {
         throw new BadRequestException(`${key} must be a boolean value`);
       }
@@ -191,10 +209,12 @@ export class UserService {
       ...sanitizedPatch,
     };
 
-    const updatePayload: { settingsPreferences: UserSettingsPreferences; memory?: string } =
-      {
-        settingsPreferences: nextSettings,
-      };
+    const updatePayload: {
+      settingsPreferences: UserSettingsPreferences;
+      memory?: string;
+    } = {
+      settingsPreferences: nextSettings,
+    };
 
     if (sanitizedPatch.memoryEnabled === false) {
       updatePayload.memory = '';
@@ -227,7 +247,9 @@ export class UserService {
       return '';
     }
 
-    const settings = normalizeUserSettingsPreferences(result.settingsPreferences);
+    const settings = normalizeUserSettingsPreferences(
+      result.settingsPreferences,
+    );
     if (!settings.memoryEnabled) {
       return '';
     }
@@ -246,7 +268,9 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
 
-    const settings = normalizeUserSettingsPreferences(result.settingsPreferences);
+    const settings = normalizeUserSettingsPreferences(
+      result.settingsPreferences,
+    );
     if (!settings.memoryEnabled) {
       return '';
     }

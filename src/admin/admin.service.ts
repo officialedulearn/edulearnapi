@@ -253,6 +253,96 @@ export class AdminService {
     map.set(key, (map.get(key) || 0) + amount);
   }
 
+  private updateEarliestAnchor(
+    anchors: Map<string, Date>,
+    userId: string,
+    timestamp: Date | string | null | undefined,
+  ) {
+    if (!timestamp) {
+      return;
+    }
+
+    const nextValue = new Date(timestamp);
+    if (Number.isNaN(nextValue.getTime())) {
+      return;
+    }
+
+    const currentValue = anchors.get(userId);
+    if (!currentValue || nextValue < currentValue) {
+      anchors.set(userId, nextValue);
+    }
+  }
+
+  private async getCohortAnchors(): Promise<Map<string, Date>> {
+    const datasets = await this.retryQuery(() =>
+      Promise.all([
+        db
+          .select({
+            userId: xpActivity.userId,
+            timestamp: xpActivity.createdAt,
+          })
+          .from(xpActivity),
+        db
+          .select({
+            userId: chat.userId,
+            timestamp: chat.createdAt,
+          })
+          .from(chat),
+        db
+          .select({
+            userId: roadmap.userId,
+            timestamp: roadmap.createdAt,
+          })
+          .from(roadmap),
+        db
+          .select({
+            userId: publicQuizParticipation.userId,
+            timestamp: publicQuizParticipation.joinedAt,
+          })
+          .from(publicQuizParticipation),
+        db
+          .select({
+            userId: userReward.userId,
+            timestamp: userReward.earnedAt,
+          })
+          .from(userReward),
+        db
+          .select({
+            userId: notifications.userId,
+            timestamp: notifications.createdAt,
+          })
+          .from(notifications),
+        db
+          .select({
+            userId: feedback.userId,
+            timestamp: feedback.createdAt,
+          })
+          .from(feedback),
+        db
+          .select({
+            userId: reminderEmailLog.userId,
+            timestamp: reminderEmailLog.createdAt,
+          })
+          .from(reminderEmailLog),
+        db
+          .select({
+            userId: agentWakeupLog.userId,
+            timestamp: agentWakeupLog.createdAt,
+          })
+          .from(agentWakeupLog),
+      ]),
+    );
+
+    const anchors = new Map<string, Date>();
+    for (const dataset of datasets) {
+      for (const row of dataset) {
+        this.updateEarliestAnchor(anchors, row.userId, row.timestamp);
+      }
+    }
+
+    return anchors;
+  }
+
   private normalizeTopic(value: string | null | undefined): string {
     const fallback = 'other';
     if (!value?.trim()) return fallback;
@@ -339,7 +429,10 @@ export class AdminService {
     };
   }
 
-  private buildGrowthLeads(data: GrowthDataSet, now = new Date()): GrowthLead[] {
+  private buildGrowthLeads(
+    data: GrowthDataSet,
+    now = new Date(),
+  ): GrowthLead[] {
     const activitiesByUser = new Map<string, number>();
     const recentActivitiesByUser = new Map<string, number>();
     const chatsByUser = new Map<string, number>();
@@ -376,7 +469,9 @@ export class AdminService {
     );
     data.reminderLogs
       .filter((item) => item.decision === 'skipped')
-      .forEach((item) => this.incrementMap(skippedRemindersByUser, item.userId));
+      .forEach((item) =>
+        this.incrementMap(skippedRemindersByUser, item.userId),
+      );
     data.wakeupLogs
       .filter((item) => item.decision === 'skipped')
       .forEach((item) => this.incrementMap(skippedWakeupsByUser, item.userId));
@@ -426,8 +521,10 @@ export class AdminService {
         };
 
         const leadScore = this.clampScore(
-          Object.values(componentScores).reduce((sum, score) => sum + score, 0) -
-            (u.isPremium ? 20 : 0),
+          Object.values(componentScores).reduce(
+            (sum, score) => sum + score,
+            0,
+          ) - (u.isPremium ? 20 : 0),
         );
         const churnRisk = this.clampScore(
           (daysSinceLogin > 30
@@ -448,7 +545,9 @@ export class AdminService {
           chatCount > 0 ? `${chatCount} chats` : '',
           roadmapCount > 0 ? `${roadmapCount} roadmaps` : '',
           referralCount > 0 ? `${referralCount} referrals` : '',
-          notificationCount > 0 ? `${notificationCount} notifications sent` : '',
+          notificationCount > 0
+            ? `${notificationCount} notifications sent`
+            : '',
           daysSinceLogin > 7 ? `${daysSinceLogin} days inactive` : '',
         ].filter(Boolean);
 
@@ -496,7 +595,9 @@ export class AdminService {
           signals: signals.slice(0, 4),
           recommendedAction,
           recommendedHref:
-            churnRisk >= 70 || daysSinceLogin > 7 ? '/emails' : '/notifications',
+            churnRisk >= 70 || daysSinceLogin > 7
+              ? '/emails'
+              : '/notifications',
         };
       })
       .sort((a, b) => b.leadScore + b.churnRisk - (a.leadScore + a.churnRisk));
@@ -570,7 +671,8 @@ export class AdminService {
         label: 'Referral leads',
         description: 'Users with referrals or strong sharing potential.',
         count: count(
-          (lead) => lead.referralCount > 0 || (!lead.isPremium && lead.leadScore >= 75),
+          (lead) =>
+            lead.referralCount > 0 || (!lead.isPremium && lead.leadScore >= 75),
         ),
         severity: 'info' as const,
         actionHref: '/leads?segment=referral',
@@ -591,7 +693,9 @@ export class AdminService {
     const total = data.users.length;
     const activeToday = leads.filter((lead) => lead.daysSinceLogin <= 1).length;
     const active7Days = leads.filter((lead) => lead.daysSinceLogin <= 7).length;
-    const active30Days = leads.filter((lead) => lead.daysSinceLogin <= 30).length;
+    const active30Days = leads.filter(
+      (lead) => lead.daysSinceLogin <= 30,
+    ).length;
 
     const riskBuckets = [
       {
@@ -602,15 +706,17 @@ export class AdminService {
       },
       {
         label: 'Needs nurture',
-        count: leads.filter((lead) => lead.churnRisk >= 35 && lead.churnRisk < 60)
-          .length,
+        count: leads.filter(
+          (lead) => lead.churnRisk >= 35 && lead.churnRisk < 60,
+        ).length,
         description: 'Some risk signals; good fit for reminders.',
         severity: 'info' as const,
       },
       {
         label: 'At risk',
-        count: leads.filter((lead) => lead.churnRisk >= 60 && lead.churnRisk < 80)
-          .length,
+        count: leads.filter(
+          (lead) => lead.churnRisk >= 60 && lead.churnRisk < 80,
+        ).length,
         description: 'High inactivity or weak learning depth.',
         severity: 'warning' as const,
       },
@@ -624,7 +730,12 @@ export class AdminService {
 
     const cohortMap = new Map<
       string,
-      { users: number; activeToday: number; active7Days: number; active30Days: number }
+      {
+        users: number;
+        activeToday: number;
+        active7Days: number;
+        active30Days: number;
+      }
     >();
     leads.forEach((lead) => {
       const date = new Date(lead.lastLoggedIn);
@@ -661,7 +772,9 @@ export class AdminService {
     };
   }
 
-  private buildContentIntelligence(data: GrowthDataSet): GrowthContentIntelligence {
+  private buildContentIntelligence(
+    data: GrowthDataSet,
+  ): GrowthContentIntelligence {
     const topicMap = new Map<
       string,
       { count: number; chat: number; roadmap: number; quiz: number }
@@ -669,14 +782,21 @@ export class AdminService {
 
     const addTopic = (topic: string, source: 'chat' | 'roadmap' | 'quiz') => {
       const key = this.normalizeTopic(topic);
-      const item = topicMap.get(key) || { count: 0, chat: 0, roadmap: 0, quiz: 0 };
+      const item = topicMap.get(key) || {
+        count: 0,
+        chat: 0,
+        roadmap: 0,
+        quiz: 0,
+      };
       item.count++;
       item[source]++;
       topicMap.set(key, item);
     };
 
     data.chats.forEach((item) => addTopic(item.title, 'chat'));
-    data.roadmaps.forEach((item) => addTopic(item.topic || item.title, 'roadmap'));
+    data.roadmaps.forEach((item) =>
+      addTopic(item.topic || item.title, 'roadmap'),
+    );
     data.publicQuizzes.forEach((item) => addTopic(item.title, 'quiz'));
 
     const topTopics = Array.from(topicMap.entries())
@@ -689,7 +809,10 @@ export class AdminService {
         return {
           topic,
           count: values.count,
-          source: sources.length > 1 ? ('mixed' as const) : (sources[0] as GrowthTopic['source']) || 'chat',
+          source:
+            sources.length > 1
+              ? ('mixed' as const)
+              : (sources[0] as GrowthTopic['source']) || 'chat',
           trend: values.count >= 5 ? ('up' as const) : ('flat' as const),
         };
       })
@@ -744,7 +867,8 @@ export class AdminService {
       {
         id: 'win-back',
         title: 'Users need win-back',
-        description: 'Inactive or high churn-risk users should get a focused reminder.',
+        description:
+          'Inactive or high churn-risk users should get a focused reminder.',
         count: countSegment('churned') + countSegment('at-risk'),
         priority: 'high',
         href: '/retention',
@@ -753,7 +877,8 @@ export class AdminService {
       {
         id: 'premium-ready',
         title: 'Premium-ready users',
-        description: 'Engaged free users are ready for a premium education offer.',
+        description:
+          'Engaged free users are ready for a premium education offer.',
         count: countSegment('premium-candidates'),
         priority: 'high',
         href: '/leads?segment=premium',
@@ -763,15 +888,18 @@ export class AdminService {
         id: 'high-value-inactive',
         title: 'High-value users inactive 7+ days',
         description: 'Users with strong lead scores but recent inactivity.',
-        count: leads.filter((lead) => lead.leadScore >= 65 && lead.daysSinceLogin > 7)
-          .length,
+        count: leads.filter(
+          (lead) => lead.leadScore >= 65 && lead.daysSinceLogin > 7,
+        ).length,
         priority: 'medium',
         href: '/emails',
         actionLabel: 'Draft campaign',
       },
       {
         id: 'topic-growth',
-        title: topTopic ? `${topTopic.topic} demand is leading` : 'No leading topic yet',
+        title: topTopic
+          ? `${topTopic.topic} demand is leading`
+          : 'No leading topic yet',
         description: topTopic
           ? 'Create content, roadmaps, or campaigns around the current top learning topic.'
           : 'More user activity is needed before topic recommendations become useful.',
@@ -782,7 +910,9 @@ export class AdminService {
       },
       {
         id: 'quiz-friction',
-        title: weakArea ? `${weakArea.topic} quiz friction` : 'No quiz friction yet',
+        title: weakArea
+          ? `${weakArea.topic} quiz friction`
+          : 'No quiz friction yet',
         description: weakArea
           ? 'High miss rates suggest learners need better explanations or onboarding.'
           : 'Quiz attempts are not deep enough yet for weak-area detection.',
@@ -820,7 +950,8 @@ export class AdminService {
         },
         {
           label: 'Win-back pool',
-          value: segments.find((segment) => segment.id === 'churned')?.count || 0,
+          value:
+            segments.find((segment) => segment.id === 'churned')?.count || 0,
           detail: 'Inactive 30+ days',
           tone: 'danger',
         },
@@ -874,31 +1005,34 @@ export class AdminService {
     const start = startDate || new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
     const end = endDate || new Date();
 
-    const users = await this.retryQuery(() =>
-      db
-        .select({
-          id: user.id,
-          lastLoggedIn: user.lastLoggedIn,
-        })
-        .from(user),
-    );
+    const [users, cohortAnchors] = await Promise.all([
+      this.retryQuery(() =>
+        db
+          .select({
+            id: user.id,
+            lastLoggedIn: user.lastLoggedIn,
+          })
+          .from(user),
+      ),
+      this.getCohortAnchors(),
+    ]);
 
     const dailyMap = new Map<string, number>();
     const weeklyMap = new Map<string, number>();
     const monthlyMap = new Map<string, number>();
 
     users.forEach((u) => {
-      const date = new Date(u.lastLoggedIn);
-      if (date >= start && date <= end) {
-        const dayKey = date.toISOString().split('T')[0];
+      const cohortDate = cohortAnchors.get(u.id) ?? new Date(u.lastLoggedIn);
+      if (cohortDate >= start && cohortDate <= end) {
+        const dayKey = cohortDate.toISOString().split('T')[0];
         dailyMap.set(dayKey, (dailyMap.get(dayKey) || 0) + 1);
 
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - date.getDay());
+        const weekStart = new Date(cohortDate);
+        weekStart.setDate(cohortDate.getDate() - cohortDate.getDay());
         const weekKey = weekStart.toISOString().split('T')[0];
         weeklyMap.set(weekKey, (weeklyMap.get(weekKey) || 0) + 1);
 
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const monthKey = `${cohortDate.getFullYear()}-${String(cohortDate.getMonth() + 1).padStart(2, '0')}`;
         monthlyMap.set(monthKey, (monthlyMap.get(monthKey) || 0) + 1);
       }
     });
@@ -1101,7 +1235,10 @@ export class AdminService {
   }
 
   async evaluateReminderNow(userId: string) {
-    const result = await this.remindersService.enqueueEvaluation(userId, 'manual');
+    const result = await this.remindersService.enqueueEvaluation(
+      userId,
+      'manual',
+    );
     const ok =
       result.enqueued ||
       (!result.enqueued && result.reason === 'already_queued');
@@ -1116,7 +1253,11 @@ export class AdminService {
     });
   }
 
-  async setReminderDisabled(userId: string, disabled: boolean, reason?: string) {
+  async setReminderDisabled(
+    userId: string,
+    disabled: boolean,
+    reason?: string,
+  ) {
     const state = await this.remindersService.setReminderDisabled(
       userId,
       disabled,
@@ -1315,16 +1456,17 @@ export class AdminService {
   }
 
   async getRetentionMetrics() {
-    const users = await this.retryQuery(() => db.select().from(user));
-    const activities = await this.retryQuery(() =>
-      db.select().from(xpActivity),
-    );
+    const [users, activities, cohortAnchors] = await Promise.all([
+      this.retryQuery(() => db.select().from(user)),
+      this.retryQuery(() => db.select().from(xpActivity)),
+      this.getCohortAnchors(),
+    ]);
 
     const weeklySignups = new Map<string, string[]>();
 
     users.forEach((u) => {
-      const signupDate = new Date(u.lastLoggedIn);
-      const weekKey = this.getWeekKey(signupDate);
+      const cohortDate = cohortAnchors.get(u.id) ?? new Date(u.lastLoggedIn);
+      const weekKey = this.getWeekKey(cohortDate);
       if (!weeklySignups.has(weekKey)) {
         weeklySignups.set(weekKey, []);
       }

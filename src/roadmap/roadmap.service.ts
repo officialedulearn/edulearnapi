@@ -6,13 +6,20 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { AuthService } from 'src/auth/auth.service';
-import { roadmap, roadMapStep, chat, message } from 'lib/db/schema';
+import {
+  roadmap,
+  roadMapStep,
+  roadmapSubStep,
+  roadmapVerificationQuiz,
+  roadmapVerificationQuizAttempt,
+} from 'lib/db/schema';
 import db from '../../drizzle';
 import { GoogleGenAI } from '@google/genai';
-import { eq, and, desc, asc, count } from 'drizzle-orm';
+import { eq, and, desc, asc, count, inArray, isNull } from 'drizzle-orm';
 import { ChatService } from 'src/chat/chat.service';
 import { generateUUID } from 'lib/utils';
 import { AiService } from 'src/ai/ai.service';
+import { QuizGenerationService } from 'src/ai/quiz-generation.service';
 import { NftRewardService } from 'src/ai/nft-reward.service';
 import { RewardsService } from 'src/rewards/rewards.service';
 import { RemindersService } from 'src/reminders/reminders.service';
@@ -25,6 +32,50 @@ import type {
 } from './roadmap-step-start.types';
 
 const ROADMAP_CACHE_TTL_SECONDS = 60 * 60 * 24; // 24 hours
+const ROADMAP_SUB_STEP_TARGET_COUNT = 6;
+const ROADMAP_VERIFICATION_QUESTION_COUNT = 5;
+const ROADMAP_VERIFICATION_PASSING_SCORE = 4;
+
+type RoadmapGeneratedSubStep = {
+  title: string;
+  description: string;
+  context?: string;
+};
+
+type RoadmapStepWithSubSteps = typeof roadMapStep.$inferSelect & {
+  done: boolean;
+  subSteps: Array<typeof roadmapSubStep.$inferSelect & { done: boolean }>;
+  progress: {
+    completedSubSteps: number;
+    totalSubSteps: number;
+    percentage: number;
+  };
+};
+
+type RoadmapProgress = {
+  completedSubSteps: number;
+  totalSubSteps: number;
+  completedSteps: number;
+  totalSteps: number;
+  percentage: number;
+};
+
+type RoadmapQuizQuestion = {
+  question: string;
+  options: string[];
+  correctAnswer: string;
+  explanation: string;
+};
+
+type RoadmapPublicQuizQuestion = Pick<
+  RoadmapQuizQuestion,
+  'question' | 'options'
+>;
+
+type RoadmapVerificationAnswer = {
+  questionIndex: number;
+  selectedAnswer: string;
+};
 
 @Injectable()
 export class RoadmapService {
@@ -35,6 +86,7 @@ export class RoadmapService {
     private readonly chatService: ChatService,
     @Inject(forwardRef(() => AiService))
     private readonly aiService: AiService,
+    private readonly quizGenerationService: QuizGenerationService,
     private readonly nftRewardService: NftRewardService,
     private readonly rewardsService: RewardsService,
     private readonly remindersService: RemindersService,
@@ -115,6 +167,226 @@ export class RoadmapService {
     }
   }
 
+  private calculateStepProgress(
+    subSteps: Array<typeof roadmapSubStep.$inferSelect & { done: boolean }>,
+  ) {
+    const totalSubSteps = subSteps.length;
+    const completedSubSteps = subSteps.filter((subStep) => subStep.done).length;
+    return {
+      completedSubSteps,
+      totalSubSteps,
+      percentage: totalSubSteps
+        ? Math.round((completedSubSteps / totalSubSteps) * 100)
+        : 0,
+    };
+  }
+
+  private calculateRoadmapProgress(
+    steps: RoadmapStepWithSubSteps[],
+  ): RoadmapProgress {
+    const totalSubSteps = steps.reduce(
+      (sum, step) => sum + step.subSteps.length,
+      0,
+    );
+    const completedSubSteps = steps.reduce(
+      (sum, step) =>
+        sum + step.subSteps.filter((subStep) => subStep.done).length,
+      0,
+    );
+    const completedSteps = steps.filter((step) => step.done).length;
+
+    if (totalSubSteps > 0) {
+      return {
+        completedSubSteps,
+        totalSubSteps,
+        completedSteps,
+        totalSteps: steps.length,
+        percentage: Math.round((completedSubSteps / totalSubSteps) * 100),
+      };
+    }
+
+    return {
+      completedSubSteps: completedSteps,
+      totalSubSteps: steps.length,
+      completedSteps,
+      totalSteps: steps.length,
+      percentage: steps.length
+        ? Math.round((completedSteps / steps.length) * 100)
+        : 0,
+    };
+  }
+
+  private normalizeGeneratedSubSteps(
+    value: unknown,
+    fallbackContext: string,
+  ): RoadmapGeneratedSubStep[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    return value
+      .filter((item): item is Record<string, unknown> => {
+        return typeof item === 'object' && item !== null;
+      })
+      .map((item) => ({
+        title:
+          typeof item.title === 'string' && item.title.trim()
+            ? item.title.trim()
+            : 'Practice checkpoint',
+        description:
+          typeof item.description === 'string' && item.description.trim()
+            ? item.description.trim()
+            : fallbackContext,
+        context:
+          typeof item.context === 'string' && item.context.trim()
+            ? item.context.trim()
+            : fallbackContext,
+      }))
+      .slice(0, ROADMAP_SUB_STEP_TARGET_COUNT);
+  }
+
+  private buildFallbackSubSteps(
+    step: Pick<typeof roadMapStep.$inferSelect, 'title' | 'description' | 'prompt'>,
+  ): RoadmapGeneratedSubStep[] {
+    const titles = [
+      'Understand the goal',
+      'Review core terms',
+      'Work through an example',
+      'Practice independently',
+      'Check common mistakes',
+      'Summarize what changed',
+    ];
+
+    return titles.map((title) => ({
+      title,
+      description: `${title} for "${step.title}" using the step guidance.`,
+      context: `${step.description} ${step.prompt}`.trim(),
+    }));
+  }
+
+  private async generateSubStepsForStep(
+    step: typeof roadMapStep.$inferSelect,
+    roadmapData: typeof roadmap.$inferSelect,
+  ): Promise<RoadmapGeneratedSubStep[]> {
+    const systemInstruction = `Generate 5-6 small, concrete roadmap checkpoints for one learning step.
+
+Return ONLY valid JSON:
+[{"title":"3-7 words","description":"One actionable task","context":"What the learner must understand or do"}]
+
+Rules:
+- Prefer 6 checkpoints when the step has enough material.
+- Each checkpoint must be smaller than the parent step.
+- Make checkpoints action-oriented and verifiable.
+- No markdown, no extra text.`;
+
+    try {
+      const result = await this.genAI.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          `Roadmap: ${roadmapData.title}`,
+          `Roadmap topic: ${roadmapData.topic}`,
+          `Step: ${step.title}`,
+          `Description: ${step.description}`,
+          `Tutor prompt: ${step.prompt}`,
+        ].join('\n'),
+        config: {
+          maxOutputTokens: 2000,
+          temperature: 0.35,
+          systemInstruction,
+        },
+      });
+      const responseText = result.text?.trim();
+      if (!responseText) {
+        return this.buildFallbackSubSteps(step);
+      }
+      const cleaned = responseText
+        .replace(/```json/g, '')
+        .replace(/```/g, '')
+        .trim();
+      const arrayStart = cleaned.indexOf('[');
+      const arrayEnd = cleaned.lastIndexOf(']');
+      if (arrayStart === -1 || arrayEnd === -1 || arrayEnd <= arrayStart) {
+        return this.buildFallbackSubSteps(step);
+      }
+      const parsed = JSON.parse(cleaned.slice(arrayStart, arrayEnd + 1));
+      const normalized = this.normalizeGeneratedSubSteps(
+        parsed,
+        `${step.description} ${step.prompt}`.trim(),
+      );
+      return normalized.length >= 5
+        ? normalized
+        : this.buildFallbackSubSteps(step);
+    } catch (error) {
+      console.error(`Failed to generate sub-steps for step ${step.id}:`, error);
+      return this.buildFallbackSubSteps(step);
+    }
+  }
+
+  private async createRoadmapSubSteps(
+    stepId: string,
+    subSteps: RoadmapGeneratedSubStep[],
+  ) {
+    if (!subSteps.length) {
+      return [];
+    }
+
+    return db
+      .insert(roadmapSubStep)
+      .values(
+        subSteps.map((subStep, index) => ({
+          stepId,
+          title: subStep.title,
+          description: subStep.description,
+          context: subStep.context ?? subStep.description,
+          sortOrder: index + 1,
+        })),
+      )
+      .onConflictDoNothing({
+        target: [roadmapSubStep.stepId, roadmapSubStep.sortOrder],
+      })
+      .returning();
+  }
+
+  async backfillMissingRoadmapSubSteps(
+    limit = 25,
+  ): Promise<{ processed: number; created: number }> {
+    const missingSteps = await db
+      .select({
+        step: roadMapStep,
+        roadmapData: roadmap,
+      })
+      .from(roadMapStep)
+      .innerJoin(roadmap, eq(roadMapStep.roadmapId, roadmap.id))
+      .leftJoin(roadmapSubStep, eq(roadmapSubStep.stepId, roadMapStep.id))
+      .where(isNull(roadmapSubStep.id))
+      .orderBy(asc(roadMapStep.createdAt))
+      .limit(limit);
+
+    let created = 0;
+    const touchedRoadmapIds = new Set<string>();
+
+    for (const { step, roadmapData } of missingSteps) {
+      const generatedSubSteps = await this.generateSubStepsForStep(
+        step,
+        roadmapData,
+      );
+      const inserted = await this.createRoadmapSubSteps(
+        step.id,
+        generatedSubSteps,
+      );
+      created += inserted.length;
+      touchedRoadmapIds.add(step.roadmapId);
+    }
+
+    await Promise.all(
+      Array.from(touchedRoadmapIds).map((roadmapId) =>
+        this.invalidateRoadmapCache({ roadmapId }),
+      ),
+    );
+
+    return { processed: missingSteps.length, created };
+  }
+
   async createRoadmap(
     userId: string,
     chatId: string,
@@ -143,11 +415,15 @@ export class RoadmapService {
     title: string,
     description: string,
     time: number,
+    subSteps: RoadmapGeneratedSubStep[] = [],
   ) {
     const newRoadmapStep = await db
       .insert(roadMapStep)
       .values({ roadmapId, prompt, title, description, time })
       .returning();
+    if (newRoadmapStep[0] && subSteps.length) {
+      await this.createRoadmapSubSteps(newRoadmapStep[0].id, subSteps);
+    }
     await this.invalidateRoadmapCache({ roadmapId });
     return newRoadmapStep[0];
   }
@@ -162,13 +438,18 @@ export class RoadmapService {
       throw new NotFoundException(`User with id ${userId} not found`);
     }
 
-    const totalRoadmaps = await db.select({count: count()})
-    .from(roadmap)
-    .where(eq(roadmap.userId, userId))
-    .execute();
+    const totalRoadmaps = await db
+      .select({ count: count() })
+      .from(roadmap)
+      .where(eq(roadmap.userId, userId))
+      .execute();
 
-    if (user.isPremium = false && totalRoadmaps.length >= 3) {
-      throw new BadRequestException('User has reached the maximum number of roadmaps');
+    const roadmapCount = Number(totalRoadmaps[0]?.count ?? 0);
+
+    if (!user.isPremium && roadmapCount >= 3) {
+      throw new BadRequestException(
+        'User has reached the maximum number of roadmaps',
+      );
     }
 
     const chat = await this.chatService.createChat({
@@ -227,15 +508,24 @@ Return ONLY valid JSON with this exact structure:
       "title": "Step title (3-8 words)",
       "description": "What the user will learn in this step (1-2 sentences)",
       "time": 5,
-      "prompt": "A detailed prompt that will be sent to the AI when the user starts this step. This should guide the AI to teach the concept interactively, ask questions, and provide hands-on examples. Make it conversational and engaging."
+      "prompt": "A detailed prompt that will be sent to the AI when the user starts this step. This should guide the AI to teach the concept interactively, ask questions, and provide hands-on examples. Make it conversational and engaging.",
+      "subSteps": [
+        {
+          "title": "Checkpoint title (3-7 words)",
+          "description": "A smaller actionable task the learner must complete inside this step.",
+          "context": "Specific skill, concept, or action that should be verified for this checkpoint."
+        }
+      ]
     }
   ]
 }
 
 Requirements:
 - Generate 5-8 steps based on topic complexity
+- Generate 5-6 subSteps for every step
 - Time is in minutes (5-10 per step)
 - Steps should progress from fundamentals to advanced concepts
+- Sub-steps should be granular, actionable, and verifiable with a short quiz
 - Each prompt is a user message that will be sent to the AI tutor on behalf of the learner
 - Write prompts as if the user is asking the AI tutor for help with that specific step
 - Prompts should be clear, focused questions or requests (2-4 sentences max)
@@ -355,12 +645,23 @@ CRITICAL JSON RULES:
             console.warn('Skipping invalid step:', step);
             return null;
           }
+          const subSteps = this.normalizeGeneratedSubSteps(
+            step.subSteps,
+            `${step.description} ${step.prompt}`.trim(),
+          );
           return await this.createRoadmapStep(
             newRoadmap.id,
             step.prompt,
             step.title,
             step.description,
             Number(step.time) || 5,
+            subSteps.length >= 5
+              ? subSteps
+              : this.buildFallbackSubSteps({
+                  title: step.title,
+                  description: step.description,
+                  prompt: step.prompt,
+                }),
           );
         }),
       );
@@ -379,9 +680,8 @@ CRITICAL JSON RULES:
 
   async getRoadmapById(roadmapId: string) {
     const cacheKey = this.roadmapByIdCacheKey(roadmapId);
-    const cached = await this.readRoadmapCache<typeof roadmap.$inferSelect>(
-      cacheKey,
-    );
+    const cached =
+      await this.readRoadmapCache<typeof roadmap.$inferSelect>(cacheKey);
     if (cached) {
       return cached;
     }
@@ -401,9 +701,8 @@ CRITICAL JSON RULES:
 
   async getRoadmapsByUserId(userId: string) {
     const cacheKey = this.roadmapsByUserCacheKey(userId);
-    const cached = await this.readRoadmapCache<
-      Array<typeof roadmap.$inferSelect>
-    >(cacheKey);
+    const cached =
+      await this.readRoadmapCache<Array<typeof roadmap.$inferSelect>>(cacheKey);
     if (cached) {
       return cached;
     }
@@ -418,34 +717,77 @@ CRITICAL JSON RULES:
     return roadmaps;
   }
 
-  async getRoadmapSteps(roadmapId: string) {
-    const cacheKey = this.roadmapStepsCacheKey(roadmapId);
-    const cached = await this.readRoadmapCache<
-      Array<(typeof roadMapStep.$inferSelect) & { done: boolean }>
-    >(cacheKey);
-    if (cached) {
-      return cached;
-    }
-
+  private async loadRoadmapStepsWithSubSteps(
+    roadmapId: string,
+  ): Promise<RoadmapStepWithSubSteps[]> {
     const steps = await db
       .select()
       .from(roadMapStep)
       .where(eq(roadMapStep.roadmapId, roadmapId))
       .orderBy(asc(roadMapStep.createdAt));
-    const normalizedSteps = steps.map((step) => ({
-      ...step,
-      done: Boolean(step.done),
-    }));
 
-    await this.setRoadmapCache(cacheKey, normalizedSteps);
-    return normalizedSteps;
+    if (!steps.length) {
+      return [];
+    }
+
+    const stepIds = steps.map((step) => step.id);
+    const subSteps = await db
+      .select()
+      .from(roadmapSubStep)
+      .where(inArray(roadmapSubStep.stepId, stepIds))
+      .orderBy(asc(roadmapSubStep.sortOrder), asc(roadmapSubStep.createdAt));
+
+    const subStepsByStepId = new Map<string, typeof subSteps>();
+    for (const subStep of subSteps) {
+      const list = subStepsByStepId.get(subStep.stepId) ?? [];
+      list.push(subStep);
+      subStepsByStepId.set(subStep.stepId, list);
+    }
+
+    return steps.map((step) => {
+      const childSubSteps = (subStepsByStepId.get(step.id) ?? []).map(
+        (subStep) => ({
+          ...subStep,
+          done: Boolean(subStep.done),
+        }),
+      );
+      const progress = this.calculateStepProgress(childSubSteps);
+      return {
+        ...step,
+        done: childSubSteps.length
+          ? progress.completedSubSteps === progress.totalSubSteps
+          : Boolean(step.done),
+        subSteps: childSubSteps,
+        progress,
+      };
+    });
+  }
+
+  async getRoadmapSteps(roadmapId: string) {
+    const cacheKey = this.roadmapStepsCacheKey(roadmapId);
+    const cached =
+      await this.readRoadmapCache<RoadmapStepWithSubSteps[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const roadmapData = await this.getRoadmapById(roadmapId);
+    if (!roadmapData) {
+      return [];
+    }
+
+    const steps = await this.loadRoadmapStepsWithSubSteps(roadmapId);
+
+    await this.setRoadmapCache(cacheKey, steps);
+    return steps;
   }
 
   async getRoadmapWithSteps(roadmapId: string) {
     const cacheKey = this.roadmapResponseCacheKey(roadmapId);
     const cached = await this.readRoadmapCache<{
       roadmap: typeof roadmap.$inferSelect;
-      steps: Array<(typeof roadMapStep.$inferSelect) & { done: boolean }>;
+      steps: RoadmapStepWithSubSteps[];
+      progress: RoadmapProgress;
     }>(cacheKey);
     if (cached) {
       return cached;
@@ -457,7 +799,11 @@ CRITICAL JSON RULES:
     }
 
     const steps = await this.getRoadmapSteps(roadmapId);
-    const response = { roadmap: roadmapData, steps };
+    const response = {
+      roadmap: roadmapData,
+      steps,
+      progress: this.calculateRoadmapProgress(steps),
+    };
 
     await this.setRoadmapCache(cacheKey, response);
     return response;
@@ -619,21 +965,6 @@ CRITICAL JSON RULES:
         aiService,
       });
 
-    await db
-      .update(roadMapStep)
-      .set({ done: true })
-      .where(eq(roadMapStep.id, stepId));
-
-    console.log(
-      `Marked step ${stepId} (${step.title}) as done for user ${userId}`,
-    );
-
-    await this.invalidateRoadmapCache({ roadmapId: step.roadmapId, userId });
-
-    this.remindersService
-      .enqueueEvaluation(userId, 'roadmap_updated')
-      .catch(() => undefined);
-
     return {
       step,
       userMessage,
@@ -667,21 +998,6 @@ CRITICAL JSON RULES:
       roadmapId: roadmapData.id,
       chatId: roadmapData.chatId,
     });
-
-    await db
-      .update(roadMapStep)
-      .set({ done: true })
-      .where(eq(roadMapStep.id, stepId));
-
-    console.log(
-      `Marked step ${stepId} (${step.title}) as done for user ${userId}`,
-    );
-
-    await this.invalidateRoadmapCache({ roadmapId: step.roadmapId, userId });
-
-    this.remindersService
-      .enqueueEvaluation(userId, 'roadmap_updated')
-      .catch(() => undefined);
 
     return {
       status: enqueued ? 'queued' : 'already_started',
@@ -725,6 +1041,230 @@ CRITICAL JSON RULES:
         url: `edulearnv2://chat/${roadmapData.chatId}`,
       },
     });
+  }
+
+  private async getAuthorizedRoadmapSubStep(subStepId: string, userId: string) {
+    const subSteps = await db
+      .select()
+      .from(roadmapSubStep)
+      .where(eq(roadmapSubStep.id, subStepId))
+      .limit(1);
+    if (!subSteps.length) {
+      throw new NotFoundException('Roadmap sub-step not found');
+    }
+    const subStep = subSteps[0];
+
+    const steps = await db
+      .select()
+      .from(roadMapStep)
+      .where(eq(roadMapStep.id, subStep.stepId))
+      .limit(1);
+    if (!steps.length) {
+      throw new NotFoundException('Roadmap step not found');
+    }
+    const step = steps[0];
+
+    const roadmapData = await this.getRoadmapById(step.roadmapId);
+    if (!roadmapData) {
+      throw new NotFoundException('Roadmap not found');
+    }
+    if (roadmapData.userId !== userId) {
+      throw new NotFoundException(
+        'You do not have permission to access this roadmap',
+      );
+    }
+
+    return { subStep, step, roadmapData };
+  }
+
+  async startSubStepVerification(subStepId: string, userId: string) {
+    const { subStep, step, roadmapData } =
+      await this.getAuthorizedRoadmapSubStep(subStepId, userId);
+
+    if (subStep.done) {
+      throw new BadRequestException('This checkpoint is already complete');
+    }
+
+    const questions =
+      await this.quizGenerationService.generateRoadmapVerificationQuiz({
+        userId,
+        roadmapTitle: roadmapData.title,
+        stepTitle: step.title,
+        stepDescription: step.description,
+        subStepTitle: subStep.title,
+        subStepDescription: subStep.description,
+        subStepContext: subStep.context,
+      });
+
+    if (questions.length !== ROADMAP_VERIFICATION_QUESTION_COUNT) {
+      throw new Error('Verification quiz must contain exactly 5 questions');
+    }
+
+    const [quiz] = await db
+      .insert(roadmapVerificationQuiz)
+      .values({
+        userId,
+        roadmapId: roadmapData.id,
+        stepId: step.id,
+        subStepId: subStep.id,
+        questions,
+      })
+      .returning();
+    const publicQuestions = (
+      quiz.questions as RoadmapQuizQuestion[]
+    ).map<RoadmapPublicQuizQuestion>(({ question, options }) => ({
+      question,
+      options,
+    }));
+
+    return {
+      quiz: {
+        id: quiz.id,
+        roadmapId: quiz.roadmapId,
+        stepId: quiz.stepId,
+        subStepId: quiz.subStepId,
+        questions: publicQuestions,
+        createdAt: quiz.createdAt,
+      },
+      passingScore: ROADMAP_VERIFICATION_PASSING_SCORE,
+      totalQuestions: ROADMAP_VERIFICATION_QUESTION_COUNT,
+    };
+  }
+
+  async submitSubStepVerificationAttempt(
+    quizId: string,
+    userId: string,
+    answers: RoadmapVerificationAnswer[],
+  ) {
+    const [quiz] = await db
+      .select()
+      .from(roadmapVerificationQuiz)
+      .where(
+        and(
+          eq(roadmapVerificationQuiz.id, quizId),
+          eq(roadmapVerificationQuiz.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (!quiz) {
+      throw new NotFoundException('Verification quiz not found');
+    }
+
+    const questions = quiz.questions as RoadmapQuizQuestion[];
+    if (questions.length !== ROADMAP_VERIFICATION_QUESTION_COUNT) {
+      throw new BadRequestException('Invalid verification quiz');
+    }
+    if (answers.length !== questions.length) {
+      throw new BadRequestException('All 5 answers are required');
+    }
+
+    const answerByIndex = new Map<number, string>();
+    for (const answer of answers) {
+      if (
+        answer.questionIndex < 0 ||
+        answer.questionIndex >= questions.length ||
+        answerByIndex.has(answer.questionIndex)
+      ) {
+        throw new BadRequestException(
+          `Invalid questionIndex ${answer.questionIndex}`,
+        );
+      }
+      answerByIndex.set(answer.questionIndex, answer.selectedAnswer);
+    }
+
+    const results: Array<{
+      questionIndex: number;
+      selectedAnswer: string;
+      correctAnswer: string;
+      isCorrect: boolean;
+    }> = [];
+    let score = 0;
+
+    for (let questionIndex = 0; questionIndex < questions.length; questionIndex++) {
+      const question = questions[questionIndex];
+      const selectedAnswer = answerByIndex.get(questionIndex) ?? '';
+      const isCorrect =
+        selectedAnswer.trim() === question.correctAnswer.trim();
+      if (isCorrect) {
+        score++;
+      }
+      results.push({
+        questionIndex,
+        selectedAnswer,
+        correctAnswer: question.correctAnswer,
+        isCorrect,
+      });
+    }
+
+    const passed = score >= ROADMAP_VERIFICATION_PASSING_SCORE;
+    let updatedSubStep: typeof roadmapSubStep.$inferSelect | undefined;
+    let updatedStep: (typeof roadMapStep.$inferSelect & { done: boolean }) | null =
+      null;
+
+    await db.transaction(async (tx) => {
+      await tx.insert(roadmapVerificationQuizAttempt).values({
+        quizId,
+        userId,
+        subStepId: quiz.subStepId,
+        answers,
+        results,
+        score,
+        totalQuestions: questions.length,
+        passed,
+      });
+
+      if (passed) {
+        const [completed] = await tx
+          .update(roadmapSubStep)
+          .set({ done: true, completedAt: new Date() })
+          .where(eq(roadmapSubStep.id, quiz.subStepId))
+          .returning();
+        updatedSubStep = completed;
+
+        const siblingSubSteps = await tx
+          .select()
+          .from(roadmapSubStep)
+          .where(eq(roadmapSubStep.stepId, quiz.stepId));
+        const allDone =
+          siblingSubSteps.length > 0 &&
+          siblingSubSteps.every((subStep) =>
+            subStep.id === quiz.subStepId ? true : Boolean(subStep.done),
+          );
+
+        if (allDone) {
+          const [step] = await tx
+            .update(roadMapStep)
+            .set({ done: true })
+            .where(eq(roadMapStep.id, quiz.stepId))
+            .returning();
+          updatedStep = step ? { ...step, done: Boolean(step.done) } : null;
+        }
+      }
+    });
+
+    await this.invalidateRoadmapCache({
+      roadmapId: quiz.roadmapId,
+      userId,
+    });
+
+    if (passed) {
+      this.remindersService
+        .enqueueEvaluation(userId, 'roadmap_updated')
+        .catch(() => undefined);
+      await this.checkAndAwardRoadmapNFT(quiz.roadmapId, userId);
+    }
+
+    return {
+      score,
+      totalQuestions: questions.length,
+      passed,
+      passingScore: ROADMAP_VERIFICATION_PASSING_SCORE,
+      results,
+      subStep: updatedSubStep
+        ? { ...updatedSubStep, done: Boolean(updatedSubStep.done) }
+        : undefined,
+      step: updatedStep,
+    };
   }
 
   async editRoadmapStep(
@@ -806,7 +1346,10 @@ CRITICAL JSON RULES:
       await db.delete(roadMapStep).where(eq(roadMapStep.id, step.id));
     }
     await db.delete(roadmap).where(eq(roadmap.id, roadmapId));
-    await this.invalidateRoadmapCache({ roadmapId, userId: roadmapData.userId });
+    await this.invalidateRoadmapCache({
+      roadmapId,
+      userId: roadmapData.userId,
+    });
     return { message: 'Roadmap deleted successfully' };
   }
 

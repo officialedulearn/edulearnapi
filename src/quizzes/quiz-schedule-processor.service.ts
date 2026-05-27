@@ -57,7 +57,10 @@ export class QuizScheduleProcessorService
     this.worker.on('error', (err: Error) => {
       this.queueHealth.markError(QUIZ_SCHEDULE_QUEUE_NAME, err);
       captureWorkerError(QUIZ_SCHEDULE_QUEUE_NAME, err);
-      this.logger.error(`Scheduled quiz worker error: ${err.message}`, err.stack);
+      this.logger.error(
+        `Scheduled quiz worker error: ${err.message}`,
+        err.stack,
+      );
     });
     this.worker.on('failed', (job, err) => {
       this.queueHealth.markFailure(QUIZ_SCHEDULE_QUEUE_NAME, job?.id, err);
@@ -112,14 +115,20 @@ export class QuizScheduleProcessorService
           this.logger.log(`No enabled schedule for user ${userId}, skipping`);
           return;
         }
-        const [u] = await db.select().from(user).where(eq(user.id, userId)).limit(1);
+        const [u] = await db
+          .select()
+          .from(user)
+          .where(eq(user.id, userId))
+          .limit(1);
         if (!u) {
           this.logger.warn(`User ${userId} not found for scheduled quiz`);
           return;
         }
         const credits = Number(u.credits ?? 0);
         if (credits < 0.5) {
-          this.logger.log(`User ${userId} low credits, skipping scheduled quiz`);
+          this.logger.log(
+            `User ${userId} low credits, skipping scheduled quiz`,
+          );
           await this.notificationsService.createNotification(
             {
               userId,
@@ -140,11 +149,14 @@ export class QuizScheduleProcessorService
           correctAnswer: string;
           explanation: string;
         }>;
+        let generatedSummary: string | undefined;
+        let generatedCoveredConcepts: string[] | undefined;
+        let generatedChallengeProfile: string | undefined;
         try {
           const mostRecentQuiz = await db
             .select()
             .from(publicQuiz)
-            .where(eq(publicQuiz.creatorId, userId))
+            .where(eq(publicQuiz.createdBy, userId))
             .orderBy(desc(publicQuiz.createdAt))
             .limit(1)
             .then((r) => r[0]);
@@ -166,17 +178,22 @@ export class QuizScheduleProcessorService
             return;
           }
 
-          const generatedQuestions: unknown =
+          const generatedQuiz =
             await this.quizGenerationService.generateScheduledQuiz({
               userId,
               topic: schedule.topic,
               difficulty: schedule.difficulty,
               memoryContext,
-            });
-          questions = generatedQuestions as typeof questions;
+          });
+          questions = generatedQuiz.questions;
+          generatedSummary = generatedQuiz.summary;
+          generatedCoveredConcepts = generatedQuiz.coveredConcepts;
+          generatedChallengeProfile = generatedQuiz.challengeProfile;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          this.logger.error(`generateScheduledQuiz failed for ${userId}: ${msg}`);
+          this.logger.error(
+            `generateScheduledQuiz failed for ${userId}: ${msg}`,
+          );
           throw err;
         }
         const dateLabel = new Date().toLocaleDateString('en-US', {
@@ -186,6 +203,9 @@ export class QuizScheduleProcessorService
         const published = await this.quizzesService.publish(userId, {
           title: `${schedule.topic} - ${dateLabel}`,
           description: `Scheduled ${schedule.difficulty} quiz`,
+          summary: generatedSummary,
+          coveredConcepts: generatedCoveredConcepts,
+          challengeProfile: generatedChallengeProfile,
           questions,
           sourceChatId: undefined,
         });

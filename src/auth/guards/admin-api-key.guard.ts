@@ -20,13 +20,12 @@ export class AdminApiKeyGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<FastifyRequest>();
-    const q = request.query as Record<string, unknown>;
-    const apiKey =
-      request.headers['x-admin-key'] || (q['adminKey'] as string | undefined);
+    const headerValue = request.headers['x-admin-key'];
+    const apiKey = Array.isArray(headerValue) ? headerValue[0] : headerValue;
 
     if (!apiKey) {
       throw new UnauthorizedException(
-        'Admin API key is missing (provide via x-admin-key header or adminKey query parameter)',
+        'Admin API key is missing (provide via x-admin-key header)',
       );
     }
 

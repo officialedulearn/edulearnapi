@@ -6,7 +6,11 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { captureException, setRequestContext } from './sentry';
+import {
+  captureException,
+  sanitizeRequestUrl,
+  setRequestContext,
+} from './sentry';
 
 interface RequestWithUser extends FastifyRequest {
   user?: {
@@ -49,17 +53,19 @@ export class SentryExceptionFilter implements ExceptionFilter {
     setRequestContext({
       method: request.method,
       route: request.routeOptions?.url,
-      url: request.url,
+      url: sanitizeRequestUrl(request.url),
       statusCode,
       requestId: request.id,
       userId: getUserId(request),
     });
 
     if (statusCode >= 500 || !(exception instanceof HttpException)) {
+      const route =
+        request.routeOptions?.url ?? sanitizeRequestUrl(request.url) ?? 'unknown';
       captureException(exception, {
         tags: {
           method: request.method,
-          route: request.routeOptions?.url ?? request.url,
+          route,
           status_code: String(statusCode),
         },
         extra: {

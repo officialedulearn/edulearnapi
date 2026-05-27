@@ -240,9 +240,7 @@ export class ChatService {
     const recent = messages.slice(-30);
     const lines = recent.map((m) => {
       const text =
-        typeof m.content === 'string'
-          ? m.content
-          : JSON.stringify(m.content);
+        typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
       return `${m.role}: ${text}`;
     });
     let text = lines.join('\n\n');

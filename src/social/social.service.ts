@@ -316,16 +316,16 @@ export class SocialService {
       if (follower.emailNotifications) {
         if (event.type === 'level_up') {
           await this.resendService.sendLevelUpEmail(
-            follower.email as string,
+            follower.email,
             follower.username as string,
-            userInfo[0].name as string,
+            userInfo[0].name,
             event.data.level,
             event.data.levelTitle,
             event.data.xpTotal,
           );
         } else if (event.type === 'nft_earned') {
           await this.resendService.sendNFTFollowingEmail(
-            follower.email as string,
+            follower.email,
             follower.username as string,
             username,
             event.data.nftTitle,
@@ -341,7 +341,7 @@ export class SocialService {
           {
             title,
             content,
-            userId: follower.id as string,
+            userId: follower.id,
             type:
               event.type === 'nft_earned' && event.data?.nftId
                 ? 'nft_claimed'
@@ -359,4 +359,3 @@ export class SocialService {
     await Promise.allSettled(notificationPromises);
   }
 }
-

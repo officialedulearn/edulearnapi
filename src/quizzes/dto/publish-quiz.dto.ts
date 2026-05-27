@@ -34,6 +34,19 @@ export class PublishQuizDto {
   @IsString()
   description?: string;
 
+  @IsOptional()
+  @IsString()
+  summary?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  coveredConcepts?: string[];
+
+  @IsOptional()
+  @IsString()
+  challengeProfile?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => PublishQuizQuestionDto)

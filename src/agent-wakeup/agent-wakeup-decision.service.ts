@@ -64,7 +64,9 @@ export class AgentWakeupDecisionService {
           .map((r, i) => {
             const topic = String(r.topic || '').trim();
             const title = String(r.title || '').trim();
-            const description = String(r.description || '').trim().slice(0, 180);
+            const description = String(r.description || '')
+              .trim()
+              .slice(0, 180);
             return `${i + 1}. ${title || topic || 'Roadmap'} (${topic || 'n/a'}) - ${description || 'no description'}`;
           })
           .join('\n')
@@ -144,8 +146,9 @@ Output rules:
           throw new Error('AgentWakeupDecisionService: empty AI response');
         }
 
-        const finishReason = (result as { candidates?: { finishReason?: string }[] })
-          .candidates?.[0]?.finishReason;
+        const finishReason = (
+          result as { candidates?: { finishReason?: string }[] }
+        ).candidates?.[0]?.finishReason;
         if (finishReason === 'MAX_TOKENS') {
           throw new Error(
             'AgentWakeupDecisionService: response truncated (MAX_TOKENS)',

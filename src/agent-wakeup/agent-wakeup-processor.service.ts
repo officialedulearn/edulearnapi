@@ -18,7 +18,9 @@ import {
 } from 'src/observability/sentry';
 
 @Injectable()
-export class AgentWakeupProcessorService implements OnModuleInit, OnModuleDestroy {
+export class AgentWakeupProcessorService
+  implements OnModuleInit, OnModuleDestroy
+{
   private readonly logger = new Logger(AgentWakeupProcessorService.name);
   private worker: Worker<AgentWakeupEvaluateJobData> | null = null;
   private workerConnection: Redis | null = null;
@@ -39,12 +41,17 @@ export class AgentWakeupProcessorService implements OnModuleInit, OnModuleDestro
     );
     this.worker.on('ready', () => {
       this.queueHealth.markReady(AGENT_WAKEUP_QUEUE_NAME);
-      this.logger.log(`Agent wake-up worker ready queue=${AGENT_WAKEUP_QUEUE_NAME}`);
+      this.logger.log(
+        `Agent wake-up worker ready queue=${AGENT_WAKEUP_QUEUE_NAME}`,
+      );
     });
     this.worker.on('error', (err: Error) => {
       this.queueHealth.markError(AGENT_WAKEUP_QUEUE_NAME, err);
       captureWorkerError(AGENT_WAKEUP_QUEUE_NAME, err);
-      this.logger.error(`Agent wake-up worker error: ${err.message}`, err.stack);
+      this.logger.error(
+        `Agent wake-up worker error: ${err.message}`,
+        err.stack,
+      );
     });
     this.worker.on('failed', (job, err) => {
       this.queueHealth.markFailure(AGENT_WAKEUP_QUEUE_NAME, job?.id, err);

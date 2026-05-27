@@ -76,7 +76,10 @@ export class HealthService {
     }
   }
 
-  private getEnvHealth(envName: string, dependencyName: string): DependencyHealth {
+  private getEnvHealth(
+    envName: string,
+    dependencyName: string,
+  ): DependencyHealth {
     return process.env[envName]?.trim()
       ? { name: dependencyName, status: 'ok' }
       : {

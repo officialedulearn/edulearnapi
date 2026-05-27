@@ -53,4 +53,3 @@ export class ReminderBullmqService implements OnModuleDestroy {
     }
   }
 }
-

@@ -34,6 +34,8 @@ export type UserSettingsPreferences = {
   emailNotifications: boolean;
   agentWake: boolean;
   memoryEnabled: boolean;
+  voiceResponsesEnabled: boolean;
+  voiceId: string;
 };
 
 export const DEFAULT_USER_SETTINGS_PREFERENCES: UserSettingsPreferences = {
@@ -42,6 +44,8 @@ export const DEFAULT_USER_SETTINGS_PREFERENCES: UserSettingsPreferences = {
   emailNotifications: true,
   agentWake: true,
   memoryEnabled: true,
+  voiceResponsesEnabled: false,
+  voiceId: 'warm-tutor',
 };
 
 const isSettingsRecord = (
@@ -51,6 +55,11 @@ const isSettingsRecord = (
 
 const readBoolean = (value: unknown, fallback: boolean): boolean =>
   typeof value === 'boolean' ? value : fallback;
+
+const readString = (value: unknown, fallback: string): string =>
+  typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : fallback;
 
 export function normalizeUserSettingsPreferences(
   value: unknown,
@@ -79,6 +88,14 @@ export function normalizeUserSettingsPreferences(
     memoryEnabled: readBoolean(
       value.memoryEnabled,
       DEFAULT_USER_SETTINGS_PREFERENCES.memoryEnabled,
+    ),
+    voiceResponsesEnabled: readBoolean(
+      value.voiceResponsesEnabled,
+      DEFAULT_USER_SETTINGS_PREFERENCES.voiceResponsesEnabled,
+    ),
+    voiceId: readString(
+      value.voiceId,
+      DEFAULT_USER_SETTINGS_PREFERENCES.voiceId,
     ),
   };
 }
@@ -119,12 +136,13 @@ export const user = pgTable('user', {
   settingsPreferences: json('settingsPreferences')
     .$type<UserSettingsPreferences>()
     .default(
-      sql`'{"pushNotifications":true,"inAppNotifications":true,"emailNotifications":true,"agentWake":true,"memoryEnabled":true}'::json`,
+      sql`'{"pushNotifications":true,"inAppNotifications":true,"emailNotifications":true,"agentWake":true,"memoryEnabled":true,"voiceResponsesEnabled":false,"voiceId":"warm-tutor"}'::json`,
     ),
   expoPushToken: text('expoPushToken'),
   profilePictureURL: text('profilePictureURL'),
   oauthProvider: text('oauth_provider'),
   oauthProviderId: text('oauth_provider_id'),
+  emailSubscribed: boolean('email_subscribed').notNull().default(true),
   hasCompletedProfile: boolean('has_completed_profile').default(true),
   streakShieldActive: boolean('streak_shield_active').default(false),
   streakShieldExpiry: timestamp('streak_shield_expiry'),
@@ -295,6 +313,101 @@ export const roadMapStep = pgTable('roadmap_step', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   done: boolean('done').default(false),
 });
+
+export const roadmapSubStep = pgTable(
+  'roadmap_sub_step',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    stepId: uuid('stepId')
+      .notNull()
+      .references(() => roadMapStep.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    description: text('description').notNull(),
+    context: text('context').notNull().default(''),
+    sortOrder: integer('sortOrder').notNull(),
+    done: boolean('done').notNull().default(false),
+    completedAt: timestamp('completedAt'),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => ({
+    stepOrderIdx: uniqueIndex('roadmap_sub_step_step_order_idx').on(
+      table.stepId,
+      table.sortOrder,
+    ),
+    stepDoneIdx: index('roadmap_sub_step_step_done_idx').on(
+      table.stepId,
+      table.done,
+    ),
+  }),
+);
+
+export type RoadmapSubStep = InferSelectModel<typeof roadmapSubStep>;
+
+export const roadmapVerificationQuiz = pgTable(
+  'roadmap_verification_quiz',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    userId: uuid('userId')
+      .notNull()
+      .references(() => user.id),
+    roadmapId: uuid('roadmapId')
+      .notNull()
+      .references(() => roadmap.id, { onDelete: 'cascade' }),
+    stepId: uuid('stepId')
+      .notNull()
+      .references(() => roadMapStep.id, { onDelete: 'cascade' }),
+    subStepId: uuid('subStepId')
+      .notNull()
+      .references(() => roadmapSubStep.id, { onDelete: 'cascade' }),
+    questions: json('questions').notNull(),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => ({
+    subStepCreatedIdx: index(
+      'roadmap_verification_quiz_sub_step_created_idx',
+    ).on(table.subStepId, table.createdAt),
+    userCreatedIdx: index('roadmap_verification_quiz_user_created_idx').on(
+      table.userId,
+      table.createdAt,
+    ),
+  }),
+);
+
+export type RoadmapVerificationQuiz = InferSelectModel<
+  typeof roadmapVerificationQuiz
+>;
+
+export const roadmapVerificationQuizAttempt = pgTable(
+  'roadmap_verification_quiz_attempt',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    quizId: uuid('quizId')
+      .notNull()
+      .references(() => roadmapVerificationQuiz.id, { onDelete: 'cascade' }),
+    userId: uuid('userId')
+      .notNull()
+      .references(() => user.id),
+    subStepId: uuid('subStepId')
+      .notNull()
+      .references(() => roadmapSubStep.id, { onDelete: 'cascade' }),
+    answers: json('answers').notNull(),
+    results: json('results').notNull(),
+    score: integer('score').notNull(),
+    totalQuestions: integer('totalQuestions').notNull(),
+    passed: boolean('passed').notNull(),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => ({
+    quizIdx: index('roadmap_verification_attempt_quiz_idx').on(table.quizId),
+    subStepCreatedIdx: index(
+      'roadmap_verification_attempt_sub_step_created_idx',
+    ).on(table.subStepId, table.createdAt),
+  }),
+);
+
+export type RoadmapVerificationQuizAttempt = InferSelectModel<
+  typeof roadmapVerificationQuizAttempt
+>;
 
 export const totalVolumes = pgTable('total_volumes', {
   id: integer('id').primaryKey(),
@@ -525,6 +638,9 @@ export const publicQuiz = pgTable('public_quiz', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
   title: text('title').notNull(),
   description: text('description'),
+  summary: text('summary'),
+  coveredConcepts: json('coveredConcepts').$type<string[]>(),
+  challengeProfile: text('challengeProfile'),
   questions: json('questions').notNull(),
   createdBy: uuid('createdBy')
     .notNull()

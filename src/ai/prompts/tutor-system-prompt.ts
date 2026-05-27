@@ -20,9 +20,7 @@ export function buildTutorSystemInstruction({
   agentPurpose?: string;
 }): string {
   const memoryBlock =
-    memory && memory.trim().length > 0
-      ? memory.trim()
-      : '(none stored yet)';
+    memory && memory.trim().length > 0 ? memory.trim() : '(none stored yet)';
 
   const resolvedAgentName = agentName?.trim() || 'EduLearn';
 

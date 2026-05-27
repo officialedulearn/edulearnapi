@@ -1,4 +1,9 @@
-import { AdminService, GrowthLead, GrowthRetention, GrowthSegment } from './admin.service';
+import {
+  AdminService,
+  GrowthLead,
+  GrowthRetention,
+  GrowthSegment,
+} from './admin.service';
 
 type PrivateGrowthService = {
   buildGrowthLeads(data: unknown, now?: Date): GrowthLead[];
@@ -133,12 +138,21 @@ const createGrowthDataSet = () => ({
       creatorId: 'user-active',
     },
   ],
-  communityMembers: [{ id: 'member-1', userId: 'user-active', communityId: 'community-1', role: 'member' }],
+  communityMembers: [
+    {
+      id: 'member-1',
+      userId: 'user-active',
+      communityId: 'community-1',
+      role: 'member',
+    },
+  ],
   notificationRows: [],
   transactions: [],
   subscriptions: [],
   feedbackRows: [],
-  reminderLogs: [{ id: 'reminder-1', userId: 'user-risk', decision: 'skipped' }],
+  reminderLogs: [
+    { id: 'reminder-1', userId: 'user-risk', decision: 'skipped' },
+  ],
   wakeupLogs: [{ id: 'wakeup-1', userId: 'user-risk', decision: 'skipped' }],
 });
 
@@ -166,9 +180,13 @@ describe('AdminService growth intelligence', () => {
     );
     const segments = service.buildGrowthSegments(leads);
 
-    expect(segments.find((segment) => segment.id === 'premium-candidates')?.count).toBe(1);
+    expect(
+      segments.find((segment) => segment.id === 'premium-candidates')?.count,
+    ).toBe(1);
     expect(segments.find((segment) => segment.id === 'churned')?.count).toBe(1);
-    expect(segments.find((segment) => segment.id === 'referral')?.count).toBeGreaterThan(0);
+    expect(
+      segments.find((segment) => segment.id === 'referral')?.count,
+    ).toBeGreaterThan(0);
   });
 
   it('returns empty retention data without crashing', () => {
@@ -181,6 +199,8 @@ describe('AdminService growth intelligence', () => {
     );
 
     expect(retention.summary.d7Rate).toBe(0);
-    expect(retention.riskBuckets.reduce((sum, bucket) => sum + bucket.count, 0)).toBe(0);
+    expect(
+      retention.riskBuckets.reduce((sum, bucket) => sum + bucket.count, 0),
+    ).toBe(0);
   });
 });

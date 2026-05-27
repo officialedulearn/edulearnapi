@@ -25,7 +25,10 @@ declare module '@sentry/nestjs' {
 
   export function init(options: InitOptions): void;
   export function addBreadcrumb(breadcrumb: Record<string, unknown>): void;
-  export function setContext(name: string, context: Record<string, unknown>): void;
+  export function setContext(
+    name: string,
+    context: Record<string, unknown>,
+  ): void;
   export function setUser(user: { id: string }): void;
   export function withScope(callback: (scope: Scope) => void): void;
   export function captureException(exception: unknown): void;

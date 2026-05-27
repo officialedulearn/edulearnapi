@@ -1,4 +1,12 @@
-import { Controller, Get, Header, Param, Req, Res, UseInterceptors } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Header,
+  Param,
+  Req,
+  Res,
+  UseInterceptors,
+} from '@nestjs/common';
 import { RouteConstraints } from '@nestjs/platform-fastify';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { DeepLinksService } from './deep-links.service';
@@ -52,8 +60,27 @@ export class DeepLinksController {
     }
 
     this.deepLinksService.logHit(req, 'referral', referralCode);
-    const html = await this.deepLinksService.buildReferralLandingPage(referralCode);
+    const html =
+      await this.deepLinksService.buildReferralLandingPage(referralCode);
     return reply.type('text/html; charset=utf-8').status(200).send(html);
+  }
+
+  @RouteConstraints({ host: DEEP_LINK_HOST })
+  @Get('quizzes/:quizId/og-image')
+  async openQuizImage(
+    @Param('quizId') quizId: string,
+    @Res() reply: FastifyReply,
+  ) {
+    if (!QUIZ_ID_PATTERN.test(quizId)) {
+      return reply.status(404).send();
+    }
+
+    const image = await this.deepLinksService.buildQuizOpenGraphImage(quizId);
+    return reply
+      .type('image/png')
+      .header('Cache-Control', 'public, max-age=86400')
+      .status(200)
+      .send(image);
   }
 
   @RouteConstraints({ host: DEEP_LINK_HOST })
@@ -90,7 +117,8 @@ export class DeepLinksController {
     }
 
     this.deepLinksService.logHit(req, 'communityInvite', inviteCode);
-    const html = await this.deepLinksService.buildCommunityLandingPage(inviteCode);
+    const html =
+      await this.deepLinksService.buildCommunityLandingPage(inviteCode);
     return reply.type('text/html; charset=utf-8').status(200).send(html);
   }
 }

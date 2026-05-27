@@ -96,7 +96,10 @@ describe('ai-cost-router', () => {
       'sounds good',
       'yes please',
     ]) {
-      const d = aiCostRouteForUserMessage({ userText, conversationContext: ctx });
+      const d = aiCostRouteForUserMessage({
+        userText,
+        conversationContext: ctx,
+      });
       expect(d.route).toBe('call_model');
     }
   });

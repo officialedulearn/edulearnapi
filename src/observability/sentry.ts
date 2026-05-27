@@ -9,6 +9,7 @@ const SENSITIVE_HEADER_NAMES = new Set([
   'cookie',
   'set-cookie',
   'x-api-key',
+  'x-admin-key',
   'x-admin-api-key',
   'x-marketplace-api-key',
   'x-supabase-auth',
@@ -30,6 +31,14 @@ function getSentryClient(): SentryClient | null {
   }
 
   return sentryClient;
+}
+
+export function sanitizeRequestUrl(url?: string): string | undefined {
+  if (!url) {
+    return url;
+  }
+
+  return url.split('?')[0]?.split('#')[0];
 }
 
 export interface SentryRuntimeConfig {
@@ -97,7 +106,8 @@ export function getSentryRuntimeConfig(
   return {
     enabled: parseEnabled(env.SENTRY_ENABLED, Boolean(dsn)),
     ...(dsn ? { dsn } : {}),
-    environment: env.SENTRY_ENVIRONMENT?.trim() || env.NODE_ENV || 'development',
+    environment:
+      env.SENTRY_ENVIRONMENT?.trim() || env.NODE_ENV || 'development',
     ...(release ? { release } : {}),
     tracesSampleRate: parseTracesSampleRate(env.SENTRY_TRACES_SAMPLE_RATE),
   };
@@ -195,8 +205,14 @@ export function addRequestBreadcrumb(context: RequestContext): void {
 
   client.addBreadcrumb({
     category: 'http.request',
-    level: context.statusCode != null && context.statusCode >= 500 ? 'error' : 'info',
-    message: `${context.method ?? 'HTTP'} ${context.route ?? context.url ?? ''}`.trim(),
+    level:
+      context.statusCode != null && context.statusCode >= 500
+        ? 'error'
+        : 'info',
+    message:
+      `${context.method ?? 'HTTP'} ${
+        context.route ?? sanitizeRequestUrl(context.url) ?? ''
+      }`.trim(),
     data: {
       statusCode: context.statusCode,
       durationMs: context.durationMs,
@@ -218,7 +234,7 @@ export function setRequestContext(context: RequestContext): void {
   client.setContext('request', {
     method: context.method,
     route: context.route,
-    url: context.url,
+    url: sanitizeRequestUrl(context.url),
     statusCode: context.statusCode,
     durationMs: context.durationMs,
     requestId: context.requestId,
@@ -257,7 +273,11 @@ export function captureException(
 }
 
 export async function startSentrySpan<TResult>(
-  options: { name: string; op: string; attributes?: Record<string, RecordValue> },
+  options: {
+    name: string;
+    op: string;
+    attributes?: Record<string, RecordValue>;
+  },
   callback: () => Promise<TResult>,
 ): Promise<TResult> {
   if (!getSentryRuntimeConfig().enabled) {

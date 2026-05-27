@@ -7,7 +7,11 @@ import {
 import type { FastifyRequest } from 'fastify';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
-import { addRequestBreadcrumb, setRequestContext } from './sentry';
+import {
+  addRequestBreadcrumb,
+  sanitizeRequestUrl,
+  setRequestContext,
+} from './sentry';
 
 interface RequestWithUser extends FastifyRequest {
   user?: {
@@ -38,7 +42,7 @@ export class ObservabilityInterceptor implements NestInterceptor {
   private recordRequest(request: RequestWithUser, durationMs: number): void {
     const statusCode = request.raw?.statusCode;
     const route = request.routeOptions?.url;
-    const url = request.url;
+    const url = sanitizeRequestUrl(request.url) ?? route ?? '';
     const method = request.method;
 
     setRequestContext({

@@ -41,9 +41,7 @@ export const mergeMemoryDeduped = (
   return out;
 };
 
-export const formatMessageText = (msg: {
-  content: unknown;
-}): string => {
+export const formatMessageText = (msg: { content: unknown }): string => {
   const c = msg.content;
   if (typeof c === 'string') return c;
   if (
@@ -93,10 +91,9 @@ const unescapeQuotedToolString = (raw: string) =>
 
 export const extractLeakedUpdateUserMemoryFacts = (raw: string): string[] => {
   const facts: string[] = [];
-  const calls =
-    raw.matchAll(
-      /default_api\.updateUserMemory\s*\(\s*facts\s*=\s*\[([\s\S]*?)\]\s*\)/g,
-    );
+  const calls = raw.matchAll(
+    /default_api\.updateUserMemory\s*\(\s*facts\s*=\s*\[([\s\S]*?)\]\s*\)/g,
+  );
 
   for (const call of calls) {
     const list = call[1] ?? '';
@@ -125,7 +122,10 @@ const extractUserFacingTextAfterThought = (raw: string): string => {
     /(?:^|[.!?]\s+)(That's|That is|Awesome|Great|Nice|Absolutely|Sure|Got it|Yes|No|Thanks|You're|You are|As a|Let's|We can|Here(?:'s| is)|To help|For\b|In\b)\b/i;
   const cue = responseCue.exec(afterThought);
   if (cue?.index !== undefined) {
-    return afterThought.slice(cue.index).replace(/^[.!?]\s*/, '').trim();
+    return afterThought
+      .slice(cue.index)
+      .replace(/^[.!?]\s*/, '')
+      .trim();
   }
 
   return afterThought;
@@ -179,14 +179,20 @@ const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
 export const isForbiddenUrlTarget = (url: URL) => {
   const host = url.hostname.toLowerCase();
-  if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.localhost')) return true;
+  if (
+    host === 'localhost' ||
+    host.endsWith('.local') ||
+    host.endsWith('.localhost')
+  )
+    return true;
   const m = host.match(ipv4);
   if (m) {
     const [a, b] = [Number(m[1]), Number(m[2])];
     const c = Number(m[3]);
     const d = Number(m[4]);
     if ([a, b, c, d].some((n) => n > 255)) return true;
-    if (a === 10 || a === 127 || a === 0 || (a === 169 && b === 254)) return true;
+    if (a === 10 || a === 127 || a === 0 || (a === 169 && b === 254))
+      return true;
     if (a === 172 && b >= 16 && b <= 31) return true;
     if (a === 192 && b === 168) return true;
   }
@@ -199,7 +205,7 @@ export const extractHttpUrlsFromText = (text: string, max: number) => {
   const out: string[] = [];
   let match: RegExpExecArray | null;
   while ((match = re.exec(text)) !== null && out.length < max) {
-    let raw = match[0].replace(/[.,;:!?)}\]]+$/u, '');
+    const raw = match[0].replace(/[.,;:!?)}\]]+$/u, '');
     try {
       const url = new URL(raw);
       if (url.protocol !== 'http:' && url.protocol !== 'https:') continue;
@@ -226,11 +232,15 @@ export const stripHtmlToPlainText = (html: string) =>
     .replace(/&gt;/gi, '>')
     .replace(/&quot;/gi, '"')
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) =>
+      String.fromCharCode(parseInt(h, 16)),
+    )
     .replace(/\s+/g, ' ')
     .trim();
 
-export async function fetchUrlPlainTextForTutor(url: string): Promise<string | null> {
+export async function fetchUrlPlainTextForTutor(
+  url: string,
+): Promise<string | null> {
   try {
     const res = await fetch(url, {
       redirect: 'follow',
@@ -251,10 +261,15 @@ export async function fetchUrlPlainTextForTutor(url: string): Promise<string | n
     )
       return null;
     const buf = await res.arrayBuffer();
-    const capped = buf.byteLength > TUTOR_URL_MAX_RESPONSE_BYTES ? buf.slice(0, TUTOR_URL_MAX_RESPONSE_BYTES) : buf;
+    const capped =
+      buf.byteLength > TUTOR_URL_MAX_RESPONSE_BYTES
+        ? buf.slice(0, TUTOR_URL_MAX_RESPONSE_BYTES)
+        : buf;
     const raw = new TextDecoder('utf-8', { fatal: false }).decode(capped);
     const text =
-      ct.includes('html') || ct.includes('xhtml') ? stripHtmlToPlainText(raw) : raw.replace(/\s+/g, ' ').trim();
+      ct.includes('html') || ct.includes('xhtml')
+        ? stripHtmlToPlainText(raw)
+        : raw.replace(/\s+/g, ' ').trim();
     if (!text) return null;
     return text.length > TUTOR_URL_MAX_CHARS_PER_PAGE
       ? text.slice(0, TUTOR_URL_MAX_CHARS_PER_PAGE) + '\n[truncated]'
@@ -264,8 +279,13 @@ export async function fetchUrlPlainTextForTutor(url: string): Promise<string | n
   }
 }
 
-export async function buildPrefetchedUrlContext(messageText: string): Promise<string | null> {
-  const urls = extractHttpUrlsFromText(messageText, TUTOR_URL_PREFETCH_MAX_URLS);
+export async function buildPrefetchedUrlContext(
+  messageText: string,
+): Promise<string | null> {
+  const urls = extractHttpUrlsFromText(
+    messageText,
+    TUTOR_URL_PREFETCH_MAX_URLS,
+  );
   if (urls.length === 0) return null;
   const chunks: string[] = [];
   let anyOk = false;
@@ -273,7 +293,9 @@ export async function buildPrefetchedUrlContext(messageText: string): Promise<st
   for (const url of urls) {
     const body = await fetchUrlPlainTextForTutor(url);
     if (body) anyOk = true;
-    const section = body ? `URL: ${url}\n${body}` : `URL: ${url}\n[Could not fetch this page.]`;
+    const section = body
+      ? `URL: ${url}\n${body}`
+      : `URL: ${url}\n[Could not fetch this page.]`;
     if (totalLen + section.length > TUTOR_URL_MAX_TOTAL_EXTRA_CHARS) {
       chunks.push('[Further URL content omitted due to size limit.]');
       break;
@@ -288,22 +310,38 @@ export async function buildPrefetchedUrlContext(messageText: string): Promise<st
 }
 
 export const getXpTierFromXp = (xp: number) =>
-  xp < 100 ? 'novice' : xp < 500 ? 'beginner' : xp < 1500 ? 'intermediate' : xp < 3000 ? 'advanced' : 'expert';
+  xp < 100
+    ? 'novice'
+    : xp < 500
+      ? 'beginner'
+      : xp < 1500
+        ? 'intermediate'
+        : xp < 3000
+          ? 'advanced'
+          : 'expert';
 
-export const studySuggestionsFingerprint = (learning: string, userLevel: string, xpTier: string) =>
+export const studySuggestionsFingerprint = (
+  learning: string,
+  userLevel: string,
+  xpTier: string,
+) =>
   createHash('sha256')
     .update(`${learning}|${userLevel}|${xpTier}`)
     .digest('hex')
     .slice(0, 16);
 
-export const studySuggestionsRedisKey = (userId: string, fp: string) => `study_suggestions:${userId}:${fp}`;
+export const studySuggestionsRedisKey = (userId: string, fp: string) =>
+  `study_suggestions:${userId}:${fp}`;
 
-export const parseStudySuggestionsCache = (raw: string): StudySuggestionsRedisPayload | null => {
+export const parseStudySuggestionsCache = (
+  raw: string,
+): StudySuggestionsRedisPayload | null => {
   try {
     const data = JSON.parse(raw) as unknown;
     if (!data || typeof data !== 'object') return null;
     const o = data as Record<string, unknown>;
-    if (!Array.isArray(o.suggestions) || typeof o.generatedAt !== 'string') return null;
+    if (!Array.isArray(o.suggestions) || typeof o.generatedAt !== 'string')
+      return null;
     const strings = o.suggestions.filter((x) => typeof x === 'string');
     if (strings.length < 3) return null;
     const feedback: StudySuggestionsRedisPayload['feedback'] = {};
@@ -315,7 +353,7 @@ export const parseStudySuggestionsCache = (raw: string): StudySuggestionsRedisPa
       }
     }
     return {
-      suggestions: strings.slice(0, 3) as string[],
+      suggestions: strings.slice(0, 3),
       generatedAt: o.generatedAt,
       feedback,
     };
@@ -324,7 +362,10 @@ export const parseStudySuggestionsCache = (raw: string): StudySuggestionsRedisPa
   }
 };
 
-export const toGeminiMessageParts = (msg: { role: string; content: unknown }) => ({
+export const toGeminiMessageParts = (msg: {
+  role: string;
+  content: unknown;
+}) => ({
   role: msg.role === 'assistant' ? ('model' as const) : ('user' as const),
   parts: toGeminiPartsFromContent(msg.content),
 });
@@ -345,19 +386,19 @@ export const getAttachmentsFromMessageContent = (
   content: unknown,
 ): ChatAttachmentInput[] => {
   if (!content || typeof content !== 'object') return [];
-  const attachments = (content as ChatMessageContentWithAttachments).attachments;
+  const attachments = (content as ChatMessageContentWithAttachments)
+    .attachments;
   if (!Array.isArray(attachments)) return [];
   return attachments.filter(
     (a): a is ChatAttachmentInput =>
       Boolean(a) &&
       typeof a === 'object' &&
-      typeof (a as ChatAttachmentInput).data === 'string' &&
-      typeof (a as ChatAttachmentInput).mimeType === 'string' &&
-      (typeof (a as ChatAttachmentInput).name === 'undefined' ||
-        typeof (a as ChatAttachmentInput).name === 'string') &&
-      (typeof (a as ChatAttachmentInput).kind === 'undefined' ||
-        (a as ChatAttachmentInput).kind === 'image' ||
-        (a as ChatAttachmentInput).kind === 'document'),
+      typeof a.data === 'string' &&
+      typeof a.mimeType === 'string' &&
+      (typeof a.name === 'undefined' || typeof a.name === 'string') &&
+      (typeof a.kind === 'undefined' ||
+        a.kind === 'image' ||
+        a.kind === 'document'),
   );
 };
 
@@ -385,7 +426,8 @@ export const toGeminiPartsFromContent = (content: unknown) => {
   }
 
   if (content && typeof content === 'object') {
-    const c = content as ChatMessageContentWithAttachments & Record<string, unknown>;
+    const c = content as ChatMessageContentWithAttachments &
+      Record<string, unknown>;
     const parts: Array<Record<string, unknown>> = [];
     if (typeof c.text === 'string' && c.text.trim().length > 0) {
       parts.push({ text: c.text });

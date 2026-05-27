@@ -2,11 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { buffer as streamToBuffer } from 'node:stream/consumers';
 
-const ALLOWED_MIMES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-]);
+const ALLOWED_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MAX_BYTES = 10 * 1024 * 1024;
 
 export async function parseProfileImageMultipart(

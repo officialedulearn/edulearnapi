@@ -183,7 +183,8 @@ export class FlashcardService {
 
     let cacheKey: string | null = null;
     try {
-      const version = await this.redisService.getFlashcardDeckListVersion(userId);
+      const version =
+        await this.redisService.getFlashcardDeckListVersion(userId);
       cacheKey = this.buildFlashcardDeckListCacheKey(userId, lim, off, version);
       const raw = await this.redisService.getFlashcardDeckListPayload(cacheKey);
       if (raw) {

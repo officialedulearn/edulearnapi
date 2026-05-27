@@ -284,7 +284,10 @@ export class CronTasksService {
         `User subscription expiration check completed — deactivated ${expiredCount} row(s)`,
       );
     } catch (error) {
-      this.logger.error('Failed to process user subscription expirations', error);
+      this.logger.error(
+        'Failed to process user subscription expirations',
+        error,
+      );
     }
   }
 

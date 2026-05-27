@@ -44,7 +44,11 @@ export class QueueHealthService {
     });
   }
 
-  markFailure(queueName: string, jobId: string | undefined, error: Error): void {
+  markFailure(
+    queueName: string,
+    jobId: string | undefined,
+    error: Error,
+  ): void {
     const current = this.getOrCreate(queueName);
     this.queues.set(queueName, {
       ...current,

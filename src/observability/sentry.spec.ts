@@ -25,11 +25,12 @@ describe('Sentry observability config', () => {
 
   it('defaults traces sample rate to 0.1', () => {
     expect(parseTracesSampleRate(undefined)).toBe(0.1);
-    expect(getSentryRuntimeConfig({ SENTRY_DSN: 'https://example.test/1' }))
-      .toMatchObject({
-        enabled: true,
-        tracesSampleRate: 0.1,
-      });
+    expect(
+      getSentryRuntimeConfig({ SENTRY_DSN: 'https://example.test/1' }),
+    ).toMatchObject({
+      enabled: true,
+      tracesSampleRate: 0.1,
+    });
   });
 
   it('clamps invalid traces sample rates', () => {

@@ -7,7 +7,10 @@ import {
 import { Job, Worker } from 'bullmq';
 import Redis from 'ioredis';
 import { ReminderBullmqService } from './reminder-bullmq.service';
-import { REMINDER_EVALUATE_JOB_NAME, REMINDER_QUEUE_NAME } from './reminders.constants';
+import {
+  REMINDER_EVALUATE_JOB_NAME,
+  REMINDER_QUEUE_NAME,
+} from './reminders.constants';
 import type { ReminderEvaluateJobData } from './reminders.types';
 import { RemindersService } from './reminders.service';
 import { QueueHealthService } from 'src/observability/queue-health.service';

@@ -29,7 +29,8 @@ export class MarketplaceApiKeyGuard implements CanActivate {
     // Check both header and query param (query param needed for EventSource which can't send headers)
     const q = request.query as Record<string, unknown>;
     const apiKey =
-      request.headers['x-marketplace-key'] || (q['apiKey'] as string | undefined);
+      request.headers['x-marketplace-key'] ||
+      (q['apiKey'] as string | undefined);
 
     if (!apiKey) {
       throw new UnauthorizedException(

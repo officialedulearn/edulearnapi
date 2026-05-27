@@ -14,6 +14,13 @@ import {
 } from './prompts/quiz-system-prompt';
 import { GeminiClientService } from './gemini-client.service';
 import { startSentrySpan } from 'src/observability/sentry';
+import {
+  buildQuizMetadataFromQuestions,
+  formatQuizHistoryForPrompt,
+  QuizGenerationMetadata,
+  validateQuizDiversity,
+} from './quiz-diversity.util';
+import { getRecentQuizGenerationHistory } from 'src/quizzes/quiz-generation-history';
 
 type QuizQuestion = {
   question?: string;
@@ -21,6 +28,12 @@ type QuizQuestion = {
   correctAnswer?: string;
   explanation?: string;
 };
+
+type GeneratedScheduledQuiz = QuizGenerationMetadata & {
+  questions: Required<QuizQuestion>[];
+};
+
+export type RoadmapVerificationQuizQuestion = Required<QuizQuestion>;
 
 @Injectable()
 export class QuizGenerationService {
@@ -80,6 +93,28 @@ export class QuizGenerationService {
 
     cleaned = cleaned.replace(/,\s*,/g, ',');
 
+    return cleaned.trim();
+  }
+
+  private cleanJSONValue(response: string): string {
+    let cleaned = response.trim();
+
+    if (cleaned.includes('```json')) {
+      const jsonMatch = cleaned.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) cleaned = jsonMatch[1].trim();
+    } else if (cleaned.includes('```')) {
+      const codeMatch = cleaned.match(/```\s*([\s\S]*?)\s*```/);
+      if (codeMatch) cleaned = codeMatch[1].trim();
+    }
+
+    cleaned = cleaned.replace(
+      /[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F-\u009F]/g,
+      '',
+    );
+    cleaned = cleaned.replace(/\n/g, ' ').replace(/\r/g, '');
+    cleaned = cleaned.replace(/\s+/g, ' ');
+    cleaned = cleaned.replace(/,(\s*[\]}])/g, '$1');
+    cleaned = cleaned.replace(/,\s*,/g, ',');
     return cleaned.trim();
   }
 
@@ -195,6 +230,41 @@ export class QuizGenerationService {
     }
   }
 
+  private assertValidQuizQuestions(
+    quizQuestions: QuizQuestion[],
+    expectedCount: number,
+  ): asserts quizQuestions is Required<QuizQuestion>[] {
+    if (!Array.isArray(quizQuestions) || quizQuestions.length === 0) {
+      throw new Error(
+        'Unable to generate quiz questions from this content. The input may not contain enough educational content.',
+      );
+    }
+    if (quizQuestions.length !== expectedCount) {
+      throw new Error(
+        `Generated quiz has incorrect number of questions (${quizQuestions.length}/${expectedCount}). Expected exactly ${expectedCount} questions.`,
+      );
+    }
+    for (let i = 0; i < quizQuestions.length; i++) {
+      const q = quizQuestions[i];
+      if (
+        !q.question ||
+        !Array.isArray(q.options) ||
+        q.options.length !== 4 ||
+        !q.correctAnswer ||
+        !q.explanation
+      ) {
+        throw new Error(
+          `Question ${i + 1} has invalid structure. All questions must have: question, 4 options, correctAnswer, and explanation.`,
+        );
+      }
+      if (!q.options.includes(q.correctAnswer)) {
+        throw new Error(
+          `Question ${i + 1}: correctAnswer "${q.correctAnswer}" does not match any of the provided options.`,
+        );
+      }
+    }
+  }
+
   async generateQuiz({
     chatId,
     userId,
@@ -273,6 +343,13 @@ export class QuizGenerationService {
             `${msg.role}: ${typeof msg.content === 'string' ? msg.content : msg.content}`,
         )
         .join('\n\n');
+      const history = await getRecentQuizGenerationHistory(userId);
+      const generationContext = [
+        conversationContext,
+        '',
+        'RECENT QUIZ HISTORY TO AVOID REPEATING:',
+        formatQuizHistoryForPrompt(history),
+      ].join('\n');
 
       let result;
       let attempts = 0;
@@ -286,14 +363,18 @@ export class QuizGenerationService {
                 name: 'Generate quiz with Gemini',
                 op: 'ai.gemini.generate_quiz',
                 attributes: {
-                  model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+                  model: user?.isPremium
+                    ? 'gemini-2.5-pro'
+                    : 'gemini-2.5-flash',
                   attempt: attempts + 1,
                 },
               },
               () =>
                 this.geminiClient.genAI.models.generateContent({
-                  model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
-                  contents: conversationContext,
+                  model: user?.isPremium
+                    ? 'gemini-2.5-pro'
+                    : 'gemini-2.5-flash',
+                  contents: generationContext,
                   config: {
                     temperature: 0.1,
                     maxOutputTokens: 5000,
@@ -406,38 +487,14 @@ export class QuizGenerationService {
 
       const quizQuestions = this.parseQuizJSONArray(cleanedResponse, 'quiz');
 
-      if (!Array.isArray(quizQuestions) || quizQuestions.length === 0) {
-        throw new Error(
-          'Unable to generate quiz questions from this conversation. The discussion may not contain enough educational content.',
-        );
-      }
-
-      if (quizQuestions.length !== 10) {
-        console.warn(
-          `Quiz generation produced ${quizQuestions.length} questions instead of 10. Retrying...`,
-        );
-        throw new Error(
-          `Generated quiz has incorrect number of questions (${quizQuestions.length}/10). Expected exactly 10 questions.`,
-        );
-      }
-      for (let i = 0; i < quizQuestions.length; i++) {
-        const q = quizQuestions[i];
-        if (
-          !q.question ||
-          !Array.isArray(q.options) ||
-          q.options.length !== 4 ||
-          !q.correctAnswer ||
-          !q.explanation
-        ) {
-          throw new Error(
-            `Question ${i + 1} has invalid structure. All questions must have: question, 4 options, correctAnswer, and explanation.`,
-          );
-        }
-        if (!q.options.includes(q.correctAnswer)) {
-          throw new Error(
-            `Question ${i + 1}: correctAnswer "${q.correctAnswer}" does not match any of the provided options.`,
-          );
-        }
+      this.assertValidQuizQuestions(quizQuestions, 10);
+      const diversity = validateQuizDiversity({
+        questions: quizQuestions,
+        history,
+        difficulty: 'medium',
+      });
+      if (!diversity.ok) {
+        throw new Error(`Generated quiz is too repetitive. ${diversity.feedback}`);
       }
 
       try {
@@ -517,7 +574,7 @@ export class QuizGenerationService {
     topic: string;
     difficulty: 'easy' | 'medium' | 'hard';
     memoryContext: string;
-  }): Promise<any[]> {
+  }): Promise<GeneratedScheduledQuiz> {
     let creditsDeducted = false;
     const topicTrimmed = topic?.trim() ?? '';
     if (!userId || !topicTrimmed) {
@@ -534,33 +591,44 @@ export class QuizGenerationService {
       if (!user) {
         throw new NotFoundException('User not found');
       }
-      const contents = [
-        `TOPIC: ${topicTrimmed}`,
-        '',
-        'LEARNER CONTEXT (from recent activity; may be empty):',
-        memoryContext?.trim() || '(none)',
-      ].join('\n');
-      const systemInstruction =
-        buildScheduledQuizSystemInstruction(difficulty);
-      let quizQuestions: QuizQuestion[] | null = null;
+      const history = await getRecentQuizGenerationHistory(userId);
+      let retryFeedback = '';
+      const systemInstruction = buildScheduledQuizSystemInstruction(difficulty);
+      let generatedQuiz: GeneratedScheduledQuiz | null = null;
       let attempts = 0;
       const maxAttempts = 3;
       while (attempts < maxAttempts) {
         try {
+          const contents = [
+            `TOPIC: ${topicTrimmed}`,
+            '',
+            'LEARNER CONTEXT (from recent activity; may be empty):',
+            memoryContext?.trim() || '(none)',
+            '',
+            'RECENT QUIZ HISTORY TO AVOID REPEATING:',
+            formatQuizHistoryForPrompt(history),
+            retryFeedback
+              ? `\nPREVIOUS GENERATION WAS REJECTED:\n${retryFeedback}\nGenerate a more varied and more challenging replacement.`
+              : '',
+          ].join('\n');
           const result = (await Promise.race([
             startSentrySpan(
               {
                 name: 'Generate scheduled quiz with Gemini',
                 op: 'ai.gemini.generate_scheduled_quiz',
                 attributes: {
-                  model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+                  model: user?.isPremium
+                    ? 'gemini-2.5-pro'
+                    : 'gemini-2.5-flash',
                   attempt: attempts + 1,
                   difficulty,
                 },
               },
               () =>
                 this.geminiClient.genAI.models.generateContent({
-                  model: user?.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+                  model: user?.isPremium
+                    ? 'gemini-2.5-pro'
+                    : 'gemini-2.5-flash',
                   contents,
                   config: {
                     temperature: 0.1,
@@ -568,37 +636,64 @@ export class QuizGenerationService {
                     systemInstruction,
                     responseMimeType: 'application/json',
                     responseSchema: {
-                      type: Type.ARRAY,
-                      items: {
-                        type: Type.OBJECT,
-                        properties: {
-                          question: {
-                            type: Type.STRING,
-                            description: 'The quiz question text',
-                          },
-                          options: {
-                            type: Type.ARRAY,
-                            items: { type: Type.STRING },
-                            description: 'Array of exactly 4 answer options',
-                          },
-                          correctAnswer: {
-                            type: Type.STRING,
-                            description:
-                              'The correct answer, must match one of the options',
-                          },
-                          explanation: {
-                            type: Type.STRING,
-                            description:
-                              'Explanation of why this is the correct answer',
+                      type: Type.OBJECT,
+                      properties: {
+                        summary: {
+                          type: Type.STRING,
+                          description:
+                            'One compact sentence describing what this quiz tests',
+                        },
+                        coveredConcepts: {
+                          type: Type.ARRAY,
+                          items: { type: Type.STRING },
+                          description:
+                            'Short concept labels covered by this quiz',
+                        },
+                        challengeProfile: {
+                          type: Type.STRING,
+                          description:
+                            'Brief description of the reasoning level and challenge style',
+                        },
+                        questions: {
+                          type: Type.ARRAY,
+                          items: {
+                            type: Type.OBJECT,
+                            properties: {
+                              question: {
+                                type: Type.STRING,
+                                description: 'The quiz question text',
+                              },
+                              options: {
+                                type: Type.ARRAY,
+                                items: { type: Type.STRING },
+                                description: 'Array of exactly 4 answer options',
+                              },
+                              correctAnswer: {
+                                type: Type.STRING,
+                                description:
+                                  'The correct answer, must match one of the options',
+                              },
+                              explanation: {
+                                type: Type.STRING,
+                                description:
+                                  'Explanation of why this is the correct answer',
+                              },
+                            },
+                            required: [
+                              'question',
+                              'options',
+                              'correctAnswer',
+                              'explanation',
+                            ],
                           },
                         },
-                        required: [
-                          'question',
-                          'options',
-                          'correctAnswer',
-                          'explanation',
-                        ],
                       },
+                      required: [
+                        'summary',
+                        'coveredConcepts',
+                        'challengeProfile',
+                        'questions',
+                      ],
                     },
                   },
                 }),
@@ -623,50 +718,41 @@ export class QuizGenerationService {
             );
           }
 
-          const cleanedResponse = this.cleanQuizJSON(response);
-          if (!cleanedResponse.endsWith(']')) {
-            throw new Error(
-              'Quiz generation was truncated. Retrying with adjusted parameters...',
-            );
+          const cleanedResponse = this.cleanJSONValue(response);
+          const parsed = JSON.parse(cleanedResponse) as Partial<
+            QuizGenerationMetadata & { questions: QuizQuestion[] }
+          >;
+          const parsedQuestions = parsed.questions ?? [];
+          this.assertValidQuizQuestions(parsedQuestions, 10);
+          const diversity = validateQuizDiversity({
+            questions: parsedQuestions,
+            history,
+            difficulty,
+          });
+          if (!diversity.ok) {
+            retryFeedback = diversity.feedback;
+            throw new Error(`Generated quiz is too repetitive. ${diversity.feedback}`);
           }
 
-          const parsedQuestions = this.parseQuizJSONArray(
-            cleanedResponse,
-            'scheduled quiz',
+          const fallbackMetadata = buildQuizMetadataFromQuestions(
+            topicTrimmed,
+            parsedQuestions,
+            difficulty,
           );
-
-          if (parsedQuestions.length === 0) {
-            throw new Error(
-              'The topic could not be used to generate quiz questions. Try a more specific topic.',
-            );
-          }
-          if (parsedQuestions.length !== 10) {
-            throw new Error(
-              `Generated quiz has incorrect number of questions (${parsedQuestions.length}/10). Expected exactly 10 questions.`,
-            );
-          }
-
-          for (let i = 0; i < parsedQuestions.length; i++) {
-            const q = parsedQuestions[i];
-            if (
-              !q.question ||
-              !Array.isArray(q.options) ||
-              q.options.length !== 4 ||
-              !q.correctAnswer ||
-              !q.explanation
-            ) {
-              throw new Error(
-                `Question ${i + 1} has invalid structure. All questions must have: question, 4 options, correctAnswer, and explanation.`,
-              );
-            }
-            if (!q.options.includes(q.correctAnswer)) {
-              throw new Error(
-                `Question ${i + 1}: correctAnswer "${q.correctAnswer}" does not match any of the provided options.`,
-              );
-            }
-          }
-
-          quizQuestions = parsedQuestions;
+          generatedQuiz = {
+            questions: parsedQuestions,
+            summary: parsed.summary?.trim() || fallbackMetadata.summary,
+            coveredConcepts: Array.isArray(parsed.coveredConcepts)
+              ? parsed.coveredConcepts
+                  .filter((item): item is string => typeof item === 'string')
+                  .map((item) => item.trim())
+                  .filter(Boolean)
+                  .slice(0, 12)
+              : fallbackMetadata.coveredConcepts,
+            challengeProfile:
+              parsed.challengeProfile?.trim() ||
+              fallbackMetadata.challengeProfile,
+          };
           break;
         } catch (attemptError) {
           attempts++;
@@ -686,13 +772,13 @@ export class QuizGenerationService {
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
       }
-      if (!quizQuestions) {
+      if (!generatedQuiz) {
         throw new Error('Failed to generate quiz from AI service');
       }
       try {
         await this.authService.deductUserCredits(userId);
         creditsDeducted = true;
-        return quizQuestions;
+        return generatedQuiz;
       } catch (_operationError) {
         throw new Error(
           'Quiz generated successfully but failed to update user account. Please contact support.',
@@ -724,5 +810,142 @@ export class QuizGenerationService {
         'Unable to generate scheduled quiz at this time. Please try again later.',
       );
     }
+  }
+
+  async generateRoadmapVerificationQuiz({
+    userId,
+    roadmapTitle,
+    stepTitle,
+    stepDescription,
+    subStepTitle,
+    subStepDescription,
+    subStepContext,
+  }: {
+    userId: string;
+    roadmapTitle: string;
+    stepTitle: string;
+    stepDescription: string;
+    subStepTitle: string;
+    subStepDescription: string;
+    subStepContext?: string | null;
+  }): Promise<RoadmapVerificationQuizQuestion[]> {
+    if (!userId || !subStepTitle?.trim() || !subStepDescription?.trim()) {
+      throw new Error('User ID and sub-step content are required');
+    }
+
+    const user = await this.authService.getUserById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const systemInstruction = `Generate EXACTLY 5 private multiple-choice verification questions for a roadmap checkpoint.
+
+These questions verify whether the learner can complete the specific checkpoint, not whether they memorized the whole roadmap.
+
+CRITICAL REQUIREMENTS:
+- YOU MUST GENERATE EXACTLY 5 QUESTIONS
+- Each question MUST have exactly 4 options
+- The correctAnswer MUST be one of the 4 options (exact match)
+- All fields required: question, options, correctAnswer, explanation
+- Questions should test practical understanding, sequencing, definitions, and application tied to the checkpoint
+- Do not include leaderboard, public quiz, multiplayer, or discovery language
+
+Return ONLY valid JSON matching the schema.`;
+
+    const contents = [
+      `ROADMAP: ${roadmapTitle}`,
+      `STEP: ${stepTitle}`,
+      `STEP DESCRIPTION: ${stepDescription}`,
+      `CHECKPOINT: ${subStepTitle}`,
+      `CHECKPOINT DESCRIPTION: ${subStepDescription}`,
+      `CHECKPOINT CONTEXT: ${subStepContext?.trim() || '(none)'}`,
+    ].join('\n');
+
+    let result;
+    let attempts = 0;
+    const maxAttempts = 3;
+    while (attempts < maxAttempts) {
+      try {
+        result = await Promise.race([
+          startSentrySpan(
+            {
+              name: 'Generate roadmap verification quiz with Gemini',
+              op: 'ai.gemini.generate_roadmap_verification_quiz',
+              attributes: {
+                model: user.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+                attempt: attempts + 1,
+              },
+            },
+            () =>
+              this.geminiClient.genAI.models.generateContent({
+                model: user.isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+                contents,
+                config: {
+                  temperature: 0.15,
+                  maxOutputTokens: 3000,
+                  systemInstruction,
+                  responseMimeType: 'application/json',
+                  responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        question: { type: Type.STRING },
+                        options: {
+                          type: Type.ARRAY,
+                          items: { type: Type.STRING },
+                        },
+                        correctAnswer: { type: Type.STRING },
+                        explanation: { type: Type.STRING },
+                      },
+                      required: [
+                        'question',
+                        'options',
+                        'correctAnswer',
+                        'explanation',
+                      ],
+                    },
+                  },
+                },
+              }),
+          ),
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error('Request timeout - AI service took too long')),
+              90000,
+            ),
+          ),
+        ]);
+        break;
+      } catch (attemptError) {
+        attempts++;
+        console.error(
+          `Roadmap verification quiz generation attempt ${attempts} failed:`,
+          attemptError,
+        );
+        if (attempts >= maxAttempts) {
+          const msg =
+            attemptError instanceof Error
+              ? attemptError.message
+              : 'AI service unavailable';
+          throw new Error(
+            `Failed to generate verification quiz after ${maxAttempts} attempts. ${msg}`,
+          );
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+
+    const response = (result as { text?: string } | undefined)?.text ?? '';
+    if (!response.trim()) {
+      throw new Error('AI service returned empty verification quiz response');
+    }
+
+    const questions = this.parseQuizJSONArray(
+      this.cleanQuizJSON(response),
+      'quiz',
+    );
+    this.assertValidQuizQuestions(questions, 5);
+    return questions;
   }
 }

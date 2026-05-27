@@ -75,7 +75,11 @@ Return ONLY valid JSON (no markdown).
     let lastError: Error | null = null;
     let lastUsage: unknown;
 
-    for (let attempt = 1; attempt <= REMINDER_DECISION_MAX_ATTEMPTS; attempt++) {
+    for (
+      let attempt = 1;
+      attempt <= REMINDER_DECISION_MAX_ATTEMPTS;
+      attempt++
+    ) {
       let rawForLog = '';
       try {
         const result = await this.geminiClient.genAI.models.generateContent({
@@ -110,8 +114,9 @@ Return ONLY valid JSON (no markdown).
           throw new Error('ReminderDecisionService: empty AI response');
         }
 
-        const finishReason = (result as { candidates?: { finishReason?: string }[] })
-          .candidates?.[0]?.finishReason;
+        const finishReason = (
+          result as { candidates?: { finishReason?: string }[] }
+        ).candidates?.[0]?.finishReason;
         if (finishReason === 'MAX_TOKENS') {
           throw new Error(
             `ReminderDecisionService: response truncated (finishReason=MAX_TOKENS)`,

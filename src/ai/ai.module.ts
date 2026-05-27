@@ -12,6 +12,7 @@ import { NftRewardService } from './nft-reward.service';
 import { QuizGenerationService } from './quiz-generation.service';
 import { FlashcardService } from './flashcard.service';
 import { SpeechTranscriptionService } from './speech-transcription.service';
+import { AiSpeechService } from './ai-speech.service';
 import { RedisModule } from 'src/redis/redis.module';
 import { QuizzesModule } from 'src/quizzes/quizzes.module';
 import { UserModule } from 'src/user/user.module';
@@ -35,6 +36,7 @@ import { AgentModule } from 'src/agent/agent.module';
     QuizGenerationService,
     FlashcardService,
     SpeechTranscriptionService,
+    AiSpeechService,
     AiStructuredGenerationService,
     AiTutorChatService,
     AiService,

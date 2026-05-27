@@ -129,10 +129,7 @@ export class AdminController {
     if (!body.status) {
       throw new BadRequestException('Status is required');
     }
-    return await this.adminService.updateFeedbackStatus(
-      id,
-      body.status as 'pending' | 'reviewed' | 'resolved',
-    );
+    return await this.adminService.updateFeedbackStatus(id, body.status);
   }
 
   @Post('notifications/send')
@@ -197,9 +194,7 @@ export class AdminController {
   }
 
   @Put('reminders/disable')
-  async disableReminders(
-    @Body() body: { userId: string; reason?: string },
-  ) {
+  async disableReminders(@Body() body: { userId: string; reason?: string }) {
     if (!body.userId?.trim()) {
       throw new BadRequestException('userId is required');
     }
@@ -215,7 +210,10 @@ export class AdminController {
     if (!body.userId?.trim()) {
       throw new BadRequestException('userId is required');
     }
-    return await this.adminService.setReminderDisabled(body.userId.trim(), false);
+    return await this.adminService.setReminderDisabled(
+      body.userId.trim(),
+      false,
+    );
   }
 
   @Post('agent-wakeup/preview')

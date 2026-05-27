@@ -226,7 +226,10 @@ export class WalletController {
 
   @Get('balance/:publicKey')
   @UseGuards(JwtAuthGuard)
-  async getBalance(@Response({ passthrough: false }) res: FastifyReply, @Param('publicKey') publicKey: string) {
+  async getBalance(
+    @Response({ passthrough: false }) res: FastifyReply,
+    @Param('publicKey') publicKey: string,
+  ) {
     try {
       const balance = await this.walletService.getBalance(
         new PublicKey(publicKey),
