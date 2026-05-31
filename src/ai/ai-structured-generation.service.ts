@@ -34,19 +34,37 @@ type GeneratedPublicQuizDeck = {
 
 type RawGeneratedPublicQuizQuestion = {
   question?: unknown;
+  questionText?: unknown;
+  question_text?: unknown;
   prompt?: unknown;
   stem?: unknown;
   text?: unknown;
   options?: unknown;
   choices?: unknown;
+  answers?: unknown;
   answerOptions?: unknown;
+  optionA?: unknown;
+  optionB?: unknown;
+  optionC?: unknown;
+  optionD?: unknown;
+  A?: unknown;
+  B?: unknown;
+  C?: unknown;
+  D?: unknown;
   correctAnswer?: unknown;
   correct_answer?: unknown;
+  correctOption?: unknown;
+  correct_option?: unknown;
+  correctOptionIndex?: unknown;
+  correct_option_index?: unknown;
+  correctIndex?: unknown;
+  correct_index?: unknown;
   answer?: unknown;
   correct?: unknown;
   explanation?: unknown;
   rationale?: unknown;
   reason?: unknown;
+  feedback?: unknown;
 };
 
 type RawGeneratedPublicQuizDeck = {
@@ -251,6 +269,28 @@ export class AiStructuredGenerationService {
       : null;
   }
 
+  private stringValue(value: unknown): string {
+    if (typeof value === 'string') return value.trim();
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value).trim();
+    }
+    const record = this.asRecord(value);
+    if (!record) return '';
+    const nested =
+      record.text ??
+      record.label ??
+      record.value ??
+      record.answer ??
+      record.option ??
+      record.content ??
+      record.title;
+    return typeof nested === 'string' ||
+      typeof nested === 'number' ||
+      typeof nested === 'boolean'
+      ? String(nested).trim()
+      : '';
+  }
+
   private unwrapPublicQuizDeck(
     parsed: RawGeneratedPublicQuizDeck,
   ): RawGeneratedPublicQuizDeck {
@@ -293,8 +333,24 @@ export class AiStructuredGenerationService {
     answer: unknown,
     options: string[],
   ): string | null {
-    if (typeof answer !== 'string') return null;
-    const trimmed = answer.trim();
+    const record = this.asRecord(answer);
+    const answerValue = record
+      ? record.text ??
+        record.label ??
+        record.value ??
+        record.answer ??
+        record.option ??
+        record.index ??
+        record.key
+      : answer;
+    if (
+      typeof answerValue !== 'string' &&
+      typeof answerValue !== 'number' &&
+      typeof answerValue !== 'boolean'
+    ) {
+      return null;
+    }
+    const trimmed = String(answerValue).trim();
     if (!trimmed) return null;
 
     const exact = options.find((option) => option === trimmed);
@@ -310,8 +366,18 @@ export class AiStructuredGenerationService {
       : null;
     if (letterIndex !== null) return options[letterIndex] ?? null;
 
+    const optionLetter = trimmed.match(/^option\s*([A-D])$/i);
+    if (optionLetter?.[1]) {
+      const index =
+        optionLetter[1].toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
+      return options[index] ?? null;
+    }
+
     const numericIndex = /^[1-4]$/.test(trimmed) ? Number(trimmed) - 1 : null;
     if (numericIndex !== null) return options[numericIndex] ?? null;
+
+    const zeroBasedIndex = /^[0-3]$/.test(trimmed) ? Number(trimmed) : null;
+    if (zeroBasedIndex !== null) return options[zeroBasedIndex] ?? null;
 
     const prefixedLetter = trimmed.match(/^[A-D][).:\-\s]+(.+)$/i);
     if (prefixedLetter?.[1]) {
@@ -324,6 +390,68 @@ export class AiStructuredGenerationService {
     }
 
     return null;
+  }
+
+  private normalizeQuestionOptions(q: RawGeneratedPublicQuizQuestion): {
+    options: string[];
+    detectedAnswer: string | null;
+  } {
+    let detectedAnswer: string | null = null;
+    const optionsSource = q.options ?? q.choices ?? q.answers ?? q.answerOptions;
+
+    if (Array.isArray(optionsSource)) {
+      const options = optionsSource
+        .map((option) => {
+          const optionText = this.stringValue(option);
+          const optionRecord = this.asRecord(option);
+          const isCorrect =
+            optionRecord?.isCorrect === true ||
+            optionRecord?.correct === true ||
+            optionRecord?.is_answer === true ||
+            optionRecord?.isAnswer === true;
+          if (isCorrect && optionText) detectedAnswer = optionText;
+          if (!detectedAnswer && optionRecord?.key && optionText) {
+            const keyAnswer = this.normalizeCorrectAnswer(
+              optionRecord.key,
+              optionsSource
+                .map((item) => this.stringValue(item))
+                .filter(Boolean),
+            );
+            if (keyAnswer === optionText) detectedAnswer = optionText;
+          }
+          return optionText;
+        })
+        .filter(Boolean);
+      return { options, detectedAnswer };
+    }
+
+    const optionsRecord = this.asRecord(optionsSource);
+    if (optionsRecord) {
+      const orderedKeys = ['A', 'B', 'C', 'D'];
+      const lowerKeys = ['a', 'b', 'c', 'd'];
+      const numericKeys = ['1', '2', '3', '4'];
+      const keys = orderedKeys.every((key) => key in optionsRecord)
+        ? orderedKeys
+        : lowerKeys.every((key) => key in optionsRecord)
+          ? lowerKeys
+          : numericKeys.every((key) => key in optionsRecord)
+            ? numericKeys
+            : Object.keys(optionsRecord).slice(0, 4);
+      const options = keys.map((key) => this.stringValue(optionsRecord[key]));
+      return { options: options.filter(Boolean), detectedAnswer };
+    }
+
+    const fieldOptions = [q.optionA, q.optionB, q.optionC, q.optionD]
+      .map((option) => this.stringValue(option))
+      .filter(Boolean);
+    if (fieldOptions.length === 4) {
+      return { options: fieldOptions, detectedAnswer };
+    }
+
+    const letterOptions = [q.A, q.B, q.C, q.D]
+      .map((option) => this.stringValue(option))
+      .filter(Boolean);
+    return { options: letterOptions, detectedAnswer };
   }
 
   private normalizePublicQuizDeck(
@@ -360,26 +488,28 @@ export class AiStructuredGenerationService {
         rawQuestion && typeof rawQuestion === 'object'
           ? (rawQuestion as RawGeneratedPublicQuizQuestion)
           : {};
-      const questionSource = q.question ?? q.prompt ?? q.stem ?? q.text;
+      const questionSource =
+        q.question ??
+        q.questionText ??
+        q.question_text ??
+        q.prompt ??
+        q.stem ??
+        q.text;
       const question =
         typeof questionSource === 'string' ? questionSource.trim() : '';
-      const optionsSource = q.options ?? q.choices ?? q.answerOptions;
-      const options = Array.isArray(optionsSource)
-        ? optionsSource
-            .map((option) => {
-              if (typeof option === 'string') return option.trim();
-              const optionRecord = this.asRecord(option);
-              const optionValue =
-                optionRecord?.text ??
-                optionRecord?.label ??
-                optionRecord?.value ??
-                optionRecord?.answer;
-              return typeof optionValue === 'string' ? optionValue.trim() : '';
-            })
-            .filter(Boolean)
-        : [];
+      const { options, detectedAnswer } = this.normalizeQuestionOptions(q);
       const answer = this.normalizeCorrectAnswer(
-        q.correctAnswer ?? q.correct_answer ?? q.answer ?? q.correct,
+        q.correctAnswer ??
+          q.correct_answer ??
+          q.correctOption ??
+          q.correct_option ??
+          q.correctOptionIndex ??
+          q.correct_option_index ??
+          q.correctIndex ??
+          q.correct_index ??
+          q.answer ??
+          q.correct ??
+          detectedAnswer,
         options,
       );
       const explanation =
@@ -389,7 +519,11 @@ export class AiStructuredGenerationService {
             ? q.rationale.trim()
             : typeof q.reason === 'string'
               ? q.reason.trim()
-              : '';
+              : typeof q.feedback === 'string'
+                ? q.feedback.trim()
+                : answer
+                  ? `The correct answer is ${answer}.`
+                  : '';
 
       if (
         !question ||

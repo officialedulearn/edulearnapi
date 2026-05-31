@@ -148,6 +148,53 @@ describe('AiStructuredGenerationService public quiz parsing', () => {
     expect(normalized.questions[2].correctAnswer).toBe('Option C3');
   });
 
+  it('normalizes object-style options and synthesizes missing explanations', () => {
+    const rawDeck = buildDeck(10);
+    const objectStylePayload = {
+      quizTitle: rawDeck.title,
+      questions: rawDeck.questions.map((question) => ({
+        questionText: question.question,
+        options: {
+          A: question.options[0],
+          B: question.options[1],
+          C: question.options[2],
+          D: question.options[3],
+        },
+        correctOption: 'A',
+      })),
+    };
+
+    const normalized = internals.normalizePublicQuizDeck(objectStylePayload, 10);
+
+    expect(normalized.questions).toHaveLength(10);
+    expect(normalized.questions[0]).toEqual({
+      question: rawDeck.questions[0].question,
+      options: rawDeck.questions[0].options,
+      correctAnswer: rawDeck.questions[0].correctAnswer,
+      explanation: `The correct answer is ${rawDeck.questions[0].correctAnswer}.`,
+    });
+  });
+
+  it('detects correct answers from answer objects marked correct', () => {
+    const rawDeck = buildDeck(10);
+    const answerObjectPayload = {
+      title: rawDeck.title,
+      questions: rawDeck.questions.map((question) => ({
+        prompt: question.question,
+        answers: question.options.map((option) => ({
+          label: option,
+          isCorrect: option === question.correctAnswer,
+        })),
+        feedback: question.explanation,
+      })),
+    };
+
+    const normalized = internals.normalizePublicQuizDeck(answerObjectPayload, 10);
+
+    expect(normalized.questions).toHaveLength(10);
+    expect(normalized.questions[4].correctAnswer).toBe('Option A5');
+  });
+
   it('retries public quiz generation after malformed JSON and succeeds', async () => {
     const validDeck = buildDeck();
     const validResponse = JSON.stringify(validDeck);
