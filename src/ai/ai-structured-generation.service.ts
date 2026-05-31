@@ -32,6 +32,25 @@ type GeneratedPublicQuizDeck = {
   }[];
 };
 
+type RawGeneratedPublicQuizQuestion = {
+  question?: unknown;
+  options?: unknown;
+  correctAnswer?: unknown;
+  correct_answer?: unknown;
+  answer?: unknown;
+  explanation?: unknown;
+  rationale?: unknown;
+};
+
+type RawGeneratedPublicQuizDeck = {
+  title?: unknown;
+  description?: unknown;
+  summary?: unknown;
+  coveredConcepts?: unknown;
+  challengeProfile?: unknown;
+  questions?: unknown;
+};
+
 @Injectable()
 export class AiStructuredGenerationService {
   constructor(
@@ -46,11 +65,12 @@ export class AiStructuredGenerationService {
   ): Promise<T> {
     let attempts = 0;
     while (attempts < maxAttempts) {
+      let timeout: ReturnType<typeof setTimeout> | undefined;
       try {
         return await Promise.race([
           run(),
           new Promise<never>((_, reject) =>
-            setTimeout(
+            (timeout = setTimeout(
               () =>
                 reject(
                   new Error(
@@ -58,7 +78,7 @@ export class AiStructuredGenerationService {
                   ),
                 ),
               AI_TIMEOUT_MS,
-            ),
+            )),
           ),
         ]);
       } catch (e) {
@@ -69,9 +89,256 @@ export class AiStructuredGenerationService {
           );
         }
         await retryDelayMs();
+      } finally {
+        if (timeout) clearTimeout(timeout);
       }
     }
     throw new Error('Unreachable');
+  }
+
+  private cleanAiJsonText(response: string): string {
+    let cleaned = response.trim().replace(/^\uFEFF/, '');
+    const jsonFence = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (jsonFence?.[1]) {
+      cleaned = jsonFence[1].trim();
+    }
+    return cleaned
+      .replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+      .trim();
+  }
+
+  private extractJsonValue(
+    response: string,
+    expectedRoot: 'object' | 'array',
+  ): string {
+    const cleaned = this.cleanAiJsonText(response);
+    const rootChar = expectedRoot === 'object' ? '{' : '[';
+    const start = cleaned.indexOf(rootChar);
+    if (start === -1) return cleaned;
+
+    const stack: string[] = [];
+    let inString = false;
+    let escaped = false;
+
+    for (let i = start; i < cleaned.length; i++) {
+      const char = cleaned[i];
+
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+
+      if (inString) continue;
+
+      if (char === '{') {
+        stack.push('}');
+      } else if (char === '[') {
+        stack.push(']');
+      } else if (char === '}' || char === ']') {
+        if (stack.length === 0 || stack[stack.length - 1] !== char) break;
+        stack.pop();
+        if (stack.length === 0) {
+          return cleaned.slice(start, i + 1);
+        }
+      }
+    }
+
+    return cleaned.slice(start);
+  }
+
+  private repairJsonValue(jsonValue: string): string {
+    let repaired = jsonValue.trim().replace(/,(\s*[}\]])/g, '$1');
+    const stack: string[] = [];
+    let inString = false;
+    let escaped = false;
+
+    for (let i = 0; i < repaired.length; i++) {
+      const char = repaired[i];
+
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+
+      if (inString) continue;
+
+      if (char === '{') {
+        stack.push('}');
+      } else if (char === '[') {
+        stack.push(']');
+      } else if (char === '}' || char === ']') {
+        if (stack[stack.length - 1] === char) {
+          stack.pop();
+        }
+      }
+    }
+
+    if (inString) repaired += '"';
+    while (stack.length > 0) {
+      repaired += stack.pop();
+    }
+    return repaired;
+  }
+
+  private parseGeneratedJsonObject(response: string): RawGeneratedPublicQuizDeck {
+    const candidates = [
+      response.trim(),
+      this.cleanAiJsonText(response),
+      this.extractJsonValue(response, 'object'),
+    ];
+
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      const repaired = this.repairJsonValue(candidate);
+      for (const jsonValue of [candidate, repaired]) {
+        try {
+          const parsed = JSON.parse(jsonValue) as unknown;
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return parsed as RawGeneratedPublicQuizDeck;
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
+
+    throw new Error('Failed to parse quiz from AI response.');
+  }
+
+  private normalizeCorrectAnswer(
+    answer: unknown,
+    options: string[],
+  ): string | null {
+    if (typeof answer !== 'string') return null;
+    const trimmed = answer.trim();
+    if (!trimmed) return null;
+
+    const exact = options.find((option) => option === trimmed);
+    if (exact) return exact;
+
+    const caseInsensitive = options.find(
+      (option) => option.toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (caseInsensitive) return caseInsensitive;
+
+    const letterIndex = /^[A-D]$/i.test(trimmed)
+      ? trimmed.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0)
+      : null;
+    if (letterIndex !== null) return options[letterIndex] ?? null;
+
+    const numericIndex = /^[1-4]$/.test(trimmed) ? Number(trimmed) - 1 : null;
+    if (numericIndex !== null) return options[numericIndex] ?? null;
+
+    const prefixedLetter = trimmed.match(/^[A-D][).:\-\s]+(.+)$/i);
+    if (prefixedLetter?.[1]) {
+      const answerText = prefixedLetter[1].trim();
+      return (
+        options.find(
+          (option) => option.toLowerCase() === answerText.toLowerCase(),
+        ) ?? null
+      );
+    }
+
+    return null;
+  }
+
+  private normalizePublicQuizDeck(
+    parsed: RawGeneratedPublicQuizDeck,
+    questionCount: number,
+  ): GeneratedPublicQuizDeck {
+    const title = typeof parsed.title === 'string' ? parsed.title.trim() : '';
+    const questions = Array.isArray(parsed.questions)
+      ? parsed.questions
+      : null;
+
+    if (!title || !questions || questions.length !== questionCount) {
+      throw new Error(
+        `Expected exactly ${questionCount} questions and a non-empty title. Please try again.`,
+      );
+    }
+
+    const normalizedQuestions = questions.map((rawQuestion, index) => {
+      const q =
+        rawQuestion && typeof rawQuestion === 'object'
+          ? (rawQuestion as RawGeneratedPublicQuizQuestion)
+          : {};
+      const question =
+        typeof q.question === 'string' ? q.question.trim() : '';
+      const options = Array.isArray(q.options)
+        ? q.options
+            .filter((option): option is string => typeof option === 'string')
+            .map((option) => option.trim())
+            .filter(Boolean)
+        : [];
+      const answer = this.normalizeCorrectAnswer(
+        q.correctAnswer ?? q.correct_answer ?? q.answer,
+        options,
+      );
+      const explanation =
+        typeof q.explanation === 'string'
+          ? q.explanation.trim()
+          : typeof q.rationale === 'string'
+            ? q.rationale.trim()
+            : '';
+
+      if (
+        !question ||
+        options.length !== 4 ||
+        new Set(options).size !== 4 ||
+        !answer ||
+        !explanation
+      ) {
+        throw new Error(`Question ${index + 1} is invalid. Please try again.`);
+      }
+
+      return {
+        question,
+        options,
+        correctAnswer: answer,
+        explanation,
+      };
+    });
+
+    return {
+      title,
+      description:
+        typeof parsed.description === 'string'
+          ? parsed.description.trim()
+          : undefined,
+      summary:
+        typeof parsed.summary === 'string' ? parsed.summary.trim() : undefined,
+      coveredConcepts: Array.isArray(parsed.coveredConcepts)
+        ? parsed.coveredConcepts
+            .filter((item): item is string => typeof item === 'string')
+            .map((item) => item.trim())
+            .filter(Boolean)
+        : undefined,
+      challengeProfile:
+        typeof parsed.challengeProfile === 'string'
+          ? parsed.challengeProfile.trim()
+          : undefined,
+      questions: normalizedQuestions,
+    };
   }
 
   async generateFlashcardDeckContent(
@@ -250,7 +517,13 @@ export class AiStructuredGenerationService {
                   },
                 },
               },
-              required: ['title', 'summary', 'coveredConcepts', 'challengeProfile', 'questions'],
+              required: [
+                'title',
+                'summary',
+                'coveredConcepts',
+                'challengeProfile',
+                'questions',
+              ],
             },
           },
         }),
@@ -260,31 +533,19 @@ export class AiStructuredGenerationService {
         throw new Error('AI returned empty response. Please try again.');
       let parsed: GeneratedPublicQuizDeck;
       try {
-        parsed = JSON.parse(response) as GeneratedPublicQuizDeck;
-      } catch {
-        throw new Error('Failed to parse quiz from AI response.');
-      }
-      if (
-        !parsed.title?.trim() ||
-        !Array.isArray(parsed.questions) ||
-        parsed.questions.length !== questionCount
-      ) {
-        throw new Error(
-          `Expected exactly ${questionCount} questions and a non-empty title. Please try again.`,
+        parsed = this.normalizePublicQuizDeck(
+          this.parseGeneratedJsonObject(response),
+          questionCount,
         );
-      }
-      for (let i = 0; i < parsed.questions.length; i++) {
-        const q = parsed.questions[i];
-        if (
-          !q.question?.trim() ||
-          !Array.isArray(q.options) ||
-          q.options.length !== 4 ||
-          !q.correctAnswer ||
-          !q.explanation?.trim() ||
-          !q.options.includes(q.correctAnswer)
-        ) {
-          throw new Error(`Question ${i + 1} is invalid. Please try again.`);
+      } catch (parseError) {
+        retryFeedback =
+          parseError instanceof Error
+            ? parseError.message
+            : 'The previous response was malformed JSON.';
+        if (attempt === 2) {
+          throw parseError;
         }
+        continue;
       }
       const diversity = validateQuizDiversity({
         questions: parsed.questions,
