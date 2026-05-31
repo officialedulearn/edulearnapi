@@ -34,21 +34,37 @@ type GeneratedPublicQuizDeck = {
 
 type RawGeneratedPublicQuizQuestion = {
   question?: unknown;
+  prompt?: unknown;
+  stem?: unknown;
+  text?: unknown;
   options?: unknown;
+  choices?: unknown;
+  answerOptions?: unknown;
   correctAnswer?: unknown;
   correct_answer?: unknown;
   answer?: unknown;
+  correct?: unknown;
   explanation?: unknown;
   rationale?: unknown;
+  reason?: unknown;
 };
 
 type RawGeneratedPublicQuizDeck = {
   title?: unknown;
+  quizTitle?: unknown;
+  name?: unknown;
   description?: unknown;
   summary?: unknown;
   coveredConcepts?: unknown;
   challengeProfile?: unknown;
   questions?: unknown;
+  quizQuestions?: unknown;
+  items?: unknown;
+  quiz?: unknown;
+  deck?: unknown;
+  publicQuiz?: unknown;
+  data?: unknown;
+  result?: unknown;
 };
 
 @Injectable()
@@ -205,6 +221,7 @@ export class AiStructuredGenerationService {
       response.trim(),
       this.cleanAiJsonText(response),
       this.extractJsonValue(response, 'object'),
+      this.extractJsonValue(response, 'array'),
     ];
 
     for (const candidate of candidates) {
@@ -213,7 +230,10 @@ export class AiStructuredGenerationService {
       for (const jsonValue of [candidate, repaired]) {
         try {
           const parsed = JSON.parse(jsonValue) as unknown;
-          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          if (Array.isArray(parsed)) {
+            return { questions: parsed };
+          }
+          if (parsed && typeof parsed === 'object') {
             return parsed as RawGeneratedPublicQuizDeck;
           }
         } catch {
@@ -223,6 +243,50 @@ export class AiStructuredGenerationService {
     }
 
     throw new Error('Failed to parse quiz from AI response.');
+  }
+
+  private asRecord(value: unknown): Record<string, unknown> | null {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  }
+
+  private unwrapPublicQuizDeck(
+    parsed: RawGeneratedPublicQuizDeck,
+  ): RawGeneratedPublicQuizDeck {
+    let current: RawGeneratedPublicQuizDeck = parsed;
+    const nestedKeys: (keyof RawGeneratedPublicQuizDeck)[] = [
+      'quiz',
+      'deck',
+      'publicQuiz',
+      'data',
+      'result',
+    ];
+
+    for (let depth = 0; depth < 4; depth++) {
+      const hasQuestions =
+        Array.isArray(current.questions) ||
+        Array.isArray(current.quizQuestions) ||
+        Array.isArray(current.items);
+      if (hasQuestions) return current;
+
+      const nestedKey = nestedKeys.find((key) => this.asRecord(current[key]));
+      if (!nestedKey) return current;
+
+      const nested = current[nestedKey] as RawGeneratedPublicQuizDeck;
+      current = {
+        ...nested,
+        title: nested.title ?? current.title,
+        quizTitle: nested.quizTitle ?? current.quizTitle,
+        name: nested.name ?? current.name,
+        description: nested.description ?? current.description,
+        summary: nested.summary ?? current.summary,
+        coveredConcepts: nested.coveredConcepts ?? current.coveredConcepts,
+        challengeProfile: nested.challengeProfile ?? current.challengeProfile,
+      };
+    }
+
+    return current;
   }
 
   private normalizeCorrectAnswer(
@@ -265,33 +329,57 @@ export class AiStructuredGenerationService {
   private normalizePublicQuizDeck(
     parsed: RawGeneratedPublicQuizDeck,
     questionCount: number,
+    fallbackTitle = 'Generated Quiz',
   ): GeneratedPublicQuizDeck {
-    const title = typeof parsed.title === 'string' ? parsed.title.trim() : '';
-    const questions = Array.isArray(parsed.questions)
-      ? parsed.questions
-      : null;
+    const deck = this.unwrapPublicQuizDeck(parsed);
+    const titleSource = deck.title ?? deck.quizTitle ?? deck.name;
+    const title =
+      typeof titleSource === 'string' && titleSource.trim()
+        ? titleSource.trim()
+        : fallbackTitle;
+    const questions = Array.isArray(deck.questions)
+      ? deck.questions
+      : Array.isArray(deck.quizQuestions)
+        ? deck.quizQuestions
+        : Array.isArray(deck.items)
+          ? deck.items
+          : null;
 
-    if (!title || !questions || questions.length !== questionCount) {
+    if (!title || !questions) {
       throw new Error(
-        `Expected exactly ${questionCount} questions and a non-empty title. Please try again.`,
+        `Expected a non-empty title and exactly ${questionCount} questions, but the response did not include a questions array.`,
       );
     }
 
-    const normalizedQuestions = questions.map((rawQuestion, index) => {
+    const normalizedQuestions: GeneratedPublicQuizDeck['questions'] = [];
+    const invalidQuestions: string[] = [];
+
+    for (let index = 0; index < questions.length; index++) {
+      const rawQuestion = questions[index];
       const q =
         rawQuestion && typeof rawQuestion === 'object'
           ? (rawQuestion as RawGeneratedPublicQuizQuestion)
           : {};
+      const questionSource = q.question ?? q.prompt ?? q.stem ?? q.text;
       const question =
-        typeof q.question === 'string' ? q.question.trim() : '';
-      const options = Array.isArray(q.options)
-        ? q.options
-            .filter((option): option is string => typeof option === 'string')
-            .map((option) => option.trim())
+        typeof questionSource === 'string' ? questionSource.trim() : '';
+      const optionsSource = q.options ?? q.choices ?? q.answerOptions;
+      const options = Array.isArray(optionsSource)
+        ? optionsSource
+            .map((option) => {
+              if (typeof option === 'string') return option.trim();
+              const optionRecord = this.asRecord(option);
+              const optionValue =
+                optionRecord?.text ??
+                optionRecord?.label ??
+                optionRecord?.value ??
+                optionRecord?.answer;
+              return typeof optionValue === 'string' ? optionValue.trim() : '';
+            })
             .filter(Boolean)
         : [];
       const answer = this.normalizeCorrectAnswer(
-        q.correctAnswer ?? q.correct_answer ?? q.answer,
+        q.correctAnswer ?? q.correct_answer ?? q.answer ?? q.correct,
         options,
       );
       const explanation =
@@ -299,7 +387,9 @@ export class AiStructuredGenerationService {
           ? q.explanation.trim()
           : typeof q.rationale === 'string'
             ? q.rationale.trim()
-            : '';
+            : typeof q.reason === 'string'
+              ? q.reason.trim()
+              : '';
 
       if (
         !question ||
@@ -308,34 +398,48 @@ export class AiStructuredGenerationService {
         !answer ||
         !explanation
       ) {
-        throw new Error(`Question ${index + 1} is invalid. Please try again.`);
+        invalidQuestions.push(`${index + 1}`);
+        continue;
       }
 
-      return {
+      normalizedQuestions.push({
         question,
         options,
         correctAnswer: answer,
         explanation,
-      };
-    });
+      });
+    }
+
+    if (normalizedQuestions.length < questionCount) {
+      const invalidDetails = invalidQuestions.length
+        ? ` Invalid question indexes: ${invalidQuestions.join(', ')}.`
+        : '';
+      throw new Error(
+        `Expected exactly ${questionCount} valid questions, but only found ${normalizedQuestions.length} valid question(s) from ${questions.length} returned.${invalidDetails}`,
+      );
+    }
+
+    if (normalizedQuestions.length > questionCount) {
+      normalizedQuestions.length = questionCount;
+    }
 
     return {
       title,
       description:
-        typeof parsed.description === 'string'
-          ? parsed.description.trim()
+        typeof deck.description === 'string'
+          ? deck.description.trim()
           : undefined,
       summary:
-        typeof parsed.summary === 'string' ? parsed.summary.trim() : undefined,
-      coveredConcepts: Array.isArray(parsed.coveredConcepts)
-        ? parsed.coveredConcepts
+        typeof deck.summary === 'string' ? deck.summary.trim() : undefined,
+      coveredConcepts: Array.isArray(deck.coveredConcepts)
+        ? deck.coveredConcepts
             .filter((item): item is string => typeof item === 'string')
             .map((item) => item.trim())
             .filter(Boolean)
         : undefined,
       challengeProfile:
-        typeof parsed.challengeProfile === 'string'
-          ? parsed.challengeProfile.trim()
+        typeof deck.challengeProfile === 'string'
+          ? deck.challengeProfile.trim()
           : undefined,
       questions: normalizedQuestions,
     };
@@ -536,6 +640,7 @@ export class AiStructuredGenerationService {
         parsed = this.normalizePublicQuizDeck(
           this.parseGeneratedJsonObject(response),
           questionCount,
+          topicTrimmed,
         );
       } catch (parseError) {
         retryFeedback =

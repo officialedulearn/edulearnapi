@@ -116,6 +116,38 @@ describe('AiStructuredGenerationService public quiz parsing', () => {
     expect(normalized.questions[0].correctAnswer).toBe('Option A1');
   });
 
+  it('unwraps nested quiz payloads and slices extra valid questions', () => {
+    const rawDeck = buildDeck(10);
+    const nestedResponse = {
+      quiz: {
+        quizTitle: rawDeck.title,
+        summary: rawDeck.summary,
+        coveredConcepts: rawDeck.coveredConcepts,
+        challengeProfile: rawDeck.challengeProfile,
+        quizQuestions: [
+          ...rawDeck.questions.map((question, index) => ({
+            stem: question.question,
+            choices: question.options.map((option) => ({ text: option })),
+            correct_answer: `${(index % 4) + 1}`,
+            rationale: question.explanation,
+          })),
+          {
+            stem: 'Which extra question should be ignored?',
+            choices: ['Extra A', 'Extra B', 'Extra C', 'Extra D'],
+            correct_answer: 'Extra A',
+            rationale: 'Extra explanation',
+          },
+        ],
+      },
+    };
+
+    const normalized = internals.normalizePublicQuizDeck(nestedResponse, 10);
+
+    expect(normalized.title).toBe(rawDeck.title);
+    expect(normalized.questions).toHaveLength(10);
+    expect(normalized.questions[2].correctAnswer).toBe('Option C3');
+  });
+
   it('retries public quiz generation after malformed JSON and succeeds', async () => {
     const validDeck = buildDeck();
     const validResponse = JSON.stringify(validDeck);
