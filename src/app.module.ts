@@ -37,6 +37,7 @@ import { DeepLinksModule } from './deep-links/deep-links.module';
 import { AgentWakeupModule } from './agent-wakeup/agent-wakeup.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { HealthModule } from './health/health.module';
+import { SurveysModule } from './surveys/surveys.module';
 
 @Module({
   imports: [
@@ -82,6 +83,7 @@ import { HealthModule } from './health/health.module';
     ReferralModule,
     DeepLinksModule,
     AgentWakeupModule,
+    SurveysModule,
   ],
   controllers: [AppController],
   providers: [

@@ -5,6 +5,7 @@ import {
   IsEnum,
   MaxLength,
   MinLength,
+  IsUUID,
 } from 'class-validator';
 
 export class CreateFeedbackDto {
@@ -18,9 +19,9 @@ export class CreateFeedbackDto {
   @IsEnum(['bug', 'feature', 'improvement', 'other'])
   category?: 'bug' | 'feature' | 'improvement' | 'other';
 
-  @IsNotEmpty()
-  @IsString()
-  userId: string;
+  @IsOptional()
+  @IsUUID()
+  userId?: string;
 }
 
 export class UpdateFeedbackStatusDto {

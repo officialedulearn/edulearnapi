@@ -35,4 +35,76 @@ describe('ai.helpers assistant transcript sanitizer', () => {
       metadata: { source: 'model' },
     });
   });
+
+  it('preserves valid assistant artifacts before persistence', () => {
+    const content = sanitizeAssistantMessageContent({
+      text: 'Here is the flow.',
+      artifacts: [
+        {
+          id: 'artifact-1',
+          kind: 'flowchart',
+          title: 'Learning flow',
+          version: 1,
+          renderer: 'native',
+          data: {
+            nodes: [{ id: 'a', label: 'Start' }],
+            edges: [],
+          },
+          createdAt: '2026-06-07T00:00:00.000Z',
+        },
+      ],
+    });
+
+    expect(content).toEqual({
+      text: 'Here is the flow.',
+      artifacts: [
+        {
+          id: 'artifact-1',
+          kind: 'flowchart',
+          title: 'Learning flow',
+          version: 1,
+          renderer: 'native',
+          data: {
+            nodes: [{ id: 'a', label: 'Start' }],
+            edges: [],
+          },
+          createdAt: '2026-06-07T00:00:00.000Z',
+        },
+      ],
+    });
+  });
+
+  it('keeps malformed assistant artifacts as fallback artifacts', () => {
+    const content = sanitizeAssistantMessageContent({
+      text: 'Here is the chart.',
+      artifacts: [
+        {
+          id: 'artifact-bad',
+          kind: 'barChart',
+          title: 'Broken chart',
+          version: 1,
+          renderer: 'native',
+          data: null,
+          fallbackText: 'Chart data was not valid.',
+          createdAt: '2026-06-07T00:00:00.000Z',
+        },
+      ],
+    });
+
+    expect(content).toEqual({
+      text: 'Here is the chart.',
+      artifacts: [
+        {
+          id: 'artifact-bad',
+          kind: 'process',
+          title: 'Broken chart',
+          version: 1,
+          renderer: 'native',
+          data: { steps: [] },
+          fallbackText: 'Chart data was not valid.',
+          createdAt: '2026-06-07T00:00:00.000Z',
+        },
+      ],
+    });
+  });
 });

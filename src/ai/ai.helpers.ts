@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import type { Message } from 'lib/db/schema';
+import { normalizeChatArtifacts } from './ai-artifacts';
 
 export const MAX_MEMORY_CHARS = 500;
 export const TUTOR_URL_PREFETCH_MAX_URLS = 3;
@@ -164,12 +165,18 @@ export const sanitizeAssistantMessageContent = (content: unknown): unknown => {
     !Array.isArray(content) &&
     typeof (content as { text?: unknown }).text === 'string'
   ) {
-    return {
+    const sanitized: Record<string, unknown> = {
       ...(content as Record<string, unknown>),
       text: sanitizeLeakedAssistantToolTranscript(
         (content as { text: string }).text,
       ).text,
     };
+    if ('artifacts' in (content as Record<string, unknown>)) {
+      sanitized.artifacts = normalizeChatArtifacts(
+        (content as { artifacts?: unknown }).artifacts,
+      );
+    }
+    return sanitized;
   }
 
   return content;

@@ -1,0 +1,1 @@
+ALTER TABLE "feedback" ALTER COLUMN "userId" DROP NOT NULL;

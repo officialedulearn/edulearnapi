@@ -13,7 +13,7 @@ export class FeedbackService {
     const newFeedback = await db
       .insert(feedback)
       .values({
-        userId: createFeedbackDto.userId,
+        userId: createFeedbackDto.userId ?? null,
         content: createFeedbackDto.content,
         category: createFeedbackDto.category,
       })

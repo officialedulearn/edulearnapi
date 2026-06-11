@@ -568,9 +568,7 @@ export type CommunityJoinRequest = InferSelectModel<
 
 export const feedback = pgTable('feedback', {
   id: uuid('id').primaryKey().notNull().defaultRandom(),
-  userId: uuid('userId')
-    .notNull()
-    .references(() => user.id),
+  userId: uuid('userId').references(() => user.id),
   content: text('content').notNull(),
   category: varchar('category', {
     enum: ['bug', 'feature', 'improvement', 'other'],
@@ -584,6 +582,183 @@ export const feedback = pgTable('feedback', {
 });
 
 export type Feedback = InferSelectModel<typeof feedback>;
+
+export type SurveyQuestionType =
+  | 'short_text'
+  | 'long_text'
+  | 'rating'
+  | 'single_choice'
+  | 'multiple_choice'
+  | 'boolean';
+
+export type SurveyStatus = 'draft' | 'published' | 'archived';
+
+export type SurveyAiAnalysisPayload = {
+  summary: string;
+  keyThemes: string[];
+  sentiment: 'positive' | 'mixed' | 'negative' | 'neutral';
+  recommendations: string[];
+  notableQuotes: string[];
+  questionInsights: Array<{
+    questionId: string;
+    question: string;
+    insight: string;
+  }>;
+};
+
+export const surveys = pgTable(
+  'surveys',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    slug: text('slug').notNull(),
+    title: text('title').notNull(),
+    description: text('description'),
+    status: varchar('status', {
+      enum: ['draft', 'published', 'archived'],
+    })
+      .notNull()
+      .default('draft'),
+    isActive: boolean('isActive').notNull().default(false),
+    publishedAt: timestamp('publishedAt'),
+    archivedAt: timestamp('archivedAt'),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+    updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+  },
+  (table) => ({
+    slugIdx: uniqueIndex('surveys_slug_idx').on(table.slug),
+    activeIdx: index('surveys_active_idx').on(table.isActive, table.status),
+  }),
+);
+
+export type Survey = InferSelectModel<typeof surveys>;
+
+export const surveyQuestions = pgTable(
+  'survey_questions',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    surveyId: uuid('surveyId')
+      .notNull()
+      .references(() => surveys.id, { onDelete: 'cascade' }),
+    prompt: text('prompt').notNull(),
+    type: varchar('type', {
+      enum: [
+        'short_text',
+        'long_text',
+        'rating',
+        'single_choice',
+        'multiple_choice',
+        'boolean',
+      ],
+    }).notNull(),
+    options: json('options')
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::json`),
+    required: boolean('required').notNull().default(false),
+    sortOrder: integer('sortOrder').notNull().default(0),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+    updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+  },
+  (table) => ({
+    surveyOrderIdx: index('survey_questions_survey_order_idx').on(
+      table.surveyId,
+      table.sortOrder,
+    ),
+  }),
+);
+
+export type SurveyQuestion = InferSelectModel<typeof surveyQuestions>;
+
+export const surveyResponses = pgTable(
+  'survey_responses',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    surveyId: uuid('surveyId')
+      .notNull()
+      .references(() => surveys.id, { onDelete: 'cascade' }),
+    userId: uuid('userId').references(() => user.id),
+    submittedAt: timestamp('submittedAt').notNull().defaultNow(),
+    metadata: json('metadata').$type<Record<string, unknown>>(),
+  },
+  (table) => ({
+    surveySubmittedIdx: index('survey_responses_survey_submitted_idx').on(
+      table.surveyId,
+      table.submittedAt,
+    ),
+    userSubmittedIdx: index('survey_responses_user_submitted_idx').on(
+      table.userId,
+      table.submittedAt,
+    ),
+  }),
+);
+
+export type SurveyResponse = InferSelectModel<typeof surveyResponses>;
+
+export const surveyAnswers = pgTable(
+  'survey_answers',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    responseId: uuid('responseId')
+      .notNull()
+      .references(() => surveyResponses.id, { onDelete: 'cascade' }),
+    surveyId: uuid('surveyId')
+      .notNull()
+      .references(() => surveys.id, { onDelete: 'cascade' }),
+    questionId: uuid('questionId')
+      .notNull()
+      .references(() => surveyQuestions.id, { onDelete: 'cascade' }),
+    questionPrompt: text('questionPrompt').notNull(),
+    questionType: varchar('questionType', {
+      enum: [
+        'short_text',
+        'long_text',
+        'rating',
+        'single_choice',
+        'multiple_choice',
+        'boolean',
+      ],
+    }).notNull(),
+    value: json('value').$type<string | number | boolean | string[] | null>(),
+    textValue: text('textValue'),
+    numberValue: integer('numberValue'),
+    booleanValue: boolean('booleanValue'),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => ({
+    responseQuestionIdx: uniqueIndex(
+      'survey_answers_response_question_idx',
+    ).on(table.responseId, table.questionId),
+    surveyQuestionIdx: index('survey_answers_survey_question_idx').on(
+      table.surveyId,
+      table.questionId,
+    ),
+  }),
+);
+
+export type SurveyAnswer = InferSelectModel<typeof surveyAnswers>;
+
+export const surveyAiAnalyses = pgTable(
+  'survey_ai_analyses',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    surveyId: uuid('surveyId')
+      .notNull()
+      .references(() => surveys.id, { onDelete: 'cascade' }),
+    model: text('model').notNull().default('gemini-2.5-flash'),
+    promptVersion: text('promptVersion').notNull().default('survey-analysis-v1'),
+    responseCountAnalyzed: integer('responseCountAnalyzed')
+      .notNull()
+      .default(0),
+    latestResponseAtAnalyzed: timestamp('latestResponseAtAnalyzed'),
+    analysis: json('analysis').$type<SurveyAiAnalysisPayload>().notNull(),
+    generatedAt: timestamp('generatedAt').notNull().defaultNow(),
+  },
+  (table) => ({
+    surveyIdx: uniqueIndex('survey_ai_analyses_survey_idx').on(table.surveyId),
+  }),
+);
+
+export type SurveyAiAnalysis = InferSelectModel<typeof surveyAiAnalyses>;
 
 export const userFollows = pgTable(
   'user_follows',

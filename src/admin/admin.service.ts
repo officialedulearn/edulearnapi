@@ -336,6 +336,9 @@ export class AdminService {
     const anchors = new Map<string, Date>();
     for (const dataset of datasets) {
       for (const row of dataset) {
+        if (!row.userId) {
+          continue;
+        }
         this.updateEarliestAnchor(anchors, row.userId, row.timestamp);
       }
     }

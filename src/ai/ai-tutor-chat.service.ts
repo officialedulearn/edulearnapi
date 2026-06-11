@@ -6,6 +6,7 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
+import { Type } from '@google/genai';
 import { Observable } from 'rxjs';
 import type { Message } from 'lib/db/schema';
 import { getMostRecentUserMessage, generateUUID } from 'lib/utils';
@@ -28,7 +29,12 @@ import {
   mergeMemoryDeduped,
   getAttachmentsFromMessageContent,
   sanitizeLeakedAssistantToolTranscript,
+  formatMessageText,
 } from './ai.helpers';
+import {
+  type ChatArtifact,
+  normalizeChatArtifacts,
+} from './ai-artifacts';
 import { UserService } from 'src/user/user.service';
 import { AgentService } from 'src/agent/agent.service';
 import {
@@ -121,6 +127,111 @@ export class AiTutorChatService {
       throw new BadRequestException(
         `Too many attachments. Your plan allows up to ${limit} attachment${limit === 1 ? '' : 's'} per message.`,
       );
+    }
+  }
+
+  private shouldConsiderArtifacts(userText: string, assistantText: string) {
+    const combined = `${userText}\n${assistantText}`.toLowerCase();
+    return /\b(diagram|chart|graph|plot|visual|visualize|draw|flow|timeline|table|compare|comparison|map|process|steps|sequence|formula|explain this visually)\b/.test(
+      combined,
+    );
+  }
+
+  private async generateArtifactsForResponse({
+    userText,
+    assistantText,
+    isPremium,
+  }: {
+    userText: string;
+    assistantText: string;
+    isPremium?: boolean;
+  }): Promise<ChatArtifact[]> {
+    if (!this.shouldConsiderArtifacts(userText, assistantText)) return [];
+
+    try {
+      const model = isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+      const result = await this.geminiClient.genAI.models.generateContent({
+        model,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: `Create up to 2 compact visual artifacts for this tutor response when a visual would materially improve learning. Return {"artifacts": []} if text alone is better.
+
+Prefer native schemas. Use html only when the visual cannot be represented by the native schemas. Never include external network resources.
+
+Supported native kinds and data shapes:
+- flowchart, conceptMap, sequence: { "nodes": [{ "id": "a", "label": "...", "detail": "..." }], "edges": [{ "from": "a", "to": "b", "label": "..." }] }
+- process, timeline, formulaSteps: { "steps": [{ "title": "...", "detail": "..." }] }
+- comparison: { "items": [{ "label": "...", "value": "...", "detail": "..." }] }
+- barChart, lineChart, pieChart: { "series": [{ "label": "...", "value": 12, "color": "#00C853" }] }
+- metricCards: { "metrics": [{ "label": "...", "value": "...", "helper": "..." }] }
+- table: { "columns": ["..."], "rows": [["..."]] }
+- quizExplainer: { "question": "...", "choices": [{ "label": "...", "correct": true, "explanation": "..." }] }
+- svg: { "markup": "<svg ...>...</svg>" }
+- html: { "html": "<!doctype html>...", "allowScripts": false }
+
+User request:
+${userText.slice(0, 4000)}
+
+Assistant response:
+${assistantText.slice(0, 6000)}`,
+              },
+            ],
+          },
+        ],
+        config: {
+          temperature: 0.2,
+          maxOutputTokens: 4096,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              artifacts: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING },
+                    kind: { type: Type.STRING },
+                    title: { type: Type.STRING },
+                    description: { type: Type.STRING },
+                    version: { type: Type.NUMBER },
+                    renderer: { type: Type.STRING },
+                    data: { type: Type.OBJECT },
+                    fallbackText: { type: Type.STRING },
+                    createdAt: { type: Type.STRING },
+                  },
+                  required: ['kind', 'title', 'renderer', 'data'],
+                },
+              },
+            },
+            required: ['artifacts'],
+          },
+        },
+      });
+
+      const parsed = JSON.parse(result?.text || '{"artifacts":[]}') as {
+        artifacts?: unknown[];
+      };
+      const now = new Date().toISOString();
+      const withIds = (parsed.artifacts || []).map((artifact) => {
+        if (!artifact || typeof artifact !== 'object') return artifact;
+        return {
+          id: generateUUID(),
+          version: 1,
+          createdAt: now,
+          ...(artifact as Record<string, unknown>),
+        };
+      });
+      return normalizeChatArtifacts(withIds).slice(0, 2);
+    } catch (error) {
+      console.warn(
+        'Failed to generate chat artifacts',
+        error instanceof Error ? error.message : error,
+      );
+      return [];
     }
   }
 
@@ -1757,10 +1868,19 @@ export class AiTutorChatService {
             fullResponse = acknowledgements + '\n\n' + fullResponse;
           }
 
+          const artifacts = await this.generateArtifactsForResponse({
+            userText: formatMessageText(recentUserMessage),
+            assistantText: fullResponse,
+            isPremium: Boolean(user?.isPremium),
+          });
+
           const assistantMessage = {
             id: generateUUID(),
             role: 'assistant',
-            content: { text: fullResponse },
+            content:
+              artifacts.length > 0
+                ? { text: fullResponse, artifacts }
+                : { text: fullResponse },
             createdAt: new Date(),
             chatId,
           };
@@ -1778,6 +1898,7 @@ export class AiTutorChatService {
             data: {
               id: assistantMessage.id,
               chatId,
+              artifacts,
               complete: true,
             },
           });
