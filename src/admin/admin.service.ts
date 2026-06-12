@@ -1459,9 +1459,15 @@ export class AdminService {
   }
 
   async getRetentionMetrics() {
-    const [users, activities, cohortAnchors] = await Promise.all([
-      this.retryQuery(() => db.select().from(user)),
-      this.retryQuery(() => db.select().from(xpActivity)),
+    const [users, cohortAnchors] = await Promise.all([
+      this.retryQuery(() =>
+        db
+          .select({
+            id: user.id,
+            lastLoggedIn: user.lastLoggedIn,
+          })
+          .from(user),
+      ),
       this.getCohortAnchors(),
     ]);
 
@@ -1483,6 +1489,23 @@ export class AdminService {
       retentionRate: string;
     }[] = [];
     const sortedWeeks = Array.from(weeklySignups.keys()).sort().slice(-8);
+    const firstCohortStart = sortedWeeks[0]
+      ? this.getDateFromWeekKey(sortedWeeks[0])
+      : null;
+    const firstRetentionDate = firstCohortStart
+      ? new Date(firstCohortStart.getTime() + 7 * 24 * 60 * 60 * 1000)
+      : null;
+    const activities = firstRetentionDate
+      ? await this.retryQuery(() =>
+          db
+            .select({
+              userId: xpActivity.userId,
+              createdAt: xpActivity.createdAt,
+            })
+            .from(xpActivity)
+            .where(gte(xpActivity.createdAt, firstRetentionDate)),
+        )
+      : [];
 
     for (const weekKey of sortedWeeks) {
       const userIds = weeklySignups.get(weekKey) || [];
@@ -1537,7 +1560,18 @@ export class AdminService {
 
   async getContentAnalytics() {
     const [chats, users] = await this.retryQuery(() =>
-      Promise.all([db.select().from(chat), db.select().from(user)]),
+      Promise.all([
+        db
+          .select({
+            title: chat.title,
+          })
+          .from(chat),
+        db
+          .select({
+            quizCompleted: user.quizCompleted,
+          })
+          .from(user),
+      ]),
     );
 
     const topicCounts = new Map<string, number>();
