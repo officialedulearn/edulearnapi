@@ -130,9 +130,16 @@ export class AiTutorChatService {
     }
   }
 
+  private isExplicitArtifactRequest(userText: string) {
+    return /\b(artifact|diagram|flowchart|mind\s*map|concept\s*map|chart|graph|plot|timeline|table|visual|visualize|draw|sketch|map\s+it|show\s+(?:me\s+)?(?:this\s+)?visually|make\s+(?:me\s+)?(?:a\s+)?(?:visual|diagram|chart|artifact)|give\s+(?:me\s+)?(?:a\s+)?(?:visual|diagram|chart|artifact))\b/i.test(
+      userText,
+    );
+  }
+
   private shouldConsiderArtifacts(userText: string, assistantText: string) {
+    if (this.isExplicitArtifactRequest(userText)) return true;
     const combined = `${userText}\n${assistantText}`.toLowerCase();
-    return /\b(diagram|chart|graph|plot|visual|visualize|draw|flow|timeline|table|compare|comparison|map|process|steps|sequence|formula|explain this visually)\b/.test(
+    return /\b(diagram|artifact|chart|graph|plot|visual|visualize|draw|flowchart|flow|timeline|table|compare|comparison|concept map|mind map|process|steps|sequence|formula|explain this visually)\b/.test(
       combined,
     );
   }
@@ -147,6 +154,7 @@ export class AiTutorChatService {
     isPremium?: boolean;
   }): Promise<ChatArtifact[]> {
     if (!this.shouldConsiderArtifacts(userText, assistantText)) return [];
+    const explicitRequest = this.isExplicitArtifactRequest(userText);
 
     try {
       const model = isPremium ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
@@ -157,7 +165,12 @@ export class AiTutorChatService {
             role: 'user',
             parts: [
               {
-                text: `Create up to 2 compact visual artifacts for this tutor response when a visual would materially improve learning. Return {"artifacts": []} if text alone is better.
+                text: `Create up to 2 compact visual artifacts for this tutor response.
+
+Artifact mode:
+- If the user explicitly requested an artifact, diagram, chart, graph, table, map, or visual, you MUST return at least 1 artifact.
+- If the user did not explicitly request one, return artifacts only when a visual would materially improve learning.
+- Return {"artifacts": []} only when no visual is useful and explicitArtifactRequest is false.
 
 Prefer native schemas. Use html only when the visual cannot be represented by the native schemas. Never include external network resources.
 
@@ -171,6 +184,8 @@ Supported native kinds and data shapes:
 - quizExplainer: { "question": "...", "choices": [{ "label": "...", "correct": true, "explanation": "..." }] }
 - svg: { "markup": "<svg ...>...</svg>" }
 - html: { "html": "<!doctype html>...", "allowScripts": false }
+
+explicitArtifactRequest: ${explicitRequest ? 'true' : 'false'}
 
 User request:
 ${userText.slice(0, 4000)}
@@ -225,7 +240,31 @@ ${assistantText.slice(0, 6000)}`,
           ...(artifact as Record<string, unknown>),
         };
       });
-      return normalizeChatArtifacts(withIds).slice(0, 2);
+      const artifacts = normalizeChatArtifacts(withIds).slice(0, 2);
+      if (explicitRequest && artifacts.length === 0) {
+        return [
+          {
+            id: generateUUID(),
+            kind: 'process',
+            title: 'Visual breakdown',
+            version: 1,
+            renderer: 'native',
+            data: {
+              steps: assistantText
+                .split(/\n+/)
+                .map((line) => line.replace(/^[-*\d.)\s]+/, '').trim())
+                .filter(Boolean)
+                .slice(0, 5)
+                .map((line, index) => ({
+                  title: line.slice(0, 80) || `Step ${index + 1}`,
+                })),
+            },
+            fallbackText: assistantText.slice(0, 500),
+            createdAt: now,
+          },
+        ];
+      }
+      return artifacts;
     } catch (error) {
       console.warn(
         'Failed to generate chat artifacts',
@@ -465,15 +504,19 @@ ${assistantText.slice(0, 6000)}`,
       ],
     });
 
+    const recentUserText =
+      typeof recentUserMessage.content === 'string'
+        ? recentUserMessage.content
+        : ((recentUserMessage.content as any)?.text ?? '');
+    const explicitArtifactRequest =
+      this.isExplicitArtifactRequest(recentUserText);
+
     const routing = await routeAiCostForUserMessage({
-      userText:
-        typeof recentUserMessage.content === 'string'
-          ? recentUserMessage.content
-          : ((recentUserMessage.content as any)?.text ?? ''),
+      userText: recentUserText,
       conversationContext,
     });
 
-    if (routing.route === 'bypass_model') {
+    if (routing.route === 'bypass_model' && !explicitArtifactRequest) {
       console.log(
         JSON.stringify({
           aiCostRouter: true,
@@ -960,10 +1003,18 @@ ${assistantText.slice(0, 6000)}`,
 
       const fullResponse =
         `${scoreAcknowledgement}${certificateAcknowledgement}${roadmapAcknowledgement}${editRoadmapAcknowledgement}${flashcardAcknowledgement}${publicQuizAcknowledgement}${scheduleQuizAcknowledgement}${sanitizedResponse.text}`.trim();
+      const artifacts = await this.generateArtifactsForResponse({
+        userText: recentUserText,
+        assistantText: fullResponse,
+        isPremium: Boolean(user?.isPremium),
+      });
       const assistantMessage = {
         id: generateUUID(),
         role: 'assistant' as const,
-        content: { text: fullResponse },
+        content:
+          artifacts.length > 0
+            ? { text: fullResponse, artifacts }
+            : { text: fullResponse },
         createdAt: new Date(),
         chatId,
       };
@@ -1183,15 +1234,19 @@ ${assistantText.slice(0, 6000)}`,
             ],
           });
 
+          const recentUserText =
+            typeof recentUserMessage.content === 'string'
+              ? recentUserMessage.content
+              : ((recentUserMessage.content as any)?.text ?? '');
+          const explicitArtifactRequest =
+            this.isExplicitArtifactRequest(recentUserText);
+
           const routing = await routeAiCostForUserMessage({
-            userText:
-              typeof recentUserMessage.content === 'string'
-                ? recentUserMessage.content
-                : ((recentUserMessage.content as any)?.text ?? ''),
+            userText: recentUserText,
             conversationContext,
           });
 
-          if (routing.route === 'bypass_model') {
+          if (routing.route === 'bypass_model' && !explicitArtifactRequest) {
             console.log(
               JSON.stringify({
                 aiCostRouter: true,
